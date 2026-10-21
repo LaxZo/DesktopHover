@@ -63,9 +63,7 @@ namespace DesktopHover
         internal string Diagnostic="";
         internal static bool Supported(string path)
         {
-            string e=System.IO.Path.GetExtension(path).ToLowerInvariant();
-            return e==".jpg" || e==".jpeg" || e==".jfif" || e==".png" || e==".bmp" || e==".gif" ||
-                e==".tif" || e==".tiff" || e==".ico" || e==".webp" || e==".heic" || e==".heif" || e==".avif";
+            return MediaFiles.Kind(path)!=MediaKind.None;
         }
         private object Shell { get { if(shell==null) shell=Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")); return shell; } }
         internal HoverItem Resolve(Point point)

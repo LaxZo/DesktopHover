@@ -14,7 +14,7 @@ using DrawingSize = System.Drawing.Size;
 
 namespace DesktopHover
 {
-    /// <summary>A passive, non-activating image tooltip. Use on the UI thread.</summary>
+    /// <summary>A passive, non-activating image, audio or video preview. Use on the UI thread.</summary>
     public sealed class PreviewWindow : Form
     {
         private const long MaximumFileBytes = 100L * 1024L * 1024L;
@@ -22,6 +22,7 @@ namespace DesktopHover
         private const int WsExTransparent = 0x20;
         private const int WsExToolWindow = 0x80;
         private const int WsExNoActivate = 0x08000000;
+        private const int WsClipChildren = 0x02000000;
         private const int SwpNoActivate = 0x0010;
         private const int SwpShowWindow = 0x0040;
 
@@ -41,9 +42,19 @@ namespace DesktopHover
         private int maximumPreviewHeight=540;
         private bool upscale;
         private string language="en";
+        private MediaPlayback media;
+        private MediaKind mediaKind;
+        private string mediaState;
+        private DrawingPoint mediaCursor;
+        private Rectangle mediaItemBounds;
+        private DateTime mediaDeadline;
+        private readonly Timer mediaTimer;
 
         public string CurrentPath { get; private set; }
         internal DrawingSize DisplayedImageSize { get { return imageArea.Size; } }
+        internal bool IsMediaPreview { get { return mediaKind != MediaKind.None; } }
+        internal string MediaState { get { return mediaState; } }
+        internal TimeSpan PlaybackPosition { get { return media == null ? TimeSpan.Zero : media.Position; } }
         internal void Configure(AppSettings settings)
         {
             maximumPreviewWidth=settings.MaxWidth;
@@ -71,6 +82,19 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer, true);
             SetFonts();
+            mediaTimer = new Timer { Interval = 200 };
+            mediaTimer.Tick += delegate
+            {
+                if (media == null) return;
+                if (mediaState == "media_loading" && DateTime.UtcNow >= mediaDeadline)
+                {
+                    MediaFailed(media);
+                    return;
+                }
+                string previousDescription = description;
+                UpdateMediaDescription();
+                if (description != previousDescription) Invalidate(descriptionArea);
+            };
         }
 
         private void UpdateLanguage()
@@ -89,6 +113,8 @@ namespace DesktopHover
             get
             {
                 CreateParams parameters = base.CreateParams;
+                // The WPF video surface owns its pixels; parent paints must not cover it.
+                parameters.Style |= WsClipChildren;
                 parameters.ExStyle |= WsExTransparent | WsExToolWindow | WsExNoActivate;
                 parameters.ClassStyle |= 0x00020000; // CS_DROPSHADOW
                 return parameters;
@@ -99,6 +125,8 @@ namespace DesktopHover
         {
             if (IsDisposed || String.IsNullOrEmpty(path))
                 return false;
+            if (mediaKind != MediaKind.None) ClearPreview();
+            UpdateLanguage();
 
             try
             {
@@ -111,12 +139,13 @@ namespace DesktopHover
                     SetFonts();
                 }
 
-                int padding = Px(12);
+                int imagePadding = Px(3);
+                int footerPadding = Px(12);
                 int footerHeight = Px(48);
                 int maximumWidth = Math.Max(1, Math.Min(maximumPreviewWidth,
-                    workingArea.Width - padding * 2 - Px(32)));
+                    workingArea.Width - imagePadding * 2 - Px(32)));
                 int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
-                    workingArea.Height - padding * 2 - footerHeight - Px(32)));
+                    workingArea.Height - imagePadding - footerPadding - footerHeight - Px(32)));
 
                 // A screen change may require a new decode at its appropriate resolution.
                 if (preview == null || changedScale ||
@@ -148,14 +177,15 @@ namespace DesktopHover
                 int imageWidth = Math.Max(1, (int)Math.Round(preview.Width * fit));
                 int imageHeight = Math.Max(1, (int)Math.Round(preview.Height * fit));
                 int contentWidth = Math.Min(maximumWidth, Math.Max(Px(220), imageWidth));
-                ClientSize = new DrawingSize(contentWidth + padding * 2,
-                    imageHeight + padding * 2 + footerHeight);
-                imageArea = new Rectangle(padding + (contentWidth - imageWidth) / 2,
-                    padding, imageWidth, imageHeight);
-                titleArea = new Rectangle(padding+Px(22), imageArea.Bottom + Px(11),
-                    contentWidth-Px(22), Px(19));
-                descriptionArea = new Rectangle(padding, titleArea.Bottom + Px(1),
-                    contentWidth, Px(17));
+                ClientSize = new DrawingSize(contentWidth + imagePadding * 2,
+                    imageHeight + imagePadding + footerPadding + footerHeight);
+                imageArea = new Rectangle(imagePadding + (contentWidth - imageWidth) / 2,
+                    imagePadding, imageWidth, imageHeight);
+                int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
+                titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
+                    Math.Max(1, footerWidth - Px(22)), Px(19));
+                descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1),
+                    footerWidth, Px(17));
 
                 Location = ChooseLocation(cursor, itemBounds, workingArea, Size, Px(18));
                 if (!Visible)
@@ -173,8 +203,150 @@ namespace DesktopHover
             }
         }
 
+        internal bool ShowFile(string path, DrawingPoint cursor, Rectangle itemBounds)
+        {
+            MediaKind kind = MediaFiles.Kind(path);
+            if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
+            if (kind == MediaKind.Audio || kind == MediaKind.Video) return ShowMedia(path, kind, cursor, itemBounds);
+            ClearPreview();
+            return false;
+        }
+
+        private bool ShowMedia(string path, MediaKind kind, DrawingPoint cursor, Rectangle itemBounds)
+        {
+            if (IsDisposed) return false;
+            ClearPreview();
+            try
+            {
+                // Playback is local only, including when called independently of the shell resolver.
+                path = Path.GetFullPath(path);
+                if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
+                    new DriveInfo(Path.GetPathRoot(path)).DriveType == DriveType.Network) return false;
+                var file = new FileInfo(path);
+                if (!file.Exists || file.Length == 0 || ((int)file.Attributes & (0x1000 | 0x40000 | 0x400000)) != 0) return false;
+                CurrentPath = path;
+                fileName = file.Name;
+                sourceBytes = file.Length;
+                mediaKind = kind;
+                mediaState = "media_loading";
+                mediaCursor = cursor;
+                mediaItemBounds = itemBounds;
+                scale = GetScale(cursor);
+                SetFonts();
+                UpdateLanguage();
+                AccessibleName = L10n.Text(language, kind == MediaKind.Video ? "video_preview" : "audio_preview");
+                Text = AccessibleName + " — Desktop Hover";
+                var session = new MediaPlayback(Handle);
+                media = session;
+                session.Opened += delegate
+                {
+                    if (media != session || IsDisposed) return;
+                    try
+                    {
+                        mediaState = "media_playing";
+                        LayoutMedia();
+                        session.Play();
+                        UpdateMediaDescription();
+                        Invalidate();
+                    }
+                    catch { MediaFailed(session); }
+                };
+                session.Ended += delegate
+                {
+                    if (media != session || IsDisposed) return;
+                    mediaState = "media_ended";
+                    mediaTimer.Stop();
+                    UpdateMediaDescription();
+                    Invalidate();
+                };
+                session.Failed += delegate { MediaFailed(session); };
+                mediaDeadline = DateTime.UtcNow.AddSeconds(15);
+                LayoutMedia();
+                UpdateMediaDescription();
+                mediaTimer.Start();
+                session.Open(path);
+                return true;
+            }
+            catch
+            {
+                ClearPreview();
+                return false;
+            }
+        }
+
+        private void MediaFailed(MediaPlayback session)
+        {
+            if (media != session || IsDisposed) return;
+            media = null;
+            session.Dispose();
+            mediaTimer.Stop();
+            mediaState = "media_unavailable";
+            UpdateMediaDescription();
+            Invalidate();
+        }
+
+        private void LayoutMedia()
+        {
+            Rectangle workingArea = Screen.FromPoint(mediaCursor).WorkingArea;
+            int padding = Px(12), footerHeight = Px(48);
+            int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
+            int maxHeight = Math.Max(1, Math.Min(maximumPreviewHeight, workingArea.Height - padding * 2 - footerHeight - Px(32)));
+            int width = Math.Min(maxWidth, Px(360)), height = Math.Min(maxHeight, Px(120));
+            if (media != null && media.IsOpen && media.HasVideo)
+            {
+                double fit = Math.Min(1.0, Math.Min((double)maxWidth / Math.Max(1, media.NaturalWidth),
+                    (double)maxHeight / Math.Max(1, media.NaturalHeight)));
+                width = Math.Max(1, (int)Math.Round(media.NaturalWidth * fit));
+                height = Math.Max(1, (int)Math.Round(media.NaturalHeight * fit));
+            }
+            else if (mediaKind == MediaKind.Video && mediaState == "media_loading")
+            {
+                width = maxWidth;
+                height = Math.Min(maxHeight, Math.Max(1, width * 9 / 16));
+            }
+            int contentWidth = Math.Min(maxWidth, Math.Max(Px(220), width));
+            ClientSize = new DrawingSize(contentWidth + padding * 2, height + padding * 2 + footerHeight);
+            imageArea = new Rectangle(padding + (contentWidth - width) / 2, padding, width, height);
+            titleArea = new Rectangle(padding + Px(22), imageArea.Bottom + Px(11), contentWidth - Px(22), Px(19));
+            descriptionArea = new Rectangle(padding, titleArea.Bottom + Px(1), contentWidth, Px(17));
+            Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
+            if (!Visible) Show();
+            if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
+            SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+            Invalidate();
+        }
+
+        private void UpdateMediaDescription()
+        {
+            if (mediaState == "media_unavailable")
+            {
+                description = FormatBytes(sourceBytes);
+                return;
+            }
+            if (media != null && media.IsOpen && mediaState != "media_loading")
+            {
+                description = FormatTime(media.Position);
+                if (media.Duration > TimeSpan.Zero) description += " / " + FormatTime(media.Duration);
+                description += "  ·  " + FormatBytes(sourceBytes);
+                if (mediaState == "media_ended") description += "  ·  " + L10n.Text(language, mediaState);
+            }
+            else description = L10n.Text(language, mediaState ?? "media_loading") + "  ·  " + FormatBytes(sourceBytes);
+        }
+
+        private static string FormatTime(TimeSpan value)
+        {
+            if (value.TotalHours >= 1) return ((int)value.TotalHours).ToString(CultureInfo.InvariantCulture) + ":" + value.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+            return value.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+        }
+
         public void ClearPreview()
         {
+            if (mediaTimer != null) mediaTimer.Stop();
+            MediaPlayback previousMedia = media;
+            media = null;
+            if (previousMedia != null) previousMedia.Dispose();
+            mediaKind = MediaKind.None;
+            mediaState = null;
             if (!IsDisposed)
                 Hide();
             CurrentPath = null;
@@ -189,10 +361,16 @@ namespace DesktopHover
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            if (preview == null)
+            if (preview == null && mediaKind == MediaKind.None)
                 return;
 
             Graphics graphics = e.Graphics;
+            if (mediaKind != MediaKind.None)
+            {
+                PaintMedia(graphics);
+                PaintFooter(graphics);
+                return;
+            }
             int checker = Px(10);
             using (SolidBrush first = new SolidBrush(DrawingColor.FromArgb(43, 46, 51)))
             using (SolidBrush second = new SolidBrush(DrawingColor.FromArgb(53, 56, 61)))
@@ -218,6 +396,44 @@ namespace DesktopHover
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             graphics.DrawImage(preview, imageArea);
 
+            PaintFooter(graphics);
+        }
+
+        private void PaintMedia(Graphics graphics)
+        {
+            // The native video child draws live frames; GDI draws only the audio/loading card.
+            if (media != null && media.IsOpen && media.HasVideo) return;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            SettingsWindow.FillRound(graphics, imageArea, Px(9), Brand.Surface);
+            string title = L10n.Text(language, mediaKind == MediaKind.Video ? "video_preview" : "audio_preview");
+            TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            if (mediaState == "media_unavailable")
+            {
+                TextRenderer.DrawText(graphics, title, titleFont,
+                    new Rectangle(imageArea.X + Px(8), imageArea.Y + Px(8), imageArea.Width - Px(16), Px(24)), Brand.Text, flags);
+                TextRenderer.DrawText(graphics, L10n.Text(language, mediaState), descriptionFont,
+                    new Rectangle(imageArea.X + Px(16), imageArea.Y + Px(38), imageArea.Width - Px(32), imageArea.Height - Px(46)),
+                    Brand.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                return;
+            }
+            int centerX = imageArea.Left + imageArea.Width / 2;
+            int centerY = imageArea.Top + imageArea.Height / 2 - Px(18);
+            using (var pen = new System.Drawing.Pen(Brand.Accent, Px(3)))
+            {
+                pen.StartCap = pen.EndCap = LineCap.Round;
+                int[] bars = { 6, 14, 22, 11, 18 };
+                for (int i = 0; i < bars.Length; i++)
+                    graphics.DrawLine(pen, centerX + Px(8) * (i - 2), centerY - Px(bars[i]) / 2,
+                        centerX + Px(8) * (i - 2), centerY + Px(bars[i]) / 2);
+            }
+            TextRenderer.DrawText(graphics, title, titleFont,
+                new Rectangle(imageArea.X + Px(8), centerY + Px(16), imageArea.Width - Px(16), Px(24)), Brand.Text, flags);
+        }
+
+        private void PaintFooter(Graphics graphics)
+        {
             TextFormatFlags textFlags = TextFormatFlags.Left | TextFormatFlags.SingleLine |
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter;
             Brand.DrawLogo(graphics,new Rectangle(Px(12),imageArea.Bottom+Px(12),Px(16),Px(16)));
@@ -247,6 +463,8 @@ namespace DesktopHover
         {
             if (disposing)
             {
+                ClearPreview();
+                if (mediaTimer != null) mediaTimer.Dispose();
                 if (preview != null)
                 {
                     preview.Dispose();

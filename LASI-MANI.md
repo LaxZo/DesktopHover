@@ -1,13 +1,19 @@
 # Desktop Hover
 
-Neliela lokāla Windows programma, kas parāda lielu attēla priekšskatījumu,
-uzvedot peli uz attēla faila darbvirsmā vai File Explorer.
+Neliela lokāla Windows programma, kas rāda attēlu un video priekšskatījumus
+un atskaņo audio, uzvedot peli uz faila darbvirsmā vai File Explorer.
 
 ## Lietošana
 
-Uzved peli uz attēla un nekustini apmēram pussekundi. Attēls parādīsies pie
-kursora kopā ar faila nosaukumu, pikseļu izmēriem un faila lielumu.
-Aizvirzot peli vai klikšķinot, priekšskatījums pazūd.
+Uzved peli uz attēla, audio vai video faila un nekustini apmēram pussekundi
+(vai iestatīto aiztures laiku). Attēls parādīsies pie kursora kopā ar faila
+nosaukumu, pikseļu izmēriem un faila lielumu. Audio fails sāks skanēt, bet video
+sāks spēlēt priekšskatījuma logā kopā ar skaņu. Skaņas stiprumu nosaka Windows
+skaļuma iestatījumi.
+
+Aizvirzot peli no faila, klikšķinot, nospiežot Esc vai pauzējot priekšskatījumus,
+priekšskatījums aizveras un atskaņošana tiek apturēta. Uzvedot peli atkārtoti,
+atskaņošana sākas no sākuma. Faila beigās atskaņošana netiek atkārtota.
 
 Tas ir atsevišķs lodziņš blakus kursora pozīcijai. Windows parastais teksta
 infotip netiek pārveidots vai aizstāts.
@@ -15,7 +21,7 @@ infotip netiek pārveidots vai aizstāts.
 Pie pulksteņa atrodi jauno ikonu: tirkīza attēla simbols ar baltu peles kursoru.
 Tā var būt zem slēpto ikonu bultiņas. **Kreisais klikšķis** atver pilno iestatījumu
 logu. **Labais klikšķis** atver mazu ātro iestatījumu izvēlni tajā pašā tumšajā stilā.
-Tajā var ieslēgt vai pauzēt priekšskatījumu, izvēlēties attēla lielumu un aizturi,
+Tajā var ieslēgt vai pauzēt priekšskatījumu, izvēlēties priekšskatījuma lielumu un aizturi,
 pārslēgt mazo attēlu palielināšanu un palaišanu kopā ar Windows, atvērt pilnos
 iestatījumus vai aizvērt lietotni. Izmaiņas uzreiz atjaunojas arī atvērtajā
 iestatījumu logā.
@@ -29,9 +35,9 @@ Pilnajā iestatījumu logā:
   Noklusējuma valoda ir angļu, arī atjauninot
   iepriekšējo versiju. Izvēlētā valoda stājas spēkā uzreiz un saglabājas pēc
   pārstartēšanas. Tālāk minēti izvēlnes nosaukumi latviešu valodā;
-- **Attēla lielums** — Mazs (480 × 360), Vidējs (720 × 540), Liels (1080 × 810)
+- **Priekšskatījuma lielums** — Mazs (480 × 360), Vidējs (720 × 540), Liels (1080 × 810)
   vai Ļoti liels (1440 × 1080 px). Slīdnis ļauj izvēlēties platumu no 320 līdz
-  1600 px. Tie ir maksimālie izmēri: attēla proporcijas saglabājas, un priekšskatījums
+  1600 px. Tie ir maksimālie izmēri: attēla vai video proporcijas saglabājas, un priekšskatījums
   tiek ietilpināts ekrānā;
 - **Palielināt mazus attēlus** — ļauj rādīt attēlu lielāku par tā oriģinālo izmēru;
 - **Parādīšanās aizture** — 250, 450 vai 750 ms;
@@ -53,12 +59,19 @@ Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
 - WebP, HEIC, HEIF un AVIF darbojas, ja datorā ir atbilstošais Windows attēlu kodeks.
 - GIF un citi vairāku kadru faili tiek rādīti kā nekustīgs pirmais kadrs.
 - JPEG orientācijas metadati tiek ņemti vērā.
-- Tiek rādīti vietējie faili līdz 100 MB un 100 megapikseļiem.
+- Attēli tiek rādīti līdz 100 MB un 100 megapikseļiem. Šie attēlu ierobežojumi
+  neattiecas uz audio un video failiem.
+- Audio failu paplašinājumi: MP3, WAV, WMA, M4A, AAC, FLAC, AIF un AIFF.
+- Video failu paplašinājumi: MP4, M4V, MOV, AVI, WMV, MPG, MPEG, MKV un WebM.
+- Audio un video atskaņošanai tiek izmantots Windows WPF `MediaPlayer` un datorā
+  pieejamie kodeki. Paplašinājums vēl negarantē atskaņošanu: jāatbalsta arī faila
+  konteiners un tajā izmantotie audio un video kodeki. Ja failu nevar atskaņot,
+  priekšskatījumā parādās paziņojums. Programma nelejupielādē kodekus.
 - Mākoņa faili, kas vēl jālejupielādē, un tīkla diski tiek izlaisti.
 - Ja Windows slēpj paplašinājumus un vienā mapē vairākiem failiem ir vienāds
-  redzamais nosaukums, programma tos var izlaist, lai nerādītu nepareizu attēlu.
+  redzamais nosaukums, programma tos var izlaist, lai neatvērtu nepareizu failu.
 - Ļoti lielas mapes ar vairāk nekā 20 000 elementiem tiek izlaistas.
-- Video, PDF, SVG un mapju priekšskatījums nav iekļauts.
+- PDF, SVG un mapju priekšskatījums nav iekļauts.
 
 ## Uzstādīšana un noņemšana
 
@@ -78,6 +91,7 @@ Parastā darbībā diagnostikas faili netiek rakstīti.
 ## Pirmkods
 
 Pirmkods ir blakus programmai: `Program.cs`, `ShellResolver.cs`,
-`PreviewWindow.cs`, `AppSettings.cs`, `SettingsWindow.cs`, `TrayMenu.cs`, `Localization.cs` un `Brand.cs`.
+`PreviewWindow.cs`, `MediaFiles.cs`, `MediaPlayback.cs`, `AppSettings.cs`,
+`SettingsWindow.cs`, `TrayMenu.cs`, `Localization.cs` un `Brand.cs`.
 Kompilēšanai palaid `build.ps1`; tas izmanto Windows
 iebūvēto .NET Framework 4 kompilatoru. Papildu lejupielādes nav nepieciešamas.

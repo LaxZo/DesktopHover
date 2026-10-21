@@ -87,7 +87,7 @@ namespace DesktopHover
         private volatile bool stopping;
         private bool paused, busy;
         private Point last, requestedPoint;
-        private IntPtr lastSurface;
+        private IntPtr lastSurface, lastNativeTip;
         private int generation, requestGeneration, resultGeneration;
         private HoverItem result, shown;
         private bool resultReady;
@@ -166,7 +166,7 @@ namespace DesktopHover
         }
         private void Reset()
         {
-            generation++; shown=null; preview.ClearPreview(); moved=DateTime.UtcNow;
+            generation++; shown=null; lastNativeTip=IntPtr.Zero; preview.ClearPreview(); moved=DateTime.UtcNow;
         }
         private void Tick(object sender,EventArgs e)
         {
@@ -176,7 +176,12 @@ namespace DesktopHover
             if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
             { Reset(); last=now; return; }
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
-            if(motion) { Reset(); last=now; }
+            if(motion)
+            {
+                // Small moves within the same file must not repeatedly restart its audio/video.
+                if(!preview.IsMediaPreview || shown==null || !shown.Bounds.Contains(now)) Reset();
+                last=now;
+            }
             IntPtr surface=Native.WindowFromPoint(p);
             IntPtr root=Native.GetAncestor(surface,2);
             bool isShell=Native.IsShellRoot(root);
@@ -189,7 +194,14 @@ namespace DesktopHover
             if(shown!=null)
             {
                 if(!shown.Bounds.Contains(now)) { Reset(); return; }
-                Native.SetWindowPos(preview.Handle,new IntPtr(-1),0,0,0,0,0x0013);
+                // ShowFile already makes the preview topmost. Only raise it again for a new
+                // Explorer infotip, rather than touching the video window every 75 ms.
+                if(nativeTip && surface!=lastNativeTip)
+                {
+                    Native.SetWindowPos(preview.Handle,new IntPtr(-1),0,0,0,0,0x0013);
+                    lastNativeTip=surface;
+                }
+                else if(!nativeTip) lastNativeTip=IntPtr.Zero;
             }
             lock(gate)
             {
@@ -203,7 +215,7 @@ namespace DesktopHover
                             if(!nativeTip && (root!=result.Root || surface!=result.Surface)) { preview.ClearPreview(); shown=null; return; }
                             if(shown==null || !string.Equals(shown.Path,result.Path,StringComparison.OrdinalIgnoreCase))
                             {
-                                if(preview.ShowImage(result.Path,now,result.Bounds)) shown=result;
+                                    if(preview.ShowFile(result.Path,now,result.Bounds)) shown=result;
                                 else shown=null;
                                 if(Program.StatusFile!=null)
                                     try { File.WriteAllText(Program.StatusFile,shown==null?"RENDER_FAILED":"SHOWN "+shown.Path+"\r\n"+preview.Bounds); } catch { }
