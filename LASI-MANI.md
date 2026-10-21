@@ -13,10 +13,17 @@ Tas ir atsevišķs lodziņš blakus kursora pozīcijai. Windows parastais teksta
 infotip netiek pārveidots vai aizstāts.
 
 Pie pulksteņa atrodi jauno ikonu: tirkīza attēla simbols ar baltu peles kursoru.
-Tā var būt zem slēpto ikonu bultiņas. Kreisais vai labais klikšķis atver tumšo
-iestatījumu izvēlni:
+Tā var būt zem slēpto ikonu bultiņas. **Kreisais klikšķis** atver pilno iestatījumu
+logu. **Labais klikšķis** atver mazu ātro iestatījumu izvēlni tajā pašā tumšajā stilā.
+Tajā var ieslēgt vai pauzēt priekšskatījumu, izvēlēties attēla lielumu un aizturi,
+pārslēgt mazo attēlu palielināšanu un palaišanu kopā ar Windows, atvērt pilnos
+iestatījumus vai aizvērt lietotni. Izmaiņas uzreiz atjaunojas arī atvērtajā
+iestatījumu logā.
 
-- Loga augšā atver valodas izkrītošo sarakstu. Pieejamas **English**, **Русский**,
+Pilnajā iestatījumu logā:
+
+- Loga apakšējā labajā stūrī nospied valodas pogu ar saīsinājumu, piemēram, **ENG** vai **LAT**.
+  Saraksts atveras uz augšu un rāda pilnos valodu nosaukumus. Pieejamas **English**, **Русский**,
   **Latviešu**, **简体中文** (vienkāršotā ķīniešu rakstība), **Deutsch**, **Español**,
   **Français**, **Português (Brasil)**, **Italiano**, **日本語**, **한국어** un **Українська**.
   Noklusējuma valoda ir angļu, arī atjauninot
@@ -30,12 +37,15 @@ iestatījumu izvēlni:
 - **Parādīšanās aizture** — 250, 450 vai 750 ms;
 - **Palaist kopā ar Windows** — automātiskās palaišanas ieslēgšana/izslēgšana;
 - **Priekšskatījums ieslēgts** — ieslēgšana vai īslaicīga pauze;
-- **Aizvērt lietotni** — programmas apturēšana.
+- **×** augšējā stūrī — programmas apturēšana.
 
 Valoda, izmērs, mazu attēlu palielināšana un aizture saglabājas uzreiz un paliek spēkā
 pēc pārstartēšanas. Pauze ir spēkā līdz programmas aizvēršanai.
-Atvērtu valodu sarakstu var aizvērt ar Esc. Krustiņš augšējā stūrī vai Esc aizver tikai iestatījumu logu; priekšskatījumi turpina
-darboties. Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
+Atvērtu valodu sarakstu var aizvērt ar Esc. Samazināšanas poga **−** augšējā stūrī
+vai Esc aizver tikai iestatījumu logu; priekšskatījumi turpina darboties.
+Iestatījumus var atkal atvērt ar ikonu pie pulksteņa.
+Krustiņš **×** pilnībā aizver programmu.
+Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
 
 ## Atbalsts un ierobežojumi
 
@@ -59,7 +69,7 @@ Atkārtotai uzstādīšanai paredzēts `Install.ps1`. Atjauninājums saglabā es
 iestatījumus un automātiskās palaišanas izvēli.
 
 Lai izslēgtu uz visiem laikiem, noņem ķeksi **Palaist kopā ar Windows** un
-izvēlies **Aizvērt lietotni**. Pēc tam `%LOCALAPPDATA%\DesktopHover` mapi var dzēst.
+nospied **×**. Pēc tam `%LOCALAPPDATA%\DesktopHover` mapi var dzēst.
 
 Programma nesūta failus internetā, neveic tīkla pieprasījumus un neievieto kodu
 Explorer procesā. Tā izmanto Windows pieejamības un Shell saskarnes.
@@ -68,6 +78,6 @@ Parastā darbībā diagnostikas faili netiek rakstīti.
 ## Pirmkods
 
 Pirmkods ir blakus programmai: `Program.cs`, `ShellResolver.cs`,
-`PreviewWindow.cs`, `AppSettings.cs`, `SettingsWindow.cs`, `Localization.cs` un `Brand.cs`.
+`PreviewWindow.cs`, `AppSettings.cs`, `SettingsWindow.cs`, `TrayMenu.cs`, `Localization.cs` un `Brand.cs`.
 Kompilēšanai palaid `build.ps1`; tas izmanto Windows
 iebūvēto .NET Framework 4 kompilatoru. Papildu lejupielādes nav nepieciešamas.

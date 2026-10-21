@@ -77,6 +77,7 @@ namespace DesktopHover
         private readonly PreviewWindow preview=new PreviewWindow();
         private readonly NotifyIcon tray;
         private readonly Icon trayIcon;
+        private readonly TrayMenu trayMenu;
         private AppSettings settings;
         private SettingsWindow settingsWindow;
         private readonly System.Windows.Forms.Timer timer;
@@ -102,9 +103,15 @@ namespace DesktopHover
             preview.Configure(settings);
             trayIcon=Brand.CreateIcon();
             tray=new NotifyIcon {Icon=trayIcon,Visible=true};
+            trayMenu=new TrayMenu(
+                delegate { settings.StartWithWindows=Startup.IsEnabled(); return settings.Clone(); },
+                delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); });
+            trayMenu.Opening+=delegate { Reset(); };
+            trayMenu.Closed+=delegate { if(!stopping) Reset(); };
+            tray.ContextMenuStrip=trayMenu;
             UpdateTrayText();
             tray.MouseClick+=delegate(object sender,MouseEventArgs e)
-            { if(e.Button==MouseButtons.Left || e.Button==MouseButtons.Right) ShowSettings(); };
+            { if(e.Button==MouseButtons.Left) ShowSettings(); };
             worker=new Thread(Work){IsBackground=true,Name="Desktop Hover shell resolver"};
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
@@ -119,11 +126,18 @@ namespace DesktopHover
             {
                 settings.StartWithWindows=Startup.IsEnabled();
                 settingsWindow=new SettingsWindow(settings.Clone(),paused,ApplySettings,
-                    delegate(bool value) { paused=value; Reset(); UpdateTrayText(); },
+                    SetPaused,
                     delegate { ExitThread(); });
             }
             settingsWindow.UpdatePaused(paused);
             settingsWindow.ShowNear(Cursor.Position);
+        }
+        private void SetPaused(bool value)
+        {
+            paused=value;
+            Reset();
+            UpdateTrayText();
+            if(settingsWindow!=null && !settingsWindow.IsDisposed) settingsWindow.UpdatePaused(paused);
         }
         private void ApplySettings(AppSettings updated)
         {
@@ -144,6 +158,7 @@ namespace DesktopHover
             preview.Configure(settings);
             UpdateTrayText();
             Reset();
+            if(settingsWindow!=null && !settingsWindow.IsDisposed) settingsWindow.UpdateSettings(settings);
         }
         private void UpdateTrayText()
         {
@@ -158,7 +173,7 @@ namespace DesktopHover
             if(Program.OpenSettingsEvent.WaitOne(0)) ShowSettings();
             Native.POINT p; if(!Native.GetCursorPos(out p)) return;
             Point now=new Point(p.X,p.Y);
-            if(paused || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
+            if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
             { Reset(); last=now; return; }
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
             if(motion) { Reset(); last=now; }
@@ -234,7 +249,7 @@ namespace DesktopHover
         {
             if(disposing)
             {
-                stopping=true; request.Set(); timer.Dispose(); tray.Dispose(); trayIcon.Dispose(); preview.Dispose();
+                stopping=true; request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
                 if(settingsWindow!=null) settingsWindow.Dispose();
             }
             base.Dispose(disposing);

@@ -10,12 +10,14 @@ namespace DesktopHover
         {
             public string Code { get; private set; }
             public string NativeName { get; private set; }
+            public string ShortName { get; private set; }
             internal string CultureName { get; private set; }
 
-            internal LanguageOption(string code, string nativeName, string cultureName)
+            internal LanguageOption(string code, string nativeName, string shortName, string cultureName)
             {
                 Code = code;
                 NativeName = nativeName;
+                ShortName = shortName;
                 CultureName = cultureName;
             }
         }
@@ -23,24 +25,24 @@ namespace DesktopHover
         // Translation columns follow this list. Keep existing codes stable for saved settings.
         internal static readonly LanguageOption[] Languages =
         {
-            new LanguageOption("en", "English", "en-US"),
-            new LanguageOption("ru", "Русский", "ru-RU"),
-            new LanguageOption("lv", "Latviešu", "lv-LV"),
-            new LanguageOption("zh", "简体中文", "zh-CN"),
-            new LanguageOption("de", "Deutsch", "de-DE"),
-            new LanguageOption("es", "Español", "es-ES"),
-            new LanguageOption("fr", "Français", "fr-FR"),
-            new LanguageOption("pt", "Português (Brasil)", "pt-BR"),
-            new LanguageOption("it", "Italiano", "it-IT"),
-            new LanguageOption("ja", "日本語", "ja-JP"),
-            new LanguageOption("ko", "한국어", "ko-KR"),
-            new LanguageOption("uk", "Українська", "uk-UA")
+            new LanguageOption("en", "English", "ENG", "en-US"),
+            new LanguageOption("ru", "Русский", "RUS", "ru-RU"),
+            new LanguageOption("lv", "Latviešu", "LAT", "lv-LV"),
+            new LanguageOption("zh", "简体中文", "ZHO", "zh-CN"),
+            new LanguageOption("de", "Deutsch", "DEU", "de-DE"),
+            new LanguageOption("es", "Español", "ESP", "es-ES"),
+            new LanguageOption("fr", "Français", "FRA", "fr-FR"),
+            new LanguageOption("pt", "Português (Brasil)", "POR", "pt-BR"),
+            new LanguageOption("it", "Italiano", "ITA", "it-IT"),
+            new LanguageOption("ja", "日本語", "JPN", "ja-JP"),
+            new LanguageOption("ko", "한국어", "KOR", "ko-KR"),
+            new LanguageOption("uk", "Українська", "UKR", "uk-UA")
         };
 
         private static readonly Dictionary<string, string[]> Strings = new Dictionary<string, string[]>
         {
             { "settings", new[] { "Settings", "Настройки", "Iestatījumi", "设置", "Einstellungen", "Ajustes", "Paramètres", "Configurações", "Impostazioni", "設定", "설정", "Налаштування" } },
-            { "close_settings", new[] { "Close settings", "Закрыть настройки", "Aizvērt iestatījumus", "关闭设置", "Einstellungen schließen", "Cerrar ajustes", "Fermer les paramètres", "Fechar configurações", "Chiudi impostazioni", "設定を閉じる", "설정 닫기", "Закрити налаштування" } },
+            { "minimize_settings", new[] { "Minimize to tray", "Свернуть в трей", "Samazināt uz sistēmas tekni", "最小化到系统托盘", "In den Infobereich minimieren", "Minimizar a la bandeja", "Réduire dans la zone de notification", "Minimizar para a bandeja", "Riduci nell’area di notifica", "トレイに最小化", "시스템 트레이로 최소화", "Згорнути в трей" } },
             { "language", new[] { "Language", "Язык", "Valoda", "语言", "Sprache", "Idioma", "Langue", "Idioma", "Lingua", "言語", "언어", "Мова" } },
             { "small", new[] { "Small", "Маленький", "Mazs", "小", "Klein", "Pequeño", "Petite", "Pequeno", "Piccola", "小", "작게", "Малий" } },
             { "medium", new[] { "Medium", "Средний", "Vidējs", "中", "Mittel", "Mediano", "Moyenne", "Médio", "Media", "中", "보통", "Середній" } },

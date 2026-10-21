@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace DesktopHover
 {
-    // The tray menu is a small, keyboard-accessible settings window.
+    // Main settings window, opened from the tray icon or quick settings menu.
     internal sealed class SettingsWindow : Form
     {
         private AppSettings settings, lastApplied;
@@ -17,7 +17,8 @@ namespace DesktopHover
         private readonly HoverButton[] delays = new HoverButton[3];
         private readonly HoverButton languagePicker;
         private readonly ContextMenuStrip languageMenu;
-        private readonly HoverButton close, exit;
+        private readonly HoverButton minimize, close;
+        private readonly ToolTip windowToolTip = new ToolTip();
         private readonly HoverSlider widthSlider;
         private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle;
         private bool paused, syncing;
@@ -56,9 +57,14 @@ namespace DesktopHover
             windowIcon = Brand.CreateIcon();
             Icon = windowIcon;
 
-            close = new HoverButton { Text = "\u00d7", Compact = true };
+            minimize = new HoverButton { Name = "minimize-settings", Text = "\u2212", Compact = true };
+            minimize.SetBounds(330, 20, 32, 32);
+            minimize.Click += delegate { Close(); };
+            Controls.Add(minimize);
+
+            close = new HoverButton { Name = "quit-app", Text = "\u00d7", Compact = true };
             close.SetBounds(368, 20, 32, 32);
-            close.Click += delegate { Close(); };
+            close.Click += QuitApp;
             Controls.Add(close);
 
             languagePicker = new HoverButton
@@ -68,7 +74,7 @@ namespace DesktopHover
                 LanguageSelector = true,
                 Font = smallFont
             };
-            languagePicker.SetBounds(76, 52, 284, 28);
+            languagePicker.SetBounds(290, 632, 110, 32);
             languageMenu = new ContextMenuStrip
             {
                 Name = "language-menu",
@@ -79,7 +85,7 @@ namespace DesktopHover
                 ShowCheckMargin = true,
                 DropShadowEnabled = false,
                 Padding = new Padding(5),
-                Renderer = new LanguageMenuRenderer()
+                Renderer = new HoverMenuRenderer()
             };
             foreach (L10n.LanguageOption language in L10n.Languages)
             {
@@ -95,7 +101,7 @@ namespace DesktopHover
                 languageMenu.Items.Add(item);
             }
             languageMenu.AutoSize = false;
-            languageMenu.Size = new Size(languagePicker.Width, languageMenu.Items.Count * 30 + languageMenu.Padding.Vertical);
+            languageMenu.Size = new Size(240, languageMenu.Items.Count * 30 + languageMenu.Padding.Vertical);
             languageMenu.Opened += delegate
             {
                 languagePicker.Selected = true;
@@ -110,7 +116,6 @@ namespace DesktopHover
             };
             languageMenu.Closed += delegate { languagePicker.Selected = false; };
             languagePicker.Click += delegate { ShowLanguageMenu(); };
-            Controls.Add(languagePicker);
 
             for (int i = 0; i < presets.Length; i++)
             {
@@ -171,20 +176,19 @@ namespace DesktopHover
                 if (this.pauseChanged != null) this.pauseChanged(this.paused);
             };
 
-            exit = new HoverButton
-            {
-                Compact = true
-            };
-            exit.SetBounds(242, 632, 158, 32);
-            exit.Click += delegate { if (this.exitRequested != null) this.exitRequested(); };
-            Controls.Add(exit);
+            Controls.Add(languagePicker);
             SyncControls();
+        }
+
+        private void QuitApp(object sender, EventArgs e)
+        {
+            if (exitRequested != null) exitRequested();
         }
 
         private void ShowLanguageMenu()
         {
             if (languageMenu.Visible) { languageMenu.Close(); return; }
-            languageMenu.Show(languagePicker, new Point(0, languagePicker.Height + 5));
+            languageMenu.Show(languagePicker, new Point(languagePicker.Width, -5), ToolStripDropDownDirection.AboveLeft);
         }
 
         private HoverToggle AddToggle(int y)
@@ -232,9 +236,14 @@ namespace DesktopHover
             settings.Language = L10n.Normalize(settings.Language);
             Text = "Desktop Hover — " + T("settings");
             AccessibleName = Text;
-            close.AccessibleName = T("close_settings");
-            languagePicker.Text = L10n.Languages[L10n.LanguageIndex(settings.Language)].NativeName;
-            languagePicker.AccessibleName = T("language") + ": " + languagePicker.Text;
+            minimize.AccessibleName = T("minimize_settings");
+            close.AccessibleName = T("exit_accessible");
+            windowToolTip.SetToolTip(minimize, minimize.AccessibleName);
+            windowToolTip.SetToolTip(close, close.AccessibleName);
+            L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
+            languagePicker.Text = language.ShortName;
+            languagePicker.AccessibleName = T("language") + ": " + language.NativeName;
+            windowToolTip.SetToolTip(languagePicker, languagePicker.AccessibleName);
             languageMenu.AccessibleName = T("language");
             foreach (ToolStripMenuItem item in languageMenu.Items)
                 item.Checked = (string)item.Tag == settings.Language;
@@ -259,8 +268,6 @@ namespace DesktopHover
             LocalizeToggle(startupToggle, "startup", "startup_detail");
             enabledToggle.Checked = !paused;
             LocalizeToggle(enabledToggle, paused ? "preview_paused" : "preview_on", "preview_detail");
-            exit.Text = T("exit");
-            exit.AccessibleName = T("exit_accessible");
             syncing = false;
             Invalidate();
         }
@@ -312,7 +319,7 @@ namespace DesktopHover
                 else Close();
                 return true;
             }
-            if (languagePicker.Focused && (keyData == Keys.Down || keyData == (Keys.Alt | Keys.Down) || keyData == Keys.F4))
+            if (languagePicker.Focused && (keyData == Keys.Up || keyData == Keys.Down || keyData == (Keys.Alt | Keys.Down) || keyData == Keys.F4))
             {
                 ShowLanguageMenu();
                 return true;
@@ -329,7 +336,7 @@ namespace DesktopHover
             using (var pen = new Pen(Brand.Border))
                 g.DrawPath(pen, border);
             Brand.DrawLogo(g, new Rectangle(24, 23, 40, 40));
-            DrawText(g, "Desktop Hover", titleFont, Brand.Text, new Rectangle(76, 20, 284, 30));
+            DrawText(g, "Desktop Hover", titleFont, Brand.Text, new Rectangle(76, 20, 246, 30));
 
             FillRound(g, new RectangleF(24, 87, 376, 34), 9, Brand.Surface);
             using (var brush = new SolidBrush(paused ? Color.FromArgb(224, 176, 99) : Brand.Accent))
@@ -371,6 +378,7 @@ namespace DesktopHover
             if (disposing)
             {
                 languageMenu.Dispose();
+                windowToolTip.Dispose();
                 headingFont.Dispose();
                 titleFont.Dispose();
                 smallFont.Dispose();
@@ -384,9 +392,24 @@ namespace DesktopHover
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     }
 
-    internal sealed class LanguageMenuRenderer : ToolStripProfessionalRenderer
+    internal sealed class HoverMenuRenderer : ToolStripProfessionalRenderer
     {
-        public LanguageMenuRenderer() { RoundedEdges = false; }
+        public HoverMenuRenderer() { RoundedEdges = false; }
+
+        protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+        {
+            using (var pen = new Pen(Brand.Border))
+                e.Graphics.DrawLine(pen, 8, e.Item.Height / 2, e.Item.Width - 8, e.Item.Height / 2);
+        }
+
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = Brand.Muted;
+            Rectangle bounds = e.ArrowRectangle;
+            bounds.Y = (e.Item.Height - bounds.Height) / 2;
+            e.ArrowRectangle = bounds;
+            base.OnRenderArrow(e);
+        }
 
         protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
         {
@@ -417,6 +440,10 @@ namespace DesktopHover
         {
             var item = e.Item as ToolStripMenuItem;
             e.TextColor = item != null && item.Checked ? Brand.Accent : Brand.Text;
+            // Native text bounds omit the extra row padding; center against the whole row.
+            e.TextRectangle = new Rectangle(e.TextRectangle.X, 0, e.TextRectangle.Width, e.Item.Height);
+            e.TextFormat = (e.TextFormat & ~TextFormatFlags.Bottom) |
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
             base.OnRenderItemText(e);
         }
 
@@ -424,7 +451,7 @@ namespace DesktopHover
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             int x = e.ImageRectangle.Left + e.ImageRectangle.Width / 2;
-            int y = e.ImageRectangle.Top + e.ImageRectangle.Height / 2;
+            int y = e.Item.Height / 2;
             using (var pen = new Pen(Brand.Accent, 1.7f))
             {
                 pen.StartCap = pen.EndCap = LineCap.Round;
@@ -478,8 +505,8 @@ namespace DesktopHover
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
                     g.DrawLines(pen, selected
-                        ? new[] { new Point(Width - 20, mid + 2), new Point(Width - 16, mid - 2), new Point(Width - 12, mid + 2) }
-                        : new[] { new Point(Width - 20, mid - 2), new Point(Width - 16, mid + 2), new Point(Width - 12, mid - 2) });
+                        ? new[] { new Point(Width - 20, mid - 2), new Point(Width - 16, mid + 2), new Point(Width - 12, mid - 2) }
+                        : new[] { new Point(Width - 20, mid + 2), new Point(Width - 16, mid - 2), new Point(Width - 12, mid + 2) });
                 }
             }
             else if (Compact)
