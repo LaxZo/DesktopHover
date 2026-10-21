@@ -16,8 +16,10 @@ Pie pulksteņa atrodi jauno ikonu: tirkīza attēla simbols ar baltu peles kurso
 Tā var būt zem slēpto ikonu bultiņas. Kreisais vai labais klikšķis atver tumšo
 iestatījumu izvēlni:
 
-- Loga augšā vari pārslēgt **English**, **Русский**, **Latviešu** vai **中文**
-  (vienkāršotā ķīniešu rakstība). Noklusējuma valoda ir angļu, arī atjauninot
+- Loga augšā atver valodas izkrītošo sarakstu. Pieejamas **English**, **Русский**,
+  **Latviešu**, **简体中文** (vienkāršotā ķīniešu rakstība), **Deutsch**, **Español**,
+  **Français**, **Português (Brasil)**, **Italiano**, **日本語**, **한국어** un **Українська**.
+  Noklusējuma valoda ir angļu, arī atjauninot
   iepriekšējo versiju. Izvēlētā valoda stājas spēkā uzreiz un saglabājas pēc
   pārstartēšanas. Tālāk minēti izvēlnes nosaukumi latviešu valodā;
 - **Attēla lielums** — Mazs (480 × 360), Vidējs (720 × 540), Liels (1080 × 810)
@@ -32,7 +34,7 @@ iestatījumu izvēlni:
 
 Valoda, izmērs, mazu attēlu palielināšana un aizture saglabājas uzreiz un paliek spēkā
 pēc pārstartēšanas. Pauze ir spēkā līdz programmas aizvēršanai.
-Krustiņš augšējā stūrī vai Esc aizver tikai iestatījumu logu; priekšskatījumi turpina
+Atvērtu valodu sarakstu var aizvērt ar Esc. Krustiņš augšējā stūrī vai Esc aizver tikai iestatījumu logu; priekšskatījumi turpina
 darboties. Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
 
 ## Atbalsts un ierobežojumi

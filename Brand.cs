@@ -32,6 +32,30 @@ namespace DesktopHover
             return path;
         }
 
+        public static void DrawLanguageIcon(Graphics graphics, Rectangle rect, Color color)
+        {
+            GraphicsState state = graphics.Save();
+            try
+            {
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.TranslateTransform(rect.X, rect.Y);
+                graphics.ScaleTransform(rect.Width / 24f, rect.Height / 24f);
+                using (var pen = new Pen(color, 1.8f))
+                {
+                    pen.StartCap = pen.EndCap = LineCap.Round;
+                    pen.LineJoin = LineJoin.Round;
+                    // Translation symbol: crossed language strokes and a Latin A.
+                    graphics.DrawLine(pen, 8, 2, 8, 5);
+                    graphics.DrawLine(pen, 2, 5, 15, 5);
+                    graphics.DrawBezier(pen, 12, 5, 11, 11, 7, 15, 3, 18);
+                    graphics.DrawBezier(pen, 5, 8, 6, 11, 9, 14, 12, 16);
+                    graphics.DrawLines(pen, new[] { new PointF(13, 22), new PointF(18, 10), new PointF(23, 22) });
+                    graphics.DrawLine(pen, 15, 18, 21, 18);
+                }
+            }
+            finally { graphics.Restore(state); }
+        }
+
         public static void DrawLogo(Graphics graphics, Rectangle rect)
         {
             GraphicsState state = graphics.Save();
