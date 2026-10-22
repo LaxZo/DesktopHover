@@ -167,6 +167,7 @@ namespace DesktopHover
         private void Reset()
         {
             generation++; shown=null; lastNativeTip=IntPtr.Zero; preview.ClearPreview(); moved=DateTime.UtcNow;
+            lastCheck=DateTime.MinValue;
         }
         private void Tick(object sender,EventArgs e)
         {

@@ -40,6 +40,7 @@ namespace DesktopHover
         private long sourceBytes;
         private int maximumPreviewWidth=720;
         private int maximumPreviewHeight=540;
+        private int volumePercent=100;
         private bool upscale;
         private string language="en";
         private MediaPlayback media;
@@ -59,6 +60,7 @@ namespace DesktopHover
         {
             maximumPreviewWidth=settings.MaxWidth;
             maximumPreviewHeight=settings.MaxHeight;
+            volumePercent=Math.Max(0,Math.Min(100,settings.VolumePercent));
             upscale=settings.Upscale;
             language=L10n.Normalize(settings.Language);
             UpdateLanguage();
@@ -236,7 +238,7 @@ namespace DesktopHover
                 UpdateLanguage();
                 AccessibleName = L10n.Text(language, kind == MediaKind.Video ? "video_preview" : "audio_preview");
                 Text = AccessibleName + " — Desktop Hover";
-                var session = new MediaPlayback(Handle);
+                var session = new MediaPlayback(Handle, volumePercent);
                 media = session;
                 session.Opened += delegate
                 {
@@ -288,9 +290,10 @@ namespace DesktopHover
         private void LayoutMedia()
         {
             Rectangle workingArea = Screen.FromPoint(mediaCursor).WorkingArea;
-            int padding = Px(12), footerHeight = Px(48);
-            int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
-            int maxHeight = Math.Max(1, Math.Min(maximumPreviewHeight, workingArea.Height - padding * 2 - footerHeight - Px(32)));
+            int imagePadding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
+            int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - imagePadding * 2 - Px(32)));
+            int maxHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
+                workingArea.Height - imagePadding - footerPadding - footerHeight - Px(32)));
             int width = Math.Min(maxWidth, Px(360)), height = Math.Min(maxHeight, Px(120));
             if (media != null && media.IsOpen && media.HasVideo)
             {
@@ -305,10 +308,13 @@ namespace DesktopHover
                 height = Math.Min(maxHeight, Math.Max(1, width * 9 / 16));
             }
             int contentWidth = Math.Min(maxWidth, Math.Max(Px(220), width));
-            ClientSize = new DrawingSize(contentWidth + padding * 2, height + padding * 2 + footerHeight);
-            imageArea = new Rectangle(padding + (contentWidth - width) / 2, padding, width, height);
-            titleArea = new Rectangle(padding + Px(22), imageArea.Bottom + Px(11), contentWidth - Px(22), Px(19));
-            descriptionArea = new Rectangle(padding, titleArea.Bottom + Px(1), contentWidth, Px(17));
+            ClientSize = new DrawingSize(contentWidth + imagePadding * 2,
+                height + imagePadding + footerPadding + footerHeight);
+            imageArea = new Rectangle(imagePadding + (contentWidth - width) / 2, imagePadding, width, height);
+            int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
+            titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
+                Math.Max(1, footerWidth - Px(22)), Px(19));
+            descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
             Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
             if (!Visible) Show();
             if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);

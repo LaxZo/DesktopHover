@@ -10,6 +10,7 @@ namespace DesktopHover
         public int MaxWidth=720;
         public int MaxHeight=540;
         public int DelayMs=450;
+        public int VolumePercent=100;
         public bool Upscale=false;
         public bool StartWithWindows;
         public string Language="en";
@@ -23,7 +24,8 @@ namespace DesktopHover
         {
             MaxWidth=Math.Max(320,Math.Min(1600,MaxWidth));
             MaxHeight=Math.Max(240,Math.Min(1200,MaxHeight));
-            DelayMs=Math.Max(150,Math.Min(2000,DelayMs));
+            DelayMs=Math.Max(0,Math.Min(2000,DelayMs));
+            VolumePercent=Math.Max(0,Math.Min(100,VolumePercent));
             Language=L10n.Normalize(Language);
         }
         internal static AppSettings Load() { return Load(DefaultPath); }
@@ -43,6 +45,7 @@ namespace DesktopHover
                         if(name=="width" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.MaxWidth=n;
                         if(name=="height" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.MaxHeight=n;
                         if(name=="delay_ms" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.DelayMs=n;
+                        if(name=="volume_percent" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.VolumePercent=n;
                         if(name=="upscale" && bool.TryParse(value,out b)) settings.Upscale=b;
                         if(name=="language") settings.Language=value;
                     }
@@ -62,8 +65,8 @@ namespace DesktopHover
             try
             {
                 string text=string.Format(CultureInfo.InvariantCulture,
-                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\n",
-                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language);
+                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\n",
+                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent);
                 File.WriteAllText(temporary,text,new UTF8Encoding(false));
                 if(File.Exists(path)) File.Replace(temporary,path,null);
                 else File.Move(temporary,path);

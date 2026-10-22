@@ -48,11 +48,13 @@ namespace DesktopHover
             }
         }
 
-        internal MediaPlayback(IntPtr parentHwnd)
+        internal MediaPlayback(IntPtr parentHwnd, int volumePercent = 100)
         {
             this.parentHwnd = parentHwnd;
             player = new MediaPlayer();
-            player.Volume = 1.0;
+            volumePercent = Math.Max(0, Math.Min(100, volumePercent));
+            player.Volume = volumePercent / 100.0;
+            player.IsMuted = volumePercent == 0;
             player.MediaOpened += OnOpened;
             player.MediaEnded += OnEnded;
             player.MediaFailed += OnFailed;

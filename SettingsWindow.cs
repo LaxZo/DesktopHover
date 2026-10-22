@@ -14,12 +14,12 @@ namespace DesktopHover
         private readonly Action<bool> pauseChanged;
         private readonly Action exitRequested;
         private readonly HoverButton[] presets = new HoverButton[4];
-        private readonly HoverButton[] delays = new HoverButton[3];
+        private readonly HoverButton[] delays = new HoverButton[5];
         private readonly HoverButton languagePicker;
         private readonly ContextMenuStrip languageMenu;
         private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
-        private readonly HoverSlider widthSlider;
+        private readonly HoverSlider widthSlider, volumeSlider;
         private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle;
         private bool paused, syncing;
         private readonly Font headingFont = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
@@ -29,9 +29,9 @@ namespace DesktopHover
         private readonly Icon windowIcon;
         private static readonly int[] SizeWidths = { 480, 720, 1080, 1440 };
         private static readonly int[] SizeHeights = { 360, 540, 810, 1080 };
-        private static readonly int[] DelayValues = { 250, 450, 750 };
+        private static readonly int[] DelayValues = { 0, 250, 450, 750, 1000 };
         private static readonly string[] SizeKeys = { "small", "medium", "large", "extra_large" };
-        private static readonly string[] DelayKeys = { "fast", "natural", "slow" };
+        private static readonly string[] DelayKeys = { "instant", "fast", "natural", "slow", "one_second" };
 
         public SettingsWindow(AppSettings settings, bool paused,
             Action<AppSettings> changed, Action<bool> pauseChanged, Action exitRequested)
@@ -43,7 +43,7 @@ namespace DesktopHover
             this.pauseChanged = pauseChanged;
             this.exitRequested = exitRequested;
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(424, 684);
+            ClientSize = new Size(424, 768);
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             ShowInTaskbar = true;
@@ -74,7 +74,7 @@ namespace DesktopHover
                 LanguageSelector = true,
                 Font = smallFont
             };
-            languagePicker.SetBounds(290, 632, 110, 32);
+            languagePicker.SetBounds(290, 716, 110, 32);
             languageMenu = new ContextMenuStrip
             {
                 Name = "language-menu",
@@ -156,20 +156,38 @@ namespace DesktopHover
                 int index = i;
                 var button = new HoverButton
                 {
+                    Name = "delay-" + DelayValues[i],
                     Compact = true,
                     Font = smallFont
                 };
-                button.SetBounds(24 + i * 128, 397, 120, 36);
+                button.SetBounds(24 + i * 76, 397, 72, 36);
                 button.Click += delegate { this.settings.DelayMs = DelayValues[index]; Apply(); };
                 Controls.Add(button);
                 delays[i] = button;
             }
 
-            upscaleToggle = AddToggle(449);
+            volumeSlider = new HoverSlider
+            {
+                Name = "volume-slider",
+                Minimum = 0,
+                Maximum = 100,
+                Step = 1,
+                Value = 100
+            };
+            volumeSlider.SetBounds(24, 494, 376, 30);
+            volumeSlider.ValueChanged += delegate
+            {
+                if (syncing) return;
+                this.settings.VolumePercent = volumeSlider.Value;
+                Apply();
+            };
+            Controls.Add(volumeSlider);
+
+            upscaleToggle = AddToggle(533);
             upscaleToggle.Click += delegate { this.settings.Upscale = !this.settings.Upscale; Apply(); };
-            startupToggle = AddToggle(503);
+            startupToggle = AddToggle(587);
             startupToggle.Click += delegate { this.settings.StartWithWindows = !this.settings.StartWithWindows; Apply(); };
-            enabledToggle = AddToggle(557);
+            enabledToggle = AddToggle(641);
             enabledToggle.Click += delegate
             {
                 UpdatePaused(!this.paused);
@@ -257,11 +275,16 @@ namespace DesktopHover
             for (int i = 0; i < delays.Length; i++)
             {
                 delays[i].Selected = settings.DelayMs == DelayValues[i];
-                delays[i].Text = T(DelayKeys[i]);
+                string seconds = (DelayValues[i] / 1000.0).ToString(DelayValues[i] == 0 ? "0" : "0.00", L10n.Culture(settings.Language));
+                delays[i].Text = String.Format(L10n.Culture(settings.Language), T("delay_seconds"), seconds);
                 delays[i].AccessibleName = String.Format(L10n.Culture(settings.Language), T("delay_accessible"), DelayValues[i]);
+                windowToolTip.SetToolTip(delays[i], T(DelayKeys[i]));
             }
             widthSlider.Value = settings.MaxWidth;
             widthSlider.AccessibleName = T("width_accessible");
+            volumeSlider.Value = settings.VolumePercent;
+            volumeSlider.AccessibleName = String.Format(L10n.Culture(settings.Language), T("volume_accessible"), settings.VolumePercent);
+            volumeSlider.AccessibleDescription = T("volume_detail");
             upscaleToggle.Checked = settings.Upscale;
             LocalizeToggle(upscaleToggle, "upscale", "upscale_detail");
             startupToggle.Checked = settings.StartWithWindows;
@@ -352,8 +375,12 @@ namespace DesktopHover
             DrawText(g, T("aspect_ratio"), smallFont, Brand.Muted, new Rectangle(24, 340, 376, 20));
             using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 367, 400, 367);
             DrawText(g, T("delay"), headingFont, Brand.Text, new Rectangle(24, 373, 376, 23));
-            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 620, 400, 620);
-            DrawText(g, T("autosaved"), smallFont, Brand.Muted, new Rectangle(24, 638, 212, 23));
+            DrawText(g, T("volume"), headingFont, Brand.Text, new Rectangle(24, 449, 300, 23));
+            DrawText(g, settings.VolumePercent + "%", Font, Brand.Accent,
+                new Rectangle(330, 449, 70, 23), TextFormatFlags.Right);
+            DrawText(g, T("volume_detail"), smallFont, Brand.Muted, new Rectangle(24, 474, 376, 20));
+            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 704, 400, 704);
+            DrawText(g, T("autosaved"), smallFont, Brand.Muted, new Rectangle(24, 722, 212, 23));
         }
 
         private static void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle)

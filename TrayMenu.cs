@@ -11,14 +11,16 @@ namespace DesktopHover
         private readonly Func<bool> readPaused;
         private readonly Action<AppSettings> applySettings;
         private readonly Font menuFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
-        private readonly ToolStripMenuItem open, enabled, size, delay, upscale, startup, quit;
+        private readonly ToolStripMenuItem open, enabled, size, delay, volume, upscale, startup, quit;
         private readonly ToolStripMenuItem[] sizes = new ToolStripMenuItem[4];
-        private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[3];
+        private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[5];
+        private readonly ToolStripMenuItem[] volumes = new ToolStripMenuItem[5];
         private static readonly int[] Widths = { 480, 720, 1080, 1440 };
         private static readonly int[] Heights = { 360, 540, 810, 1080 };
-        private static readonly int[] Delays = { 250, 450, 750 };
+        private static readonly int[] Delays = { 0, 250, 450, 750, 1000 };
+        private static readonly int[] Volumes = { 0, 25, 50, 75, 100 };
         private static readonly string[] SizeKeys = { "small", "medium", "large", "extra_large" };
-        private static readonly string[] DelayKeys = { "fast", "natural", "slow" };
+        private static readonly string[] DelayKeys = { "instant", "fast", "natural", "slow", "one_second" };
 
         internal TrayMenu(Func<AppSettings> readSettings, Func<bool> readPaused,
             Action<AppSettings> applySettings, Action<bool> setPaused, Action showSettings, Action exit)
@@ -49,6 +51,16 @@ namespace DesktopHover
                 delays[i] = AddItem(delay.DropDownItems, "delay-" + Delays[i], delegate
                 {
                     Change(delegate(AppSettings value) { value.DelayMs = Delays[index]; });
+                });
+            }
+            volume = AddItem(Items, "volume", null);
+            Style((ToolStripDropDownMenu)volume.DropDown);
+            for (int i = 0; i < volumes.Length; i++)
+            {
+                int index = i;
+                volumes[i] = AddItem(volume.DropDownItems, "volume-" + Volumes[i], delegate
+                {
+                    Change(delegate(AppSettings value) { value.VolumePercent = Volumes[index]; });
                 });
             }
             upscale = AddItem(Items, "upscale", delegate { Change(delegate(AppSettings value) { value.Upscale = !value.Upscale; }); });
@@ -110,6 +122,7 @@ namespace DesktopHover
             enabled.Checked = !readPaused();
             size.Text = L10n.Text(language, "image_size");
             delay.Text = L10n.Text(language, "delay");
+            volume.Text = L10n.Text(language, "volume");
             upscale.Text = L10n.Text(language, "upscale");
             upscale.Checked = current.Upscale;
             startup.Text = L10n.Text(language, "startup");
@@ -124,6 +137,13 @@ namespace DesktopHover
             {
                 delays[i].Text = L10n.Text(language, DelayKeys[i]);
                 delays[i].Checked = current.DelayMs == Delays[i];
+            }
+            for (int i = 0; i < volumes.Length; i++)
+            {
+                volumes[i].Text = Volumes[i].ToString(L10n.Culture(language)) + "%";
+                volumes[i].AccessibleName = String.Format(L10n.Culture(language),
+                    L10n.Text(language, "volume_accessible"), Volumes[i]);
+                volumes[i].Checked = current.VolumePercent == Volumes[i];
             }
         }
 

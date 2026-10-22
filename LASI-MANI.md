@@ -8,8 +8,8 @@ un atskaņo audio, uzvedot peli uz faila darbvirsmā vai File Explorer.
 Uzved peli uz attēla, audio vai video faila un nekustini apmēram pussekundi
 (vai iestatīto aiztures laiku). Attēls parādīsies pie kursora kopā ar faila
 nosaukumu, pikseļu izmēriem un faila lielumu. Audio fails sāks skanēt, bet video
-sāks spēlēt priekšskatījuma logā kopā ar skaņu. Skaņas stiprumu nosaka Windows
-skaļuma iestatījumi.
+sāks spēlēt priekšskatījuma logā kopā ar skaņu. Video un audio skaļumu var regulēt
+lietotnes iestatījumos no 0 līdz 100%; to ietekmē arī Windows skaļuma iestatījumi.
 
 Aizvirzot peli no faila, klikšķinot, nospiežot Esc vai pauzējot priekšskatījumus,
 priekšskatījums aizveras un atskaņošana tiek apturēta. Uzvedot peli atkārtoti,
@@ -21,7 +21,7 @@ infotip netiek pārveidots vai aizstāts.
 Pie pulksteņa atrodi jauno ikonu: tirkīza attēla simbols ar baltu peles kursoru.
 Tā var būt zem slēpto ikonu bultiņas. **Kreisais klikšķis** atver pilno iestatījumu
 logu. **Labais klikšķis** atver mazu ātro iestatījumu izvēlni tajā pašā tumšajā stilā.
-Tajā var ieslēgt vai pauzēt priekšskatījumu, izvēlēties priekšskatījuma lielumu un aizturi,
+Tajā var ieslēgt vai pauzēt priekšskatījumu, izvēlēties priekšskatījuma lielumu, aizturi un skaļumu,
 pārslēgt mazo attēlu palielināšanu un palaišanu kopā ar Windows, atvērt pilnos
 iestatījumus vai aizvērt lietotni. Izmaiņas uzreiz atjaunojas arī atvērtajā
 iestatījumu logā.
@@ -40,12 +40,15 @@ Pilnajā iestatījumu logā:
   1600 px. Tie ir maksimālie izmēri: attēla vai video proporcijas saglabājas, un priekšskatījums
   tiek ietilpināts ekrānā;
 - **Palielināt mazus attēlus** — ļauj rādīt attēlu lielāku par tā oriģinālo izmēru;
-- **Parādīšanās aizture** — 250, 450 vai 750 ms;
+- **Parādīšanās aizture** — 0, 250, 450, 750 vai 1000 ms. Izvēloties 0, nav papildu
+  gaidīšanas pirms faila meklēšanas un ielādes;
+- **Atskaņošanas skaļums** — slīdnis no 0 līdz 100% video un audio failiem. Pie 0% skaņa
+  ir izslēgta. Ātrajā izvēlnē pieejami 0%, 25%, 50%, 75% un 100%;
 - **Palaist kopā ar Windows** — automātiskās palaišanas ieslēgšana/izslēgšana;
 - **Priekšskatījums ieslēgts** — ieslēgšana vai īslaicīga pauze;
 - **×** augšējā stūrī — programmas apturēšana.
 
-Valoda, izmērs, mazu attēlu palielināšana un aizture saglabājas uzreiz un paliek spēkā
+Valoda, izmērs, mazu attēlu palielināšana, aizture un skaļums saglabājas uzreiz un paliek spēkā
 pēc pārstartēšanas. Pauze ir spēkā līdz programmas aizvēršanai.
 Atvērtu valodu sarakstu var aizvērt ar Esc. Samazināšanas poga **−** augšējā stūrī
 vai Esc aizver tikai iestatījumu logu; priekšskatījumi turpina darboties.
