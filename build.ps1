@@ -15,7 +15,7 @@ $argsForCompiler = @(
     "$PSScriptRoot\Program.cs", "$PSScriptRoot\ShellResolver.cs", "$PSScriptRoot\PreviewWindow.cs",
     "$PSScriptRoot\AppSettings.cs", "$PSScriptRoot\Brand.cs", "$PSScriptRoot\SettingsWindow.cs",
     "$PSScriptRoot\Localization.cs", "$PSScriptRoot\TrayMenu.cs",
-    "$PSScriptRoot\MediaFiles.cs", "$PSScriptRoot\MediaPlayback.cs"
+    "$PSScriptRoot\MediaFiles.cs", "$PSScriptRoot\MediaPlayback.cs", "$PSScriptRoot\TextPreviewContent.cs"
 )
 & "$framework\csc.exe" @argsForCompiler
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }

@@ -1,15 +1,21 @@
 # Desktop Hover
 
-Neliela lokāla Windows programma, kas rāda attēlu un video priekšskatījumus
-un atskaņo audio, uzvedot peli uz faila darbvirsmā vai File Explorer.
+Neliela lokāla Windows programma, kas rāda attēlu, video, teksta un koda failu
+priekšskatījumus un atskaņo audio, uzvedot peli uz faila darbvirsmā vai File Explorer.
 
 ## Lietošana
 
-Uzved peli uz attēla, audio vai video faila un nekustini apmēram pussekundi
+Uzved peli uz attēla, audio, video, teksta vai koda faila un nekustini apmēram pussekundi
 (vai iestatīto aiztures laiku). Attēls parādīsies pie kursora kopā ar faila
 nosaukumu, pikseļu izmēriem un faila lielumu. Audio fails sāks skanēt, bet video
 sāks spēlēt priekšskatījuma logā kopā ar skaņu. Video un audio skaļumu var regulēt
 lietotnes iestatījumos no 0 līdz 100%; to ietekmē arī Windows skaļuma iestatījumi.
+
+Teksta un koda failiem priekšskatījumā redzama faila sākuma daļa ar rindu numuriem
+uz tumša fona. Kodam atslēgvārdi, virknes, komentāri un citi sintakses elementi tiek
+izcelti dažādās krāsās. Tas ir pamata sintakses iekrāsojums, nevis pilna IDE valodas
+analīze. Priekšskatījums paredzēts tikai lasīšanai: failu nevar rediģēt, un kods netiek
+izpildīts. Teksta un koda priekšskatījumiem darbojas tie paši lieluma un aiztures iestatījumi.
 
 Aizvirzot peli no faila, klikšķinot, nospiežot Esc vai pauzējot priekšskatījumus,
 priekšskatījums aizveras un atskaņošana tiek apturēta. Uzvedot peli atkārtoti,
@@ -66,6 +72,13 @@ Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
   neattiecas uz audio un video failiem.
 - Audio failu paplašinājumi: MP3, WAV, WMA, M4A, AAC, FLAC, AIF un AIFF.
 - Video failu paplašinājumi: MP4, M4V, MOV, AVI, WMV, MPG, MPEG, MKV un WebM.
+- Teksta un koda faili: TXT, LOG, MD, JSON, YAML/YML, XML, HTML, CSS, JS, TS, PY,
+  C, CPP, CS, JAVA, GO, RS, PHP, SQL, PS1, SH, BAT, INI un CONF, kā arī izplatīti
+  saistītie paplašinājumi. Atbalstīti arī `README`, `LICENSE`, `Dockerfile`, `Makefile`
+  un `.gitignore` faili bez parasta paplašinājuma.
+- Teksta priekšskatījumam nolasa ne vairāk par pirmajiem 256 KiB un sagatavo līdz
+  300 rindām, katrā līdz 500 rakstzīmēm. Logā redzamas tikai tajā ietilpstošās rindas;
+  par saīsinātu priekšskatījumu norāda paziņojums. Binārs saturs netiek rādīts kā teksts.
 - Audio un video atskaņošanai tiek izmantots Windows WPF `MediaPlayer` un datorā
   pieejamie kodeki. Paplašinājums vēl negarantē atskaņošanu: jāatbalsta arī faila
   konteiners un tajā izmantotie audio un video kodeki. Ja failu nevar atskaņot,
@@ -74,7 +87,7 @@ Atkārtoti palaižot programmu, atveras jau palaistās kopijas iestatījumi.
 - Ja Windows slēpj paplašinājumus un vienā mapē vairākiem failiem ir vienāds
   redzamais nosaukums, programma tos var izlaist, lai neatvērtu nepareizu failu.
 - Ļoti lielas mapes ar vairāk nekā 20 000 elementiem tiek izlaistas.
-- PDF, SVG un mapju priekšskatījums nav iekļauts.
+- SVG failiem rāda XML kodu. PDF un mapju priekšskatījums nav iekļauts.
 
 ## Uzstādīšana un noņemšana
 
@@ -94,7 +107,7 @@ Parastā darbībā diagnostikas faili netiek rakstīti.
 ## Pirmkods
 
 Pirmkods ir blakus programmai: `Program.cs`, `ShellResolver.cs`,
-`PreviewWindow.cs`, `MediaFiles.cs`, `MediaPlayback.cs`, `AppSettings.cs`,
+`PreviewWindow.cs`, `MediaFiles.cs`, `MediaPlayback.cs`, `TextPreviewContent.cs`, `AppSettings.cs`,
 `SettingsWindow.cs`, `TrayMenu.cs`, `Localization.cs` un `Brand.cs`.
 Kompilēšanai palaid `build.ps1`; tas izmanto Windows
 iebūvēto .NET Framework 4 kompilatoru. Papildu lejupielādes nav nepieciešamas.

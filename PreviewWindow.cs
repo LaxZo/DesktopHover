@@ -14,7 +14,7 @@ using DrawingSize = System.Drawing.Size;
 
 namespace DesktopHover
 {
-    /// <summary>A passive, non-activating image, audio or video preview. Use on the UI thread.</summary>
+    /// <summary>A passive image, media or text preview. Use on the UI thread.</summary>
     public sealed class PreviewWindow : Form
     {
         private const long MaximumFileBytes = 100L * 1024L * 1024L;
@@ -34,6 +34,9 @@ namespace DesktopHover
         private Rectangle descriptionArea;
         private Font titleFont;
         private Font descriptionFont;
+        private Font codeFont;
+        private TextPreviewContent textPreview;
+        private int textLineHeight, textVisibleLines, textGutterWidth;
         private float scale = 1F;
         private int sourceWidth;
         private int sourceHeight;
@@ -209,9 +212,142 @@ namespace DesktopHover
         {
             MediaKind kind = MediaFiles.Kind(path);
             if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
+            if (kind == MediaKind.Text) return ShowText(path, cursor, itemBounds);
             if (kind == MediaKind.Audio || kind == MediaKind.Video) return ShowMedia(path, kind, cursor, itemBounds);
             ClearPreview();
             return false;
+        }
+
+        private bool ShowText(string path, DrawingPoint cursor, Rectangle itemBounds)
+        {
+            if (IsDisposed) return false;
+            ClearPreview();
+            try
+            {
+                path = Path.GetFullPath(path);
+                textPreview = TextPreviewContent.Load(path);
+                mediaKind = MediaKind.Text;
+                CurrentPath = path;
+                fileName = Path.GetFileName(path);
+                sourceBytes = textPreview.FileBytes;
+                scale = GetScale(cursor);
+                SetFonts();
+                UpdateLanguage();
+                AccessibleName = L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
+                Text = AccessibleName + " — Desktop Hover";
+
+                Rectangle workingArea = Screen.FromPoint(cursor).WorkingArea;
+                int padding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
+                int width = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
+                int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
+                    workingArea.Height - padding - footerPadding - footerHeight - Px(32)));
+                textLineHeight = Px(21);
+                int height = Math.Min(maximumHeight, Math.Max(Px(120),
+                    textPreview.Lines.Length * textLineHeight + Px(16)));
+                ClientSize = new DrawingSize(width + padding * 2, height + padding + footerPadding + footerHeight);
+                imageArea = new Rectangle(padding, padding, width, height);
+                int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
+                titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
+                    Math.Max(1, footerWidth - Px(22)), Px(19));
+                descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
+                textVisibleLines = Math.Max(0, (imageArea.Height - Px(16)) / textLineHeight);
+                bool truncated = textPreview.Truncated || textPreview.Lines.Length > textVisibleLines;
+                using (Graphics graphics = CreateGraphics())
+                using (StringFormat format = CodeFormat())
+                {
+                    string lastNumber = Math.Max(1, Math.Min(textVisibleLines, textPreview.Lines.Length)).ToString(CultureInfo.InvariantCulture);
+                    textGutterWidth = Math.Max(Px(38), (int)Math.Ceiling(graphics.MeasureString(lastNumber, codeFont, DrawingPoint.Empty, format).Width) + Px(20));
+                    int textWidth = Math.Max(0, width - textGutterWidth - Px(20));
+                    for (int i = 0; i < Math.Min(textVisibleLines, textPreview.Lines.Length); i++)
+                        if (graphics.MeasureString(textPreview.Lines[i].Text, codeFont, DrawingPoint.Empty, format).Width > textWidth)
+                            truncated = true;
+                }
+                string type = textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
+                description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+                if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
+                Location = ChooseLocation(cursor, itemBounds, workingArea, Size, Px(18));
+                if (!Visible) Show();
+                SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+                Invalidate();
+                return true;
+            }
+            catch
+            {
+                ClearPreview();
+                return false;
+            }
+        }
+
+        private static StringFormat CodeFormat()
+        {
+            var format = (StringFormat)StringFormat.GenericTypographic.Clone();
+            format.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoWrap;
+            return format;
+        }
+
+        private void PaintText(Graphics graphics)
+        {
+            GraphicsState state = graphics.Save();
+            try
+            {
+                graphics.SetClip(imageArea, CombineMode.Intersect);
+                graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                using (var background = new SolidBrush(DrawingColor.FromArgb(30, 30, 30))) graphics.FillRectangle(background, imageArea);
+                using (var gutter = new SolidBrush(DrawingColor.FromArgb(37, 37, 38)))
+                    graphics.FillRectangle(gutter, imageArea.Left, imageArea.Top, textGutterWidth, imageArea.Height);
+                if (textPreview.Lines.Length == 0 ||
+                    (textPreview.Lines.Length == 1 && textPreview.Lines[0].Text.Length == 0))
+                {
+                    TextRenderer.DrawText(graphics, L10n.Text(language, "text_empty"), codeFont, imageArea,
+                        Brand.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                    return;
+                }
+                using (StringFormat format = CodeFormat())
+                using (var numbers = new SolidBrush(DrawingColor.FromArgb(133, 133, 133)))
+                {
+                    int count = Math.Min(textVisibleLines, textPreview.Lines.Length);
+                    for (int i = 0; i < count; i++)
+                    {
+                        float y = imageArea.Top + Px(8) + i * textLineHeight;
+                        string number = (i + 1).ToString(CultureInfo.InvariantCulture);
+                        float numberWidth = graphics.MeasureString(number, codeFont, DrawingPoint.Empty, format).Width;
+                        graphics.DrawString(number, codeFont, numbers, imageArea.Left + textGutterWidth - Px(9) - numberWidth, y, format);
+                        TextPreviewLine line = textPreview.Lines[i];
+                        float x = imageArea.Left + textGutterWidth + Px(10);
+                        int end = 0;
+                        foreach (TextSpan span in line.Spans)
+                        {
+                            if (span.Start > end) x = DrawCodeRun(graphics, line.Text.Substring(end, span.Start - end), TextTokenKind.Plain, x, y, format);
+                            x = DrawCodeRun(graphics, line.Text.Substring(span.Start, span.Length), span.Kind, x, y, format);
+                            end = span.Start + span.Length;
+                            if (x >= imageArea.Right) break;
+                        }
+                        if (end < line.Text.Length && x < imageArea.Right)
+                            DrawCodeRun(graphics, line.Text.Substring(end), TextTokenKind.Plain, x, y, format);
+                    }
+                }
+            }
+            finally { graphics.Restore(state); }
+        }
+
+        private float DrawCodeRun(Graphics graphics, string text, TextTokenKind kind, float x, float y, StringFormat format)
+        {
+            DrawingColor color;
+            switch (kind)
+            {
+                case TextTokenKind.Keyword: color = DrawingColor.FromArgb(197, 134, 192); break;
+                case TextTokenKind.String: color = DrawingColor.FromArgb(206, 145, 120); break;
+                case TextTokenKind.Comment: color = DrawingColor.FromArgb(106, 153, 85); break;
+                case TextTokenKind.Number: color = DrawingColor.FromArgb(181, 206, 168); break;
+                case TextTokenKind.Type: color = DrawingColor.FromArgb(78, 201, 176); break;
+                case TextTokenKind.Function: color = DrawingColor.FromArgb(220, 220, 170); break;
+                case TextTokenKind.Operator: color = DrawingColor.FromArgb(212, 212, 212); break;
+                case TextTokenKind.Preprocessor: color = DrawingColor.FromArgb(86, 156, 214); break;
+                case TextTokenKind.Property: color = DrawingColor.FromArgb(156, 220, 254); break;
+                default: color = DrawingColor.FromArgb(212, 212, 212); break;
+            }
+            using (var brush = new SolidBrush(color)) graphics.DrawString(text, codeFont, brush, x, y, format);
+            return x + graphics.MeasureString(text, codeFont, DrawingPoint.Empty, format).Width;
         }
 
         private bool ShowMedia(string path, MediaKind kind, DrawingPoint cursor, Rectangle itemBounds)
@@ -353,6 +489,7 @@ namespace DesktopHover
             if (previousMedia != null) previousMedia.Dispose();
             mediaKind = MediaKind.None;
             mediaState = null;
+            textPreview = null;
             if (!IsDisposed)
                 Hide();
             CurrentPath = null;
@@ -371,6 +508,12 @@ namespace DesktopHover
                 return;
 
             Graphics graphics = e.Graphics;
+            if (mediaKind == MediaKind.Text)
+            {
+                PaintText(graphics);
+                PaintFooter(graphics);
+                return;
+            }
             if (mediaKind != MediaKind.None)
             {
                 PaintMedia(graphics);
@@ -486,6 +629,11 @@ namespace DesktopHover
                     descriptionFont.Dispose();
                     descriptionFont = null;
                 }
+                if (codeFont != null)
+                {
+                    codeFont.Dispose();
+                    codeFont = null;
+                }
             }
             base.Dispose(disposing);
         }
@@ -501,8 +649,11 @@ namespace DesktopHover
                 titleFont.Dispose();
             if (descriptionFont != null)
                 descriptionFont.Dispose();
+            if (codeFont != null)
+                codeFont.Dispose();
             titleFont = new Font("Segoe UI", 13F * scale, FontStyle.Regular, GraphicsUnit.Pixel);
             descriptionFont = new Font("Segoe UI", 11F * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+            codeFont = new Font("Consolas", 14F * scale, FontStyle.Regular, GraphicsUnit.Pixel);
         }
 
         private static Bitmap LoadImage(string path, int maximumWidth, int maximumHeight,
