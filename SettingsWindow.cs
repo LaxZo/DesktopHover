@@ -15,7 +15,7 @@ namespace DesktopHover
         private readonly Action exitRequested;
         private readonly HoverButton[] presets = new HoverButton[4];
         private readonly HoverButton[] delays = new HoverButton[5];
-        private readonly HoverButton languagePicker;
+        private readonly HoverButton languagePicker, themeToggle;
         private readonly ContextMenuStrip languageMenu;
         private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
@@ -66,6 +66,15 @@ namespace DesktopHover
             close.SetBounds(368, 20, 32, 32);
             close.Click += QuitApp;
             Controls.Add(close);
+
+            themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
+            themeToggle.SetBounds(242, 716, 40, 32);
+            themeToggle.Click += delegate
+            {
+                this.settings.Theme = Brand.IsLight ? "dark" : "light";
+                Apply();
+            };
+            Controls.Add(themeToggle);
 
             languagePicker = new HoverButton
             {
@@ -252,6 +261,21 @@ namespace DesktopHover
         {
             syncing = true;
             settings.Language = L10n.Normalize(settings.Language);
+            Brand.SetTheme(settings.Theme);
+            BackColor = Brand.Background;
+            ForeColor = Brand.Text;
+            foreach (Control control in Controls)
+            {
+                control.BackColor = Brand.Background;
+                control.ForeColor = Brand.Text;
+            }
+            languageMenu.BackColor = Brand.Surface;
+            languageMenu.ForeColor = Brand.Text;
+            themeToggle.Selected = Brand.IsLight;
+            themeToggle.AccessibleName = String.Format(L10n.Culture(settings.Language), T("theme_switch"),
+                T(Brand.IsLight ? "theme_dark" : "theme_light"));
+            themeToggle.AccessibleDescription = T("theme") + ": " + T(Brand.IsLight ? "theme_light" : "theme_dark");
+            windowToolTip.SetToolTip(themeToggle, themeToggle.AccessibleName);
             Text = "Desktop Hover — " + T("settings");
             AccessibleName = Text;
             minimize.AccessibleName = T("minimize_settings");
@@ -264,7 +288,11 @@ namespace DesktopHover
             windowToolTip.SetToolTip(languagePicker, languagePicker.AccessibleName);
             languageMenu.AccessibleName = T("language");
             foreach (ToolStripMenuItem item in languageMenu.Items)
+            {
+                item.BackColor = Brand.Surface;
+                item.ForeColor = Brand.Text;
                 item.Checked = (string)item.Tag == settings.Language;
+            }
             for (int i = 0; i < presets.Length; i++)
             {
                 presets[i].Selected = settings.MaxWidth == SizeWidths[i] && settings.MaxHeight == SizeHeights[i];
@@ -292,7 +320,7 @@ namespace DesktopHover
             enabledToggle.Checked = !paused;
             LocalizeToggle(enabledToggle, paused ? "preview_paused" : "preview_on", "preview_detail");
             syncing = false;
-            Invalidate();
+            Invalidate(true);
         }
 
         private string T(string key) { return L10n.Text(settings.Language, key); }
@@ -362,7 +390,7 @@ namespace DesktopHover
             DrawText(g, "Desktop Hover", titleFont, Brand.Text, new Rectangle(76, 20, 246, 30));
 
             FillRound(g, new RectangleF(24, 87, 376, 34), 9, Brand.Surface);
-            using (var brush = new SolidBrush(paused ? Color.FromArgb(224, 176, 99) : Brand.Accent))
+            using (var brush = new SolidBrush(paused ? Brand.Paused : Brand.Accent))
                 g.FillEllipse(brush, 37, 100, 8, 8);
             DrawText(g, T(paused ? "paused" : "active"), Font, Brand.Text, new Rectangle(53, 94, 100, 22));
             DrawText(g, T("surfaces"), smallFont, Brand.Muted,
@@ -459,7 +487,7 @@ namespace DesktopHover
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 SettingsWindow.FillRound(e.Graphics, new RectangleF(0, 0, e.Item.Width, e.Item.Height), 6,
-                    e.Item.Selected ? Color.FromArgb(43, 47, 57) : Color.FromArgb(35, 57, 62));
+                    e.Item.Selected ? Brand.HoverSurface : Brand.SelectedSurface);
             }
         }
 
@@ -493,6 +521,7 @@ namespace DesktopHover
         public string Detail { get; set; }
         public bool Compact { get; set; }
         public bool LanguageSelector { get; set; }
+        public bool ThemeSelector { get; set; }
         public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
 
         public HoverButton()
@@ -515,7 +544,7 @@ namespace DesktopHover
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color fill = selected ? Color.FromArgb(35, 57, 62) : (hovering ? Color.FromArgb(43, 47, 57) : Brand.Surface);
+            Color fill = selected ? Brand.SelectedSurface : (hovering ? Brand.HoverSurface : Brand.Surface);
             SettingsWindow.FillRound(g, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 9, fill);
             using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), 9))
             using (var pen = new Pen(selected || Focused ? Brand.Accent : Brand.Border))
@@ -536,6 +565,10 @@ namespace DesktopHover
                         : new[] { new Point(Width - 20, mid + 2), new Point(Width - 16, mid - 2), new Point(Width - 12, mid + 2) });
                 }
             }
+            else if (ThemeSelector)
+            {
+                DrawThemeIcon(g);
+            }
             else if (Compact)
             {
                 TextRenderer.DrawText(g, Text, Font, ClientRectangle, selected ? Brand.Accent : Brand.Text,
@@ -554,6 +587,44 @@ namespace DesktopHover
                         g.DrawLines(pen, new[] { new Point(Width - 24, 18), new Point(Width - 20, 22), new Point(Width - 13, 14) });
                 }
             }
+        }
+
+        private void DrawThemeIcon(Graphics graphics)
+        {
+            GraphicsState state = graphics.Save();
+            try
+            {
+                graphics.TranslateTransform((Width - 20) / 2f, (Height - 20) / 2f);
+                using (var pen = new Pen(selected ? Brand.Accent : Brand.Text, 1.6f))
+                {
+                    pen.StartCap = pen.EndCap = LineCap.Round;
+                    pen.LineJoin = LineJoin.Round;
+                    if (Brand.IsLight)
+                    {
+                        using (var moon = new GraphicsPath())
+                        {
+                            moon.AddBezier(17, 11, 16, 16, 12, 19, 7, 17);
+                            moon.AddBezier(7, 17, 2, 15, 0, 10, 3, 5);
+                            moon.AddBezier(3, 5, 4, 3, 7, 1, 10, 2);
+                            moon.AddBezier(10, 2, 7, 5, 8, 10, 11, 12);
+                            moon.AddBezier(11, 12, 13, 13, 15, 13, 17, 11);
+                            moon.CloseFigure();
+                            graphics.DrawPath(pen, moon);
+                        }
+                    }
+                    else
+                    {
+                        graphics.DrawEllipse(pen, 6, 6, 8, 8);
+                        for (int ray = 0; ray < 8; ray++)
+                        {
+                            double angle = ray * Math.PI / 4;
+                            float x = (float)Math.Cos(angle), y = (float)Math.Sin(angle);
+                            graphics.DrawLine(pen, 10 + x * 7, 10 + y * 7, 10 + x * 9, 10 + y * 9);
+                        }
+                    }
+                }
+            }
+            finally { graphics.Restore(state); }
         }
     }
 
@@ -598,8 +669,8 @@ namespace DesktopHover
                 TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(0, 27, Width - 58, 16), Brand.Muted,
                     TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
             SettingsWindow.FillRound(g, new RectangleF(Width - 43, 12, 42, 24), 12,
-                isChecked ? Brand.Accent : Color.FromArgb(65, 70, 83));
-            using (var brush = new SolidBrush(isChecked ? Brand.Background : Brand.Text))
+                isChecked ? Brand.Accent : Brand.ToggleOff);
+            using (var brush = new SolidBrush(isChecked && !Brand.IsLight ? Brand.Background : Brand.ToggleThumb))
                 g.FillEllipse(brush, Width - (isChecked ? 22 : 40), 15, 18, 18);
         }
 

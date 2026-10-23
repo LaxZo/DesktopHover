@@ -93,6 +93,8 @@ After launching the application:
 3. Use the provided contextual information or action flow.
 4. Adjust settings as needed for your workflow preferences.
 
+Use the theme button beside the language selector at the bottom of Settings to switch between dark and light appearance. You can also right-click the tray icon and choose **Theme → Dark / Light**. The choice applies to Settings, menus, and file previews, including code highlighting, and is saved automatically for the next launch.
+
 ## Configuration
 
 The project is intended to be easily configurable for different use cases. Configuration may include:

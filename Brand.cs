@@ -8,12 +8,44 @@ namespace DesktopHover
 {
     internal static class Brand
     {
-        public static readonly Color Background = Color.FromArgb(16, 20, 24);
-        public static readonly Color Surface = Color.FromArgb(27, 33, 40);
-        public static readonly Color Border = Color.FromArgb(48, 57, 67);
-        public static readonly Color Text = Color.FromArgb(238, 243, 247);
-        public static readonly Color Muted = Color.FromArgb(145, 160, 174);
-        public static readonly Color Accent = Color.FromArgb(99, 219, 194);
+        public static bool IsLight { get; private set; }
+        public static void SetTheme(string theme)
+        {
+            IsLight = String.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static Color Background { get { return IsLight ? Color.FromArgb(245, 247, 250) : Color.FromArgb(16, 20, 24); } }
+        public static Color Surface { get { return IsLight ? Color.White : Color.FromArgb(27, 33, 40); } }
+        public static Color Border { get { return IsLight ? Color.FromArgb(205, 214, 222) : Color.FromArgb(48, 57, 67); } }
+        public static Color Text { get { return IsLight ? Color.FromArgb(35, 47, 57) : Color.FromArgb(238, 243, 247); } }
+        public static Color Muted { get { return IsLight ? Color.FromArgb(88, 105, 119) : Color.FromArgb(145, 160, 174); } }
+        public static Color Accent { get { return IsLight ? Color.FromArgb(0, 116, 99) : Color.FromArgb(99, 219, 194); } }
+        public static Color HoverSurface { get { return IsLight ? Color.FromArgb(232, 238, 244) : Color.FromArgb(43, 47, 57); } }
+        public static Color SelectedSurface { get { return IsLight ? Color.FromArgb(218, 242, 236) : Color.FromArgb(35, 57, 62); } }
+        public static Color ToggleOff { get { return IsLight ? Color.FromArgb(156, 168, 181) : Color.FromArgb(65, 70, 83); } }
+        public static Color ToggleThumb { get { return Color.FromArgb(238, 243, 247); } }
+        public static Color Paused { get { return IsLight ? Color.FromArgb(157, 105, 32) : Color.FromArgb(224, 176, 99); } }
+        public static Color EditorBackground { get { return IsLight ? Color.White : Color.FromArgb(30, 30, 30); } }
+        public static Color EditorGutter { get { return IsLight ? Color.FromArgb(243, 245, 247) : Color.FromArgb(37, 37, 38); } }
+        public static Color EditorLineNumber { get { return IsLight ? Color.FromArgb(100, 110, 119) : Color.FromArgb(133, 133, 133); } }
+        public static Color CheckerFirst { get { return IsLight ? Color.FromArgb(235, 239, 243) : Color.FromArgb(43, 46, 51); } }
+        public static Color CheckerSecond { get { return IsLight ? Color.FromArgb(216, 223, 230) : Color.FromArgb(53, 56, 61); } }
+
+        public static Color SyntaxColor(TextTokenKind kind)
+        {
+            switch (kind)
+            {
+                case TextTokenKind.Keyword: return IsLight ? Color.FromArgb(0, 0, 255) : Color.FromArgb(197, 134, 192);
+                case TextTokenKind.String: return IsLight ? Color.FromArgb(163, 21, 21) : Color.FromArgb(206, 145, 120);
+                case TextTokenKind.Comment: return IsLight ? Color.FromArgb(0, 128, 0) : Color.FromArgb(106, 153, 85);
+                case TextTokenKind.Number: return IsLight ? Color.FromArgb(9, 134, 88) : Color.FromArgb(181, 206, 168);
+                case TextTokenKind.Type: return IsLight ? Color.FromArgb(38, 127, 153) : Color.FromArgb(78, 201, 176);
+                case TextTokenKind.Function: return IsLight ? Color.FromArgb(121, 94, 38) : Color.FromArgb(220, 220, 170);
+                case TextTokenKind.Preprocessor: return IsLight ? Color.FromArgb(0, 0, 255) : Color.FromArgb(86, 156, 214);
+                case TextTokenKind.Property: return IsLight ? Color.FromArgb(0, 16, 128) : Color.FromArgb(156, 220, 254);
+                default: return IsLight ? Color.FromArgb(36, 41, 46) : Color.FromArgb(212, 212, 212);
+            }
+        }
 
         public static GraphicsPath RoundRect(RectangleF rect, float radius)
         {
@@ -68,8 +100,8 @@ namespace DesktopHover
                 graphics.ScaleTransform(side / 64f, side / 64f);
                 using (var tile = RoundRect(new RectangleF(1, 1, 62, 62), 15))
                 using (var fill = new LinearGradientBrush(new PointF(0, 0), new PointF(64, 64),
-                    Color.FromArgb(33, 46, 52), Background))
-                using (var edge = new Pen(Color.FromArgb(54, 70, 77), 1.2f))
+                    IsLight ? Color.FromArgb(227, 241, 237) : Color.FromArgb(33, 46, 52), Background))
+                using (var edge = new Pen(IsLight ? Border : Color.FromArgb(54, 70, 77), 1.2f))
                 {
                     graphics.FillPath(fill, tile);
                     graphics.DrawPath(edge, tile);

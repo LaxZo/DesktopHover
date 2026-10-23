@@ -61,6 +61,9 @@ namespace DesktopHover
         internal TimeSpan PlaybackPosition { get { return media == null ? TimeSpan.Zero : media.Position; } }
         internal void Configure(AppSettings settings)
         {
+            Brand.SetTheme(settings.Theme);
+            BackColor=Brand.Background;
+            ForeColor=Brand.Text;
             maximumPreviewWidth=settings.MaxWidth;
             maximumPreviewHeight=settings.MaxHeight;
             volumePercent=Math.Max(0,Math.Min(100,settings.VolumePercent));
@@ -292,8 +295,8 @@ namespace DesktopHover
             {
                 graphics.SetClip(imageArea, CombineMode.Intersect);
                 graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                using (var background = new SolidBrush(DrawingColor.FromArgb(30, 30, 30))) graphics.FillRectangle(background, imageArea);
-                using (var gutter = new SolidBrush(DrawingColor.FromArgb(37, 37, 38)))
+                using (var background = new SolidBrush(Brand.EditorBackground)) graphics.FillRectangle(background, imageArea);
+                using (var gutter = new SolidBrush(Brand.EditorGutter))
                     graphics.FillRectangle(gutter, imageArea.Left, imageArea.Top, textGutterWidth, imageArea.Height);
                 if (textPreview.Lines.Length == 0 ||
                     (textPreview.Lines.Length == 1 && textPreview.Lines[0].Text.Length == 0))
@@ -303,7 +306,7 @@ namespace DesktopHover
                     return;
                 }
                 using (StringFormat format = CodeFormat())
-                using (var numbers = new SolidBrush(DrawingColor.FromArgb(133, 133, 133)))
+                using (var numbers = new SolidBrush(Brand.EditorLineNumber))
                 {
                     int count = Math.Min(textVisibleLines, textPreview.Lines.Length);
                     for (int i = 0; i < count; i++)
@@ -332,20 +335,7 @@ namespace DesktopHover
 
         private float DrawCodeRun(Graphics graphics, string text, TextTokenKind kind, float x, float y, StringFormat format)
         {
-            DrawingColor color;
-            switch (kind)
-            {
-                case TextTokenKind.Keyword: color = DrawingColor.FromArgb(197, 134, 192); break;
-                case TextTokenKind.String: color = DrawingColor.FromArgb(206, 145, 120); break;
-                case TextTokenKind.Comment: color = DrawingColor.FromArgb(106, 153, 85); break;
-                case TextTokenKind.Number: color = DrawingColor.FromArgb(181, 206, 168); break;
-                case TextTokenKind.Type: color = DrawingColor.FromArgb(78, 201, 176); break;
-                case TextTokenKind.Function: color = DrawingColor.FromArgb(220, 220, 170); break;
-                case TextTokenKind.Operator: color = DrawingColor.FromArgb(212, 212, 212); break;
-                case TextTokenKind.Preprocessor: color = DrawingColor.FromArgb(86, 156, 214); break;
-                case TextTokenKind.Property: color = DrawingColor.FromArgb(156, 220, 254); break;
-                default: color = DrawingColor.FromArgb(212, 212, 212); break;
-            }
+            DrawingColor color = Brand.SyntaxColor(kind);
             using (var brush = new SolidBrush(color)) graphics.DrawString(text, codeFont, brush, x, y, format);
             return x + graphics.MeasureString(text, codeFont, DrawingPoint.Empty, format).Width;
         }
@@ -521,8 +511,8 @@ namespace DesktopHover
                 return;
             }
             int checker = Px(10);
-            using (SolidBrush first = new SolidBrush(DrawingColor.FromArgb(43, 46, 51)))
-            using (SolidBrush second = new SolidBrush(DrawingColor.FromArgb(53, 56, 61)))
+            using (SolidBrush first = new SolidBrush(Brand.CheckerFirst))
+            using (SolidBrush second = new SolidBrush(Brand.CheckerSecond))
             {
                 graphics.FillRectangle(first, imageArea);
                 for (int y = 0; y < imageArea.Height; y += checker)

@@ -14,6 +14,7 @@ namespace DesktopHover
         public bool Upscale=false;
         public bool StartWithWindows;
         public string Language="en";
+        public string Theme="dark";
 
         internal static string DefaultPath
         {
@@ -27,6 +28,7 @@ namespace DesktopHover
             DelayMs=Math.Max(0,Math.Min(2000,DelayMs));
             VolumePercent=Math.Max(0,Math.Min(100,VolumePercent));
             Language=L10n.Normalize(Language);
+            Theme=String.Equals(Theme,"light",StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
         }
         internal static AppSettings Load() { return Load(DefaultPath); }
         internal static AppSettings Load(string path)
@@ -48,6 +50,7 @@ namespace DesktopHover
                         if(name=="volume_percent" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.VolumePercent=n;
                         if(name=="upscale" && bool.TryParse(value,out b)) settings.Upscale=b;
                         if(name=="language") settings.Language=value;
+                        if(name=="theme") settings.Theme=value;
                     }
             }
             catch(IOException) { }
@@ -65,8 +68,8 @@ namespace DesktopHover
             try
             {
                 string text=string.Format(CultureInfo.InvariantCulture,
-                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\n",
-                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent);
+                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\ntheme={6}\r\n",
+                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent,Theme);
                 File.WriteAllText(temporary,text,new UTF8Encoding(false));
                 if(File.Exists(path)) File.Replace(temporary,path,null);
                 else File.Move(temporary,path);

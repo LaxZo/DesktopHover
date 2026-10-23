@@ -11,7 +11,7 @@ namespace DesktopHover
         private readonly Func<bool> readPaused;
         private readonly Action<AppSettings> applySettings;
         private readonly Font menuFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
-        private readonly ToolStripMenuItem open, enabled, size, delay, volume, upscale, startup, quit;
+        private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, upscale, startup, quit;
         private readonly ToolStripMenuItem[] sizes = new ToolStripMenuItem[4];
         private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[5];
         private readonly ToolStripMenuItem[] volumes = new ToolStripMenuItem[5];
@@ -63,6 +63,16 @@ namespace DesktopHover
                     Change(delegate(AppSettings value) { value.VolumePercent = Volumes[index]; });
                 });
             }
+            theme = AddItem(Items, "theme", null);
+            Style((ToolStripDropDownMenu)theme.DropDown);
+            darkTheme = AddItem(theme.DropDownItems, "theme-dark", delegate
+            {
+                Change(delegate(AppSettings value) { value.Theme = "dark"; });
+            });
+            lightTheme = AddItem(theme.DropDownItems, "theme-light", delegate
+            {
+                Change(delegate(AppSettings value) { value.Theme = "light"; });
+            });
             upscale = AddItem(Items, "upscale", delegate { Change(delegate(AppSettings value) { value.Upscale = !value.Upscale; }); });
             startup = AddItem(Items, "startup", delegate { Change(delegate(AppSettings value) { value.StartWithWindows = !value.StartWithWindows; }); });
             Items.Add(new ToolStripSeparator());
@@ -116,6 +126,8 @@ namespace DesktopHover
         internal void RefreshState()
         {
             AppSettings current = readSettings();
+            Brand.SetTheme(current.Theme);
+            RefreshColors(this);
             string language = current.Language;
             open.Text = L10n.Text(language, "settings");
             enabled.Text = L10n.Text(language, readPaused() ? "preview_paused" : "preview_on");
@@ -123,6 +135,11 @@ namespace DesktopHover
             size.Text = L10n.Text(language, "image_size");
             delay.Text = L10n.Text(language, "delay");
             volume.Text = L10n.Text(language, "volume");
+            theme.Text = L10n.Text(language, "theme");
+            darkTheme.Text = L10n.Text(language, "theme_dark");
+            darkTheme.Checked = !Brand.IsLight;
+            lightTheme.Text = L10n.Text(language, "theme_light");
+            lightTheme.Checked = Brand.IsLight;
             upscale.Text = L10n.Text(language, "upscale");
             upscale.Checked = current.Upscale;
             startup.Text = L10n.Text(language, "startup");
@@ -145,6 +162,20 @@ namespace DesktopHover
                     L10n.Text(language, "volume_accessible"), Volumes[i]);
                 volumes[i].Checked = current.VolumePercent == Volumes[i];
             }
+        }
+
+        private static void RefreshColors(ToolStripDropDown menu)
+        {
+            menu.BackColor = Brand.Surface;
+            menu.ForeColor = Brand.Text;
+            foreach (ToolStripItem item in menu.Items)
+            {
+                item.BackColor = Brand.Surface;
+                item.ForeColor = Brand.Text;
+                ToolStripMenuItem child = item as ToolStripMenuItem;
+                if (child != null && child.HasDropDownItems) RefreshColors(child.DropDown);
+            }
+            menu.Invalidate(true);
         }
 
         protected override void Dispose(bool disposing)
