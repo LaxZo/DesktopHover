@@ -130,7 +130,7 @@ namespace DesktopHover
                     delegate { ExitThread(); });
             }
             settingsWindow.UpdatePaused(paused);
-            settingsWindow.ShowNear(Cursor.Position);
+            settingsWindow.ShowCentered(Cursor.Position);
         }
         private void SetPaused(bool value)
         {

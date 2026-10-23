@@ -307,11 +307,11 @@ namespace DesktopHover
             toggle.Invalidate();
         }
 
-        public void ShowNear(Point screenPoint)
+        public void ShowCentered(Point screenPoint)
         {
             Rectangle area = Screen.FromPoint(screenPoint).WorkingArea;
-            int x = Math.Max(area.Left + 8, Math.Min(screenPoint.X - Width + 24, area.Right - Width - 8));
-            int y = Math.Max(area.Top + 8, Math.Min(screenPoint.Y - Height - 12, area.Bottom - Height - 8));
+            int x = area.Left + Math.Max(0, (area.Width - Width) / 2);
+            int y = area.Top + Math.Max(0, (area.Height - Height) / 2);
             Location = new Point(x, y);
             if (!Visible) Show();
             Activate();
