@@ -13,6 +13,7 @@ namespace DesktopHover
         internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_OpenSettings");
         [STAThread] static void Main(string[] args)
         {
+            if (ShellThumbnailProvider.TryRunWorker(args)) return;
             try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
             catch { Native.SetProcessDPIAware(); }
             Application.EnableVisualStyles();
@@ -126,8 +127,7 @@ namespace DesktopHover
             {
                 settings.StartWithWindows=Startup.IsEnabled();
                 settingsWindow=new SettingsWindow(settings.Clone(),paused,ApplySettings,
-                    SetPaused,
-                    delegate { ExitThread(); });
+                    SetPaused);
             }
             settingsWindow.UpdatePaused(paused);
             settingsWindow.ShowCentered(Cursor.Position);

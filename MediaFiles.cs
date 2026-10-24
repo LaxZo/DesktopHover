@@ -3,7 +3,7 @@ using System.IO;
 
 namespace DesktopHover
 {
-    internal enum MediaKind { None, Image, Audio, Video, Text }
+    internal enum MediaKind { None, Image, Audio, Video, Text, Document }
 
     internal static class MediaFiles
     {
@@ -27,6 +27,7 @@ namespace DesktopHover
                 case ".mpg": case ".mpeg": case ".mkv": case ".webm":
                     return MediaKind.Video;
                 default:
+                    if (DocumentPreviewContent.IsSupported(path)) return MediaKind.Document;
                     return TextPreviewContent.IsSupported(path) ? MediaKind.Text : MediaKind.None;
             }
         }

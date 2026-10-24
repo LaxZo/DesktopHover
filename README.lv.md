@@ -5,7 +5,7 @@
 <h1 align="center">Desktop Hover</h1>
 
 <p align="center"><strong>Apskati tuvāk. Vienkārši uzved peli.</strong></p>
-<p align="center">Apskati attēlus, atskaņo medijus un lasi kodu, neatverot citu programmu.</p>
+<p align="center">Apskati attēlus, dokumentus un dizaina projektus, atskaņo medijus un lasi kodu, neatverot citu programmu.</p>
 
 <p align="center">
   <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā un gaišā tēma &nbsp;·&nbsp; 12 valodas
@@ -33,9 +33,27 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Ātri apskatīt attēlus** | Kompakts priekšskatījums ar faila nosaukumu, izmēriem un lielumu. Attēla proporcijas saglabājas. |
 | **Klausīties un skatīties** | Audio sāk skanēt pēc peles uzvešanas. Video atskaņojas priekšskatījuma logā ar skaņu. Abiem ir kopīgs skaļuma iestatījums. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
+| **Ieskatīties dokumentos un projektos** | Word fragmenti, Excel lapas, PowerPoint slaidi un Photoshop attēli. Citiem Adobe projektiem izmanto saglabātos priekšskatījumus vai pieejamos Windows sīktēlus. |
 | **Pielāgot sev** | Tumšā vai gaišā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
+
+### Dokumenti un dizaina projekti
+
+Īsti priekšskatījumi ar demonstrācijas failiem. Ja nav derīga saglabāta priekšskatījuma, Word, Excel un PowerPoint saturu rāda vienkāršoti; priekšskatījuma veids ir norādīts apakšējā joslā.
+
+<table>
+  <tr><th>Photoshop</th><th>Word</th></tr>
+  <tr>
+    <td><img src="docs/assets/photoshop-preview.png" width="360" alt="PSD apvienotā attēla priekšskatījums"></td>
+    <td><img src="docs/assets/word-preview.png" width="360" alt="DOCX fragments ar virsrakstiem un tabulu"></td>
+  </tr>
+  <tr><th>Excel</th><th>PowerPoint</th></tr>
+  <tr>
+    <td><img src="docs/assets/excel-preview.png" width="360" alt="XLSX pirmā lapa ar saglabātām vērtībām"></td>
+    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PPTX pirmais slaids ar tekstu un attēlu"></td>
+  </tr>
+</table>
 
 ### Kods, neatverot redaktoru
 
@@ -102,8 +120,9 @@ Skripts iekopē lietotni un dokumentāciju mapē `%LOCALAPPDATA%\DesktopHover` u
 | Aizvirzi peli no faila | Priekšskatījums aizveras un atskaņošana apstājas. |
 | Kreisais klikšķis uz teknes ikonas | Iestatījumi atveras peles kursora monitora centrā. |
 | Labais klikšķis uz teknes ikonas | Atveras ātrie iestatījumi: priekšskatījumi, lielums, aizture, skaļums, tēma un palaišana. |
-| Poga **−** | Aizver iestatījumu logu; lietotne turpina darboties sistēmas teknē. |
-| Poga **×** vai **Aizvērt lietotni** | Pilnībā aizver Desktop Hover. |
+| Poga **−** | Samazina iestatījumus uz Windows uzdevumjoslu. Nospied loga pogu uzdevumjoslā, lai to atjaunotu. |
+| Poga **×** | Aizver iestatījumu logu; Desktop Hover turpina darboties sistēmas teknē. |
+| **Aizvērt lietotni** teknes izvēlnē | Pilnībā aizver Desktop Hover. |
 | Izslēgts priekšskatījumu pārslēgs | Priekšskatījumi tiek apturēti, neaizverot lietotni. |
 
 ### Iestatījumi
@@ -131,15 +150,25 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
+| **Photoshop** | PSD/PSB saglabātie sīktēli vai apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE. |
+| **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Saglabātais priekšskatījums vai vienkāršots fragments, pirmā redzamā lapa vai pirmais slaids. |
+| **Citi Adobe projekti** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ un FLA, **ja pieejams atbalstīts iegultais priekšskatījums vai Windows sīktēls**. |
+| **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, XLSB un PDF nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
 
-Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](MediaFiles.cs) un [TextPreviewContent.cs](TextPreviewContent.cs).
+Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](MediaFiles.cs), [TextPreviewContent.cs](TextPreviewContent.cs) un [DocumentPreviewContent.cs](DocumentPreviewContent.cs).
+
+Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
 
 ### Pašreizējās robežas
 
 - Priekšskatījumi darbojas ar **lokāli pieejamiem failiem**. Tīkla mapes, piesaistīti tīkla diski un tikai mākonī pieejami faili tiek izlaisti.
 - Tekstam nolasa līdz **256 KiB**, **300 rindām** un **500 rakstzīmēm rindā**. Redzama tikai daļa, kas ietilpst logā; par saīsinājumu informē apakšējā josla.
 - Sintakses krāsas nodrošina pamata leksiska analīze. Kods netiek izpildīts vai rediģēts.
-- Markdown, HTML un SVG tiek rādīti kā avota teksts. PDF un Office dokumentu priekšskatījumi nav pieejami.
+- Markdown, HTML un SVG tiek rādīti kā avota teksts.
+- Dokumentu/projektu priekšskatījumiem ir **512 MiB** faila robeža. Office ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
+- Office priekšskatījums ir fragments, ne precīzs drukas makets. Sarežģīta formatēšana, diagrammas, slaidu šabloni, animācijas un iegulti objekti netiek pilnībā atveidoti. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām) un pirmais slaids.
+- Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Citiem Adobe failiem izmanto atbalstītu XMP/ZIP priekšskatījumu vai Windows sīktēlu; pilna projektu atveidošana nav paredzēta.
+- Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
 - Animētiem un vairāku kadru attēliem tiek rādīts nekustīgs kadrs. Attēli virs **100 MiB** vai **100 miljoniem pikseļu** tiek izlaisti.
 - Priekšskatījums ir pasīvs: tas nepārņem tastatūras fokusu un nepiedāvā redaktoru vai interaktīvas atskaņošanas pogas.
 
@@ -172,6 +201,9 @@ Pirms izpildfaila aizstāšanas aizver palaisto kopiju vai norādi citu izvades 
 | [PreviewWindow.cs](PreviewWindow.cs) | Priekšskatījuma izkārtojums, zīmēšana un satura pārslēgšana. |
 | [MediaPlayback.cs](MediaPlayback.cs) | Audio un video atskaņošana. |
 | [TextPreviewContent.cs](TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
+| [DocumentPreviewContent.cs](DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
+| [OfficePreviewReader.cs](OfficePreviewReader.cs), [AdobePreviewReader.cs](AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
+| [ShellThumbnailProvider.cs](ShellThumbnailProvider.cs) | Windows sīktēli atsevišķā palīgprocesā ar laika ierobežojumu. |
 | [SettingsWindow.cs](SettingsWindow.cs), [TrayMenu.cs](TrayMenu.cs) | Iestatījumi un ātrā izvēlne. |
 | [Brand.cs](Brand.cs), [Localization.cs](Localization.cs) | Tēmu krāsas, ikonas un tulkojumi. |
 | [AppSettings.cs](AppSettings.cs) | Iestatījumu validācija un saglabāšana. |
@@ -194,7 +226,10 @@ Automātiskās palaišanas parametri reģistrē vai noņem izpildītās kopijas 
 | Mākoņa fails netiek rādīts | Vispirms padari failu pieejamu bezsaistē. Peles uzvešana nesāk tā lejupielādi. |
 | Audio vai video neatskaņojas | Pārbaudi skaļumu un Windows kodeku atbalstu. Atpazīts paplašinājums negarantē atskaņošanu. |
 | Teksts ir nogriezts | Lieli faili un garas rindas tiek apzināti saīsināti. Pilnam saturam atver failu redaktorā. |
-| Pēc **−** nospiešanas lietotne joprojām darbojas | Šī poga aizver tikai iestatījumus. Lai izietu, izvēlies **×** vai **Aizvērt lietotni**. |
+| Adobe vai vecam Office failam nav priekšskatījuma | Saglabā failu ar iegultu priekšskatījumu vai izmanto saderīgu Windows sīktēlu nodrošinātāju. Atpazīts paplašinājums negarantē satura nolasīšanu. |
+| Dokuments izskatās citādi nekā redaktorā | Apakšējā joslā norādīts vienkāršots saturs. Pilnai formatēšanai un visām lapām vai slaidiem atver sākotnējo lietotni. |
+| Iestatījumi ir samazināti | Atjauno logu no Windows uzdevumjoslas vai ar kreiso klikšķi uz teknes ikonas. |
+| Pēc **×** nospiešanas lietotne joprojām darbojas | Šī poga aizver iestatījumus un atstāj priekšskatījumus ieslēgtus. Lai izietu pilnībā, ar labo klikšķi uz teknes ikonas izvēlies **Aizvērt lietotni**. |
 
 Lai noņemtu uzstādīto kopiju, izslēdz **Palaist kopā ar Windows**, aizver lietotni un izdzēs `%LOCALAPPDATA%\DesktopHover`. Šīs mapes dzēšana noņem arī saglabātos iestatījumus.
 

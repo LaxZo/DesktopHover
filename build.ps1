@@ -8,6 +8,7 @@ $argsForCompiler = @(
     "/resource:$PSScriptRoot\DesktopHover.ico,DesktopHover.ico",
     '/r:System.dll', '/r:System.Core.dll', '/r:Microsoft.CSharp.dll',
     '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Xaml.dll',
+    '/r:System.Xml.dll', '/r:System.IO.Compression.dll',
     "/r:$framework\WPF\WindowsBase.dll",
     "/r:$framework\WPF\PresentationCore.dll",
     "/r:$framework\WPF\UIAutomationClient.dll",
@@ -15,7 +16,9 @@ $argsForCompiler = @(
     "$PSScriptRoot\Program.cs", "$PSScriptRoot\ShellResolver.cs", "$PSScriptRoot\PreviewWindow.cs",
     "$PSScriptRoot\AppSettings.cs", "$PSScriptRoot\Brand.cs", "$PSScriptRoot\SettingsWindow.cs",
     "$PSScriptRoot\Localization.cs", "$PSScriptRoot\TrayMenu.cs",
-    "$PSScriptRoot\MediaFiles.cs", "$PSScriptRoot\MediaPlayback.cs", "$PSScriptRoot\TextPreviewContent.cs"
+    "$PSScriptRoot\MediaFiles.cs", "$PSScriptRoot\MediaPlayback.cs", "$PSScriptRoot\TextPreviewContent.cs",
+    "$PSScriptRoot\DocumentPreviewContent.cs", "$PSScriptRoot\OfficePreviewReader.cs",
+    "$PSScriptRoot\AdobePreviewReader.cs", "$PSScriptRoot\ShellThumbnailProvider.cs", "$PSScriptRoot\DocumentArchiveGuard.cs"
 )
 & "$framework\csc.exe" @argsForCompiler
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }

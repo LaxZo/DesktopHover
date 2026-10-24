@@ -12,7 +12,6 @@ namespace DesktopHover
         private AppSettings settings, lastApplied;
         private readonly Action<AppSettings> changed;
         private readonly Action<bool> pauseChanged;
-        private readonly Action exitRequested;
         private readonly HoverButton[] presets = new HoverButton[4];
         private readonly HoverButton[] delays = new HoverButton[5];
         private readonly HoverButton languagePicker, themeToggle;
@@ -34,21 +33,20 @@ namespace DesktopHover
         private static readonly string[] DelayKeys = { "instant", "fast", "natural", "slow", "one_second" };
 
         public SettingsWindow(AppSettings settings, bool paused,
-            Action<AppSettings> changed, Action<bool> pauseChanged, Action exitRequested)
+            Action<AppSettings> changed, Action<bool> pauseChanged)
         {
             this.settings = settings.Clone();
             lastApplied = this.settings.Clone();
             this.paused = paused;
             this.changed = changed;
             this.pauseChanged = pauseChanged;
-            this.exitRequested = exitRequested;
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(424, 768);
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             ShowInTaskbar = true;
             MaximizeBox = false;
-            MinimizeBox = false;
+            MinimizeBox = true;
             KeyPreview = true;
             DoubleBuffered = true;
             BackColor = Brand.Background;
@@ -59,12 +57,12 @@ namespace DesktopHover
 
             minimize = new HoverButton { Name = "minimize-settings", Text = "\u2212", Compact = true };
             minimize.SetBounds(330, 20, 32, 32);
-            minimize.Click += delegate { Close(); };
+            minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
             Controls.Add(minimize);
 
-            close = new HoverButton { Name = "quit-app", Text = "\u00d7", Compact = true };
+            close = new HoverButton { Name = "close-settings", Text = "\u00d7", Compact = true };
             close.SetBounds(368, 20, 32, 32);
-            close.Click += QuitApp;
+            close.Click += delegate { Close(); };
             Controls.Add(close);
 
             themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
@@ -207,11 +205,6 @@ namespace DesktopHover
             SyncControls();
         }
 
-        private void QuitApp(object sender, EventArgs e)
-        {
-            if (exitRequested != null) exitRequested();
-        }
-
         private void ShowLanguageMenu()
         {
             if (languageMenu.Visible) { languageMenu.Close(); return; }
@@ -279,7 +272,7 @@ namespace DesktopHover
             Text = "Desktop Hover — " + T("settings");
             AccessibleName = Text;
             minimize.AccessibleName = T("minimize_settings");
-            close.AccessibleName = T("exit_accessible");
+            close.AccessibleName = T("close_settings");
             windowToolTip.SetToolTip(minimize, minimize.AccessibleName);
             windowToolTip.SetToolTip(close, close.AccessibleName);
             L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
@@ -337,6 +330,7 @@ namespace DesktopHover
 
         public void ShowCentered(Point screenPoint)
         {
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
             Rectangle area = Screen.FromPoint(screenPoint).WorkingArea;
             int x = area.Left + Math.Max(0, (area.Width - Width) / 2);
             int y = area.Top + Math.Max(0, (area.Height - Height) / 2);

@@ -1,2 +1,26 @@
+# Local analysis, assistant instructions and maintainer drafts
 /graphify-out
 AGENTS.md
+/.local/
+
+# Verification, IDE and intermediate build files
+/.verification/
+/.vs/
+/bin/
+/obj/
+*.pdb
+*.suo
+*.user
+
+# Local preferences and diagnostic output
+/settings.ini
+/settings-*.tmp
+/preview-test.txt
+/*.log
+/*.tmp
+
+# Windows-generated metadata
+Thumbs.db
+Desktop.ini
+
+# DesktopHover.exe is intentionally tracked for the portable download/installer.
