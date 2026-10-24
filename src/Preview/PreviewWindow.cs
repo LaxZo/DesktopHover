@@ -28,6 +28,8 @@ namespace DesktopHover
         private const int SwpShowWindow = 0x0040;
 
         private Bitmap preview;
+        private AnimatedGif animatedGif;
+        private readonly Timer animationTimer;
         private string fileName;
         private string description;
         private Rectangle imageArea;
@@ -59,7 +61,7 @@ namespace DesktopHover
 
         public string CurrentPath { get; private set; }
         internal DrawingSize DisplayedImageSize { get { return imageArea.Size; } }
-        internal bool IsMediaPreview { get { return mediaKind != MediaKind.None; } }
+        internal bool IsMediaPreview { get { return mediaKind != MediaKind.None || animatedGif != null; } }
         internal string MediaState { get { return mediaState; } }
         internal TimeSpan PlaybackPosition { get { return media == null ? TimeSpan.Zero : media.Position; } }
         internal void Configure(AppSettings settings)
@@ -93,6 +95,8 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer, true);
             SetFonts();
+            animationTimer = new Timer();
+            animationTimer.Tick += AdvanceAnimation;
             mediaTimer = new Timer { Interval = 200 };
             mediaTimer.Tick += delegate
             {
@@ -166,12 +170,23 @@ namespace DesktopHover
                     int width;
                     int height;
                     long bytes;
-                    Bitmap replacement = LoadImage(path, maximumWidth, maximumHeight,
-                        out width, out height, out bytes);
-                    Bitmap previous = preview;
-                    preview = replacement;
-                    if (previous != null)
-                        previous.Dispose();
+                    if (String.Equals(Path.GetExtension(path), ".gif", StringComparison.OrdinalIgnoreCase))
+                    {
+                        AnimatedGif replacement = AnimatedGif.Load(path);
+                        ClearImage();
+                        animatedGif = replacement;
+                        preview = replacement.Image;
+                        width = preview.Width;
+                        height = preview.Height;
+                        bytes = replacement.FileBytes;
+                    }
+                    else
+                    {
+                        Bitmap replacement = LoadImage(path, maximumWidth, maximumHeight,
+                            out width, out height, out bytes);
+                        ClearImage();
+                        preview = replacement;
+                    }
 
                     sourceWidth = width;
                     sourceHeight = height;
@@ -205,6 +220,11 @@ namespace DesktopHover
                 SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height,
                     SwpNoActivate | SwpShowWindow);
                 Invalidate();
+                if (animatedGif != null && animatedGif.CanAdvance && !animationTimer.Enabled)
+                {
+                    animationTimer.Interval = animatedGif.FrameDelay;
+                    animationTimer.Start();
+                }
                 return true;
             }
             catch
@@ -614,10 +634,32 @@ namespace DesktopHover
             CurrentPath = null;
             fileName = null;
             description = null;
+            ClearImage();
+        }
+
+        private void ClearImage()
+        {
+            if (animationTimer != null) animationTimer.Stop();
             Bitmap previous = preview;
             preview = null;
-            if (previous != null)
-                previous.Dispose();
+            if (animatedGif != null)
+            {
+                animatedGif.Dispose();
+                animatedGif = null;
+            }
+            else if (previous != null) previous.Dispose();
+        }
+
+        private void AdvanceAnimation(object sender, EventArgs e)
+        {
+            if (animatedGif == null || !Visible) { animationTimer.Stop(); return; }
+            try
+            {
+                if (!animatedGif.Advance()) { animationTimer.Stop(); return; }
+                animationTimer.Interval = animatedGif.FrameDelay;
+                Invalidate(imageArea);
+            }
+            catch { ClearPreview(); }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -738,6 +780,7 @@ namespace DesktopHover
             if (disposing)
             {
                 ClearPreview();
+                if (animationTimer != null) animationTimer.Dispose();
                 if (mediaTimer != null) mediaTimer.Dispose();
                 if (preview != null)
                 {

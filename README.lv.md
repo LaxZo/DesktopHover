@@ -144,7 +144,7 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 
 | Veids | Atpazītie formāti un piemēri |
 | --- | --- |
-| **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF, TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
+| **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF (arī animēti), TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM. |
 | **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
@@ -169,7 +169,8 @@ Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajie
 - Office priekšskatījums ir fragments, ne precīzs drukas makets. Sarežģīta formatēšana, diagrammas, slaidu šabloni, animācijas un iegulti objekti netiek pilnībā atveidoti. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām) un pirmais slaids.
 - Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Citiem Adobe failiem izmanto atbalstītu XMP/ZIP priekšskatījumu vai Windows sīktēlu; pilna projektu atveidošana nav paredzēta.
 - Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
-- Animētiem un vairāku kadru attēliem tiek rādīts nekustīgs kadrs. Attēli virs **100 MiB** vai **100 miljoniem pikseļu** tiek izlaisti.
+- Animēti GIF atskaņojas automātiski, kamēr pele ir uz faila, ievērojot kadru aiztures un atkārtošanās iestatījumus. Peles kustība vienas faila ikonas robežās animāciju nepārstartē; aizvirzot peli prom, atskaņošana apstājas. Citu animētu vai vairāku kadru attēlu formātiem tiek rādīts nekustīgs kadrs.
+- Attēli virs **100 MiB** vai **100 miljoniem pikseļu** tiek izlaisti. GIF papildus ir **2000 kadru** un **100 miljonu pikseļu summas visu kadru taisnstūros** robeža. Ja GIF kadra aizture nav norādīta vai ir ļoti īsa (0–10 ms), izmanto 100 ms.
 - Priekšskatījums ir pasīvs: tas nepārņem tastatūras fokusu un nepiedāvā redaktoru vai interaktīvas atskaņošanas pogas.
 
 ## Būvēšana no pirmkoda
@@ -222,6 +223,7 @@ Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — 
 | [Program.cs](src/App/Program.cs) | Programmas dzīves cikls, teknes ikona, aizture un automātiskā palaišana. |
 | [ShellResolver.cs](src/Windows/ShellResolver.cs) | Faila noteikšana zem peles darbvirsmā vai Explorer. |
 | [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Priekšskatījuma izkārtojums, zīmēšana un satura pārslēgšana. |
+| [AnimatedGif.cs](src/Preview/AnimatedGif.cs) | GIF kadru aiztures, atkārtošana, ierobežota ielāde un kadru salikšana ar Windows atbalstu. |
 | [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio un video atskaņošana. |
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |

@@ -179,7 +179,7 @@ namespace DesktopHover
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
             if(motion)
             {
-                // Small moves within the same file must not repeatedly restart its audio/video.
+                // Small moves within the same file must not restart audio, video or animated GIFs.
                 if(!preview.IsMediaPreview || shown==null || !shown.Bounds.Contains(now)) Reset();
                 last=now;
             }

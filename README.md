@@ -144,7 +144,7 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 
 | Kind | Recognized formats and examples |
 | --- | --- |
-| **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF, TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
+| **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF (including animation), TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM. |
 | **Text & data** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML and other configuration files. |
@@ -169,7 +169,8 @@ Document previews load in the background and are canceled when you move away. Th
 - Office content previews are excerpts, not exact print layouts. Complex formatting, charts, slide masters, animations and embedded objects are not fully rendered. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) and the first slide are considered.
 - Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Other Adobe files use supported XMP/ZIP previews or Windows thumbnails; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
-- Animated or multi-frame images show a still frame. Images over **100 MiB** or **100 million pixels** are skipped.
+- Animated GIFs play automatically while hovering, using their frame delays and repeat settings. Moving within the same file's icon keeps the animation playing; leaving the file stops it. Other animated or multi-frame image formats show a still frame.
+- Images over **100 MiB** or **100 million pixels** are skipped. GIFs also have a limit of **2,000 frames** and **100 million pixels summed across frame rectangles**. Missing or very short GIF delays (0–10 ms) use 100 ms.
 - Previews are passive: they do not take keyboard focus or provide an editor or interactive playback controls.
 
 ## Build from source
@@ -222,6 +223,7 @@ Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/Pr
 | [Program.cs](src/App/Program.cs) | App lifecycle, tray icon, hover timing and startup registration. |
 | [ShellResolver.cs](src/Windows/ShellResolver.cs) | Resolve the file beneath the pointer in Explorer or on the desktop. |
 | [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Preview layout, rendering and content switching. |
+| [AnimatedGif.cs](src/Preview/AnimatedGif.cs) | GIF frame timing, repeat settings, bounded loading and native frame compositing. |
 | [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio/video playback using Windows media support. |
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Bounded text loading, encoding detection and syntax tokens. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
