@@ -22,3 +22,5 @@ On 2026-10-24, four document previews were rendered from the updated application
 | `powerpoint-preview.png` | The first slide of a generated PPTX with text and an embedded design-board image. |
 
 The Office samples were generated with python-docx, openpyxl and python-pptx; they are test fixtures, not user documents. The PSD sample was written according to its file structure. Previews were captured with the real `PreviewWindow.DrawToBitmap` after asynchronous loading completed. Fixture generators and test programs remain outside the repository.
+
+The application icon and README logo live in the separate [assets folder](../../assets). This folder contains documentation screenshots only.

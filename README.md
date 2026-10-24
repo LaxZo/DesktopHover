@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon-preview.png" width="88" alt="Desktop Hover icon">
+  <img src="assets/icon-preview.png" width="88" alt="Desktop Hover icon">
 </p>
 
 <h1 align="center">Desktop Hover</h1>
@@ -155,7 +155,7 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Other Adobe projects** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ and FLA **when a supported embedded preview or Windows thumbnail is available**. |
 | **Other documents** | Legacy DOC/XLS/PPT and templates, XLSB and PDF depend on a Windows thumbnail provider. ODT/ODS/ODP can also use their saved PNG thumbnail. |
 
-File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](MediaFiles.cs), [TextPreviewContent.cs](TextPreviewContent.cs) and [DocumentPreviewContent.cs](DocumentPreviewContent.cs) for the full extension lists.
+File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) and [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs) for the full extension lists.
 
 Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
 
@@ -183,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 .\DesktopHover.exe --settings
 ```
 
-`build.ps1` invokes the 64-bit .NET Framework C# compiler:
+`build.ps1` delegates to [scripts/build.ps1](scripts/build.ps1), which invokes the 64-bit .NET Framework C# compiler:
 
 ```text
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
@@ -191,22 +191,45 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 Stop a running copy before replacing its executable, or build to a separate location with `-OutputPath`.
 
+### Repository layout
+
+```text
+DesktopHover/
+├── src/
+│   ├── App/                 # Entry point, preferences and translations
+│   ├── UI/                  # Settings, tray menu and visual style
+│   ├── Preview/             # Preview window, images, media and text
+│   │   └── Documents/       # Office/Adobe readers and archive validation
+│   └── Windows/             # Explorer integration and Windows thumbnails
+├── assets/                  # Application icon and README logo
+├── scripts/                 # Build and installation implementations
+├── docs/assets/             # Screenshots and their provenance
+├── DesktopHover.exe         # Portable application
+├── build.ps1                # Shortcut to scripts/build.ps1
+├── Install.ps1              # Shortcut to scripts/Install.ps1
+├── README.md
+└── README.lv.md
+```
+
+Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/PreviewWindow.cs` for previews. The build includes C# files under `src` and embeds `assets/DesktopHover.ico`. The root scripts preserve the commands shown above; generated verification files and local Graphify data are ignored by Git.
+
 <details>
 <summary><strong>Source map and useful launch options</strong></summary>
 
 | File | Responsibility |
 | --- | --- |
-| [Program.cs](Program.cs) | App lifecycle, tray icon, hover timing and startup registration. |
-| [ShellResolver.cs](ShellResolver.cs) | Resolve the file beneath the pointer in Explorer or on the desktop. |
-| [PreviewWindow.cs](PreviewWindow.cs) | Preview layout, rendering and content switching. |
-| [MediaPlayback.cs](MediaPlayback.cs) | Audio/video playback using Windows media support. |
-| [TextPreviewContent.cs](TextPreviewContent.cs) | Bounded text loading, encoding detection and syntax tokens. |
-| [DocumentPreviewContent.cs](DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
-| [OfficePreviewReader.cs](OfficePreviewReader.cs), [AdobePreviewReader.cs](AdobePreviewReader.cs) | Local document content and embedded project-image readers. |
-| [ShellThumbnailProvider.cs](ShellThumbnailProvider.cs) | Windows thumbnail fallback in a separate helper with a timeout. |
-| [SettingsWindow.cs](SettingsWindow.cs), [TrayMenu.cs](TrayMenu.cs) | Settings window and quick menu. |
-| [Brand.cs](Brand.cs), [Localization.cs](Localization.cs) | Theme palettes, icons and translations. |
-| [AppSettings.cs](AppSettings.cs) | Preference validation and persistence. |
+| [scripts/build.ps1](scripts/build.ps1), [scripts/Install.ps1](scripts/Install.ps1) | Build and installation; the root scripts forward their parameters here. |
+| [Program.cs](src/App/Program.cs) | App lifecycle, tray icon, hover timing and startup registration. |
+| [ShellResolver.cs](src/Windows/ShellResolver.cs) | Resolve the file beneath the pointer in Explorer or on the desktop. |
+| [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Preview layout, rendering and content switching. |
+| [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio/video playback using Windows media support. |
+| [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Bounded text loading, encoding detection and syntax tokens. |
+| [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
+| [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Local document content and embedded project-image readers. |
+| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows thumbnail fallback in a separate helper with a timeout. |
+| [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Settings window and quick menu. |
+| [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Theme palettes, icons and translations. |
+| [AppSettings.cs](src/App/AppSettings.cs) | Preference validation and persistence. |
 
 ```powershell
 .\DesktopHover.exe --settings

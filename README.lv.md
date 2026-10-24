@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon-preview.png" width="88" alt="Desktop Hover ikona">
+  <img src="assets/icon-preview.png" width="88" alt="Desktop Hover ikona">
 </p>
 
 <h1 align="center">Desktop Hover</h1>
@@ -155,7 +155,7 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Citi Adobe projekti** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ un FLA, **ja pieejams atbalstīts iegultais priekšskatījums vai Windows sīktēls**. |
 | **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, XLSB un PDF nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
 
-Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](MediaFiles.cs), [TextPreviewContent.cs](TextPreviewContent.cs) un [DocumentPreviewContent.cs](DocumentPreviewContent.cs).
+Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) un [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs).
 
 Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
 
@@ -183,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 .\DesktopHover.exe --settings
 ```
 
-`build.ps1` izmanto 64 bitu .NET Framework C# kompilatoru:
+`build.ps1` palaiž [scripts/build.ps1](scripts/build.ps1), kas izmanto 64 bitu .NET Framework C# kompilatoru:
 
 ```text
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
@@ -191,22 +191,45 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 Pirms izpildfaila aizstāšanas aizver palaisto kopiju vai norādi citu izvades vietu ar `-OutputPath`.
 
+### Repozitorija struktūra
+
+```text
+DesktopHover/
+├── src/
+│   ├── App/                 # Palaišana, iestatījumi un tulkojumi
+│   ├── UI/                  # Iestatījumu logs, teknes izvēlne un stils
+│   ├── Preview/             # Priekšskata logs, attēli, mediji un teksts
+│   │   └── Documents/       # Office/Adobe lasītāji un arhīvu pārbaude
+│   └── Windows/             # Explorer integrācija un Windows sīktēli
+├── assets/                  # Lietotnes ikona un README logotips
+├── scripts/                 # Būvēšanas un uzstādīšanas skripti
+├── docs/assets/             # Ekrānattēli un to izcelsmes apraksts
+├── DesktopHover.exe         # Portatīvā lietotne
+├── build.ps1                # Palaiž scripts/build.ps1
+├── Install.ps1              # Palaiž scripts/Install.ps1
+├── README.md
+└── README.lv.md
+```
+
+Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — ar `src/Preview/PreviewWindow.cs`. Būve iekļauj C# failus no `src` un iegulst `assets/DesktopHover.ico`. Saknes skripti saglabā iepriekš aprakstītās komandas; pagaidu pārbaudes faili un lokālie Graphify dati Git repozitorijā netiek iekļauti.
+
 <details>
 <summary><strong>Koda uzbūve un palaišanas parametri</strong></summary>
 
 | Fails | Atbildība |
 | --- | --- |
-| [Program.cs](Program.cs) | Programmas dzīves cikls, teknes ikona, aizture un automātiskā palaišana. |
-| [ShellResolver.cs](ShellResolver.cs) | Faila noteikšana zem peles darbvirsmā vai Explorer. |
-| [PreviewWindow.cs](PreviewWindow.cs) | Priekšskatījuma izkārtojums, zīmēšana un satura pārslēgšana. |
-| [MediaPlayback.cs](MediaPlayback.cs) | Audio un video atskaņošana. |
-| [TextPreviewContent.cs](TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
-| [DocumentPreviewContent.cs](DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
-| [OfficePreviewReader.cs](OfficePreviewReader.cs), [AdobePreviewReader.cs](AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
-| [ShellThumbnailProvider.cs](ShellThumbnailProvider.cs) | Windows sīktēli atsevišķā palīgprocesā ar laika ierobežojumu. |
-| [SettingsWindow.cs](SettingsWindow.cs), [TrayMenu.cs](TrayMenu.cs) | Iestatījumi un ātrā izvēlne. |
-| [Brand.cs](Brand.cs), [Localization.cs](Localization.cs) | Tēmu krāsas, ikonas un tulkojumi. |
-| [AppSettings.cs](AppSettings.cs) | Iestatījumu validācija un saglabāšana. |
+| [scripts/build.ps1](scripts/build.ps1), [scripts/Install.ps1](scripts/Install.ps1) | Būvēšana un uzstādīšana; saknes skripti nodod tiem parametrus. |
+| [Program.cs](src/App/Program.cs) | Programmas dzīves cikls, teknes ikona, aizture un automātiskā palaišana. |
+| [ShellResolver.cs](src/Windows/ShellResolver.cs) | Faila noteikšana zem peles darbvirsmā vai Explorer. |
+| [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Priekšskatījuma izkārtojums, zīmēšana un satura pārslēgšana. |
+| [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio un video atskaņošana. |
+| [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
+| [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
+| [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
+| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows sīktēli atsevišķā palīgprocesā ar laika ierobežojumu. |
+| [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Iestatījumi un ātrā izvēlne. |
+| [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Tēmu krāsas, ikonas un tulkojumi. |
+| [AppSettings.cs](src/App/AppSettings.cs) | Iestatījumu validācija un saglabāšana. |
 
 ```powershell
 .\DesktopHover.exe --settings
