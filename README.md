@@ -96,7 +96,7 @@ Change the appearance with the sun/moon button beside the language selector. Set
 ### Run it without installing
 
 1. Open [DesktopHover.exe](DesktopHover.exe) in this repository and use **Download raw file**, or download and extract the repository ZIP.
-2. Put `DesktopHover.exe` in a folder you want to keep and run it.
+2. Put `DesktopHover.exe` and the [LICENSE](LICENSE) file in a folder you want to keep and run the executable.
 3. Find its icon in the Windows system tray. It may be inside the **Show hidden icons** menu.
 4. Hover over a supported local file on the desktop or in File Explorer.
 
@@ -267,4 +267,8 @@ To remove an installed copy, switch off **Start with Windows**, quit the app, an
 
 Contributions are welcome. Describe the behavior you changed, build with `build.ps1`, and include screenshots for interface changes.
 
-**License:** a license has not yet been specified in this repository.
+## License
+
+Desktop Hover is licensed under the [MIT License](LICENSE). Copyright © 2026 LaxZo.
+
+You may use, modify and redistribute it, including commercially and in closed-source projects, provided you retain the copyright and license notices. The software is provided without warranty. Include `LICENSE` when sharing the source code or executable; the installer copies it alongside the app.

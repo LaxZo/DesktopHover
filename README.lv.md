@@ -96,7 +96,7 @@ Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi 
 ### Palaišana bez uzstādīšanas
 
 1. Atver repozitorija failu [DesktopHover.exe](DesktopHover.exe) un izvēlies **Download raw file**, vai lejupielādē un atpako visu repozitoriju ZIP formātā.
-2. Saglabā `DesktopHover.exe` mapē, kuru plāno paturēt, un palaid to.
+2. Saglabā `DesktopHover.exe` un [LICENSE](LICENSE) failu mapē, kuru plāno paturēt, un palaid izpildfailu.
 3. Atrodi lietotnes ikonu Windows sistēmas teknē. Tā var būt paslēpto ikonu izvēlnē.
 4. Uzved peli uz atbalstīta lokāla faila darbvirsmā vai File Explorer.
 
@@ -267,4 +267,8 @@ Lai noņemtu uzstādīto kopiju, izslēdz **Palaist kopā ar Windows**, aizver l
 
 Piedaloties izstrādē, apraksti mainīto uzvedību, pārbaudi būvi ar `build.ps1` un saskarnes izmaiņām pievieno ekrānattēlus.
 
-**Licence:** šajā repozitorijā licence vēl nav norādīta.
+## Licence
+
+Desktop Hover ir pieejams ar [MIT licenci](LICENSE). Autortiesības © 2026 LaxZo.
+
+Drīkst lietot, pārveidot un izplatīt, arī komerciāli un slēgta koda projektos, saglabājot autora un licences paziņojumus. Programmatūra tiek nodrošināta bez garantijas. Izplatot pirmkodu vai izpildfailu, pievieno `LICENSE`; instalētājs to kopē līdzās lietotnei.

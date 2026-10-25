@@ -10,7 +10,7 @@ Get-Process DesktopHover -ErrorAction SilentlyContinue |
     ForEach-Object { Stop-Process -Id $_.Id; if (-not $_.WaitForExit(5000)) { throw 'Desktop Hover did not stop.' } }
 New-Item -ItemType Directory -Path $installFolder -Force | Out-Null
 Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force
-foreach ($documentation in @('README.md', 'README.lv.md', 'assets', 'docs')) {
+foreach ($documentation in @('LICENSE', 'README.md', 'README.lv.md', 'assets', 'docs')) {
     $documentationSource = Join-Path $projectRoot $documentation
     if (Test-Path -LiteralPath $documentationSource) {
         Copy-Item -LiteralPath $documentationSource -Destination $installFolder -Recurse -Force
