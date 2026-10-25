@@ -96,7 +96,7 @@ Change the appearance with the sun/moon button beside the language selector. Set
 ### Run it without installing
 
 1. Open [DesktopHover.exe](DesktopHover.exe) in this repository and use **Download raw file**, or download and extract the repository ZIP.
-2. Put `DesktopHover.exe` and the [LICENSE](LICENSE) file in a folder you want to keep and run the executable.
+2. Put `DesktopHover.exe`, [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) in a folder you want to keep and run the executable.
 3. Find its icon in the Windows system tray. It may be inside the **Show hidden icons** menu.
 4. Hover over a supported local file on the desktop or in File Explorer.
 
@@ -271,4 +271,4 @@ Contributions are welcome. Describe the behavior you changed, build with `build.
 
 Desktop Hover is licensed under the [MIT License](LICENSE). Copyright © 2026 LaxZo.
 
-You may use, modify and redistribute it, including commercially and in closed-source projects, provided you retain the copyright and license notices. The software is provided without warranty. Include `LICENSE` when sharing the source code or executable; the installer copies it alongside the app.
+You may use, modify and redistribute it, including commercially and in closed-source projects, provided you retain the copyright and license notices. The software is provided without warranty. Include `LICENSE` and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) when sharing the source code or executable; the installer copies them alongside the app. The GitHub button uses an MIT-licensed GitHub Octicons logo.

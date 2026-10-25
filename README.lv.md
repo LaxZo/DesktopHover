@@ -96,7 +96,7 @@ Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi 
 ### Palaišana bez uzstādīšanas
 
 1. Atver repozitorija failu [DesktopHover.exe](DesktopHover.exe) un izvēlies **Download raw file**, vai lejupielādē un atpako visu repozitoriju ZIP formātā.
-2. Saglabā `DesktopHover.exe` un [LICENSE](LICENSE) failu mapē, kuru plāno paturēt, un palaid izpildfailu.
+2. Saglabā `DesktopHover.exe`, [LICENSE](LICENSE) un [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) mapē, kuru plāno paturēt, un palaid izpildfailu.
 3. Atrodi lietotnes ikonu Windows sistēmas teknē. Tā var būt paslēpto ikonu izvēlnē.
 4. Uzved peli uz atbalstīta lokāla faila darbvirsmā vai File Explorer.
 
@@ -271,4 +271,4 @@ Piedaloties izstrādē, apraksti mainīto uzvedību, pārbaudi būvi ar `build.p
 
 Desktop Hover ir pieejams ar [MIT licenci](LICENSE). Autortiesības © 2026 LaxZo.
 
-Drīkst lietot, pārveidot un izplatīt, arī komerciāli un slēgta koda projektos, saglabājot autora un licences paziņojumus. Programmatūra tiek nodrošināta bez garantijas. Izplatot pirmkodu vai izpildfailu, pievieno `LICENSE`; instalētājs to kopē līdzās lietotnei.
+Drīkst lietot, pārveidot un izplatīt, arī komerciāli un slēgta koda projektos, saglabājot autora un licences paziņojumus. Programmatūra tiek nodrošināta bez garantijas. Izplatot pirmkodu vai izpildfailu, pievieno `LICENSE` un [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); instalētājs tos kopē līdzās lietotnei. GitHub pogā izmantots GitHub Octicons logo ar MIT licenci.

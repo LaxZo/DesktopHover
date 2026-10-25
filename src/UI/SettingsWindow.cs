@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -14,7 +16,9 @@ namespace DesktopHover
         private readonly Action<bool> pauseChanged;
         private readonly HoverButton[] presets = new HoverButton[4];
         private readonly HoverButton[] delays = new HoverButton[5];
-        private readonly HoverButton languagePicker, themeToggle;
+        private readonly HoverButton languagePicker, themeToggle, githubProject;
+        private readonly Label autosavedLabel;
+        private const string ProjectUrl = "https://github.com/LaxZo/DesktopHover";
         private readonly ContextMenuStrip languageMenu;
         private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
@@ -64,6 +68,21 @@ namespace DesktopHover
             close.SetBounds(368, 20, 32, 32);
             close.Click += delegate { Close(); };
             Controls.Add(close);
+
+            autosavedLabel = new Label
+            {
+                Name = "autosaved-status",
+                Font = smallFont,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            autosavedLabel.SetBounds(24, 716, 162, 32);
+            Controls.Add(autosavedLabel);
+
+            githubProject = new HoverButton { Name = "github-project", Compact = true, ProjectLink = true };
+            githubProject.SetBounds(194, 716, 40, 32);
+            githubProject.Click += delegate { OpenProject(); };
+            Controls.Add(githubProject);
 
             themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
             themeToggle.SetBounds(242, 716, 40, 32);
@@ -211,6 +230,22 @@ namespace DesktopHover
             languageMenu.Show(languagePicker, new Point(languagePicker.Width, -5), ToolStripDropDownDirection.AboveLeft);
         }
 
+        private void OpenProject()
+        {
+            try
+            {
+                using (Process browser = Process.Start(new ProcessStartInfo(ProjectUrl) { UseShellExecute = true })) { }
+            }
+            catch (Win32Exception) { ShowProjectLinkError(); }
+            catch (InvalidOperationException) { ShowProjectLinkError(); }
+        }
+
+        private void ShowProjectLinkError()
+        {
+            MessageBox.Show(this, T("project_link_error") + "\r\n\r\n" + ProjectUrl,
+                "Desktop Hover", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private HoverToggle AddToggle(int y)
         {
             var toggle = new HoverToggle();
@@ -264,6 +299,12 @@ namespace DesktopHover
             }
             languageMenu.BackColor = Brand.Surface;
             languageMenu.ForeColor = Brand.Text;
+            autosavedLabel.Text = T("autosaved");
+            autosavedLabel.ForeColor = Brand.Muted;
+            windowToolTip.SetToolTip(autosavedLabel, autosavedLabel.Text);
+            githubProject.AccessibleName = T("project_link");
+            githubProject.AccessibleDescription = ProjectUrl;
+            windowToolTip.SetToolTip(githubProject, githubProject.AccessibleName + "\r\n" + ProjectUrl);
             themeToggle.Selected = Brand.IsLight;
             themeToggle.AccessibleName = String.Format(L10n.Culture(settings.Language), T("theme_switch"),
                 T(Brand.IsLight ? "theme_dark" : "theme_light"));
@@ -402,7 +443,6 @@ namespace DesktopHover
                 new Rectangle(330, 449, 70, 23), TextFormatFlags.Right);
             DrawText(g, T("volume_detail"), smallFont, Brand.Muted, new Rectangle(24, 474, 376, 20));
             using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 704, 400, 704);
-            DrawText(g, T("autosaved"), smallFont, Brand.Muted, new Rectangle(24, 722, 212, 23));
         }
 
         private static void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle)
@@ -516,6 +556,7 @@ namespace DesktopHover
         public bool Compact { get; set; }
         public bool LanguageSelector { get; set; }
         public bool ThemeSelector { get; set; }
+        public bool ProjectLink { get; set; }
         public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
 
         public HoverButton()
@@ -563,6 +604,10 @@ namespace DesktopHover
             {
                 DrawThemeIcon(g);
             }
+            else if (ProjectLink)
+            {
+                DrawGitHubIcon(g);
+            }
             else if (Compact)
             {
                 TextRenderer.DrawText(g, Text, Font, ClientRectangle, selected ? Brand.Accent : Brand.Text,
@@ -581,6 +626,52 @@ namespace DesktopHover
                         g.DrawLines(pen, new[] { new Point(Width - 24, 18), new Point(Width - 20, 22), new Point(Width - 13, 14) });
                 }
             }
+        }
+
+        // GitHub Octicons mark-github-16, converted to GDI+ curves. See THIRD-PARTY-NOTICES.md.
+        private void DrawGitHubIcon(Graphics graphics)
+        {
+            GraphicsState state = graphics.Save();
+            try
+            {
+                graphics.TranslateTransform((Width - 20) / 2f, (Height - 20) / 2f);
+                graphics.ScaleTransform(20f / 16f, 20f / 16f);
+                using (var path = new GraphicsPath())
+                using (var brush = new SolidBrush(Brand.Text))
+                {
+                    path.AddBezier(7.984f, 0f, 12.406f, 0f, 16.0f, 3.61f, 16.0f, 8.03f);
+                    path.AddBezier(16.0f, 8.03f, 16.0f, 11.53f, 13.781f, 14.359f, 10.953f, 15.438f);
+                    path.AddBezier(10.953f, 15.438f, 10.484f, 15.625f, 10.093f, 15.359f, 10.093f, 14.891f);
+                    path.AddLine(10.093f, 14.891f, 10.093f, 13.266f);
+                    path.AddBezier(10.093f, 13.266f, 10.093f, 12.406f, 9.734f, 11.656f, 9.203f, 11.312f);
+                    path.AddBezier(9.203f, 11.312f, 11.297f, 11.047f, 12.75f, 9.594f, 12.75f, 7.672f);
+                    path.AddBezier(12.75f, 7.672f, 12.75f, 6.859f, 12.484f, 6.062f, 11.984f, 5.469f);
+                    path.AddBezier(11.984f, 5.469f, 12.188f, 4.937f, 12.156f, 3.844f, 11.938f, 3.422f);
+                    path.AddBezier(11.938f, 3.422f, 11.313f, 3.344f, 10.453f, 3.672f, 9.969f, 4.109f);
+                    path.AddBezier(9.969f, 4.109f, 9.406f, 3.938f, 8.781f, 3.844f, 8.016f, 3.844f);
+                    path.AddBezier(8.016f, 3.844f, 7.25f, 3.844f, 6.625f, 3.938f, 6.031f, 4.125f);
+                    path.AddBezier(6.031f, 4.125f, 5.531f, 3.672f, 4.688f, 3.344f, 4.063f, 3.422f);
+                    path.AddBezier(4.063f, 3.422f, 3.828f, 3.875f, 3.797f, 4.969f, 4.0f, 5.484f);
+                    path.AddBezier(4.0f, 5.484f, 3.531f, 6.047f, 3.25f, 6.891f, 3.25f, 7.672f);
+                    path.AddBezier(3.25f, 7.672f, 3.25f, 9.594f, 4.703f, 11.078f, 6.766f, 11.328f);
+                    path.AddBezier(6.766f, 11.328f, 6.579f, 11.484f, 6.375f, 11.719f, 6.109f, 11.984f);
+                    path.AddBezier(6.109f, 11.984f, 5.75f, 12.344f, 5.5f, 12.484f, 5.109f, 12.484f);
+                    path.AddBezier(5.109f, 12.484f, 4.718f, 12.484f, 4.391f, 12.281f, 4.078f, 11.829f);
+                    path.AddBezier(4.078f, 11.829f, 3.672f, 11.25f, 3.281f, 10.969f, 2.828f, 10.969f);
+                    path.AddBezier(2.828f, 10.969f, 2.516f, 10.969f, 2.203f, 11.109f, 2.203f, 11.297f);
+                    path.AddBezier(2.203f, 11.297f, 2.203f, 11.391f, 2.266f, 11.469f, 2.453f, 11.484f);
+                    path.AddBezier(2.453f, 11.484f, 2.812f, 11.531f, 3.0f, 11.781f, 3.172f, 12.203f);
+                    path.AddBezier(3.172f, 12.203f, 3.61f, 13.25f, 4.219f, 13.812f, 5.25f, 13.812f);
+                    path.AddBezier(5.25f, 13.812f, 5.5f, 13.812f, 5.781f, 13.75f, 6.0f, 13.656f);
+                    path.AddLine(6.0f, 13.656f, 6.0f, 14.906f);
+                    path.AddBezier(6.0f, 14.906f, 6.0f, 15.328f, 5.594f, 15.609f, 5.172f, 15.453f);
+                    path.AddBezier(5.172f, 15.453f, 2.0582f, 14.3135f, -0.0092f, 11.3467f, 0f, 8.031f);
+                    path.AddBezier(0f, 8.031f, 0f, 3.61f, 3.563f, 0f, 7.984f, 0f);
+                    path.CloseFigure();
+                    graphics.FillPath(brush, path);
+                }
+            }
+            finally { graphics.Restore(state); }
         }
 
         private void DrawThemeIcon(Graphics graphics)
