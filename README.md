@@ -114,6 +114,8 @@ The script copies the app and documentation to `%LOCALAPPDATA%\DesktopHover` and
 
 ## Everyday controls
 
+While previews are enabled, DesktopHover temporarily deactivates Windows file infotips in the current Explorer or desktop file view, so they do not repeatedly appear over the preview. This also applies to unsupported files in that view. Leaving the view, pausing previews or quitting restores the controls; a small background helper restores them if the main process is forcibly stopped. Windows preferences and the Explorer Preview pane are unchanged. A first tooltip may briefly appear before its control is detected.
+
 | Action | Result |
 | --- | --- |
 | Hover over a supported file | Show its preview after the selected delay. |
@@ -222,6 +224,7 @@ Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/Pr
 | [scripts/build.ps1](scripts/build.ps1), [scripts/Install.ps1](scripts/Install.ps1) | Build and installation; the root scripts forward their parameters here. |
 | [Program.cs](src/App/Program.cs) | App lifecycle, tray icon, hover timing and startup registration. |
 | [ShellResolver.cs](src/Windows/ShellResolver.cs) | Resolve the file beneath the pointer in Explorer or on the desktop. |
+| [ShellInfoTipSuppressor.cs](src/Windows/ShellInfoTipSuppressor.cs), [InfoTipRestoreGuard.cs](src/Windows/InfoTipRestoreGuard.cs) | Temporarily deactivate Explorer file infotips and restore them on pause/exit or unexpected termination. |
 | [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Preview layout, rendering and content switching. |
 | [AnimatedGif.cs](src/Preview/AnimatedGif.cs) | GIF frame timing, repeat settings, bounded loading and native frame compositing. |
 | [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio/video playback using Windows media support. |

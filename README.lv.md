@@ -114,6 +114,8 @@ Skripts iekopē lietotni un dokumentāciju mapē `%LOCALAPPDATA%\DesktopHover` u
 
 ## Ikdienas vadība
 
+Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows failu informācijas lodziņus pašreizējā Explorer vai darbvirsmas failu skatā, lai tie atkārtoti neparādītos virs priekšskatījuma. Tas attiecas arī uz neatbalstītiem failiem šajā skatā. Aizejot no skata, iepauzējot priekšskatījumus vai aizverot lietotni, vadīklas tiek atjaunotas; neliels fona palīgprocess tās atjauno arī pēc galvenā procesa piespiedu apturēšanas. Windows iestatījumi un Explorer priekšskatījuma sānu panelis netiek mainīti. Pirmais lodziņš var īslaicīgi parādīties, pirms tā vadīkla ir noteikta.
+
 | Darbība | Rezultāts |
 | --- | --- |
 | Uzved peli uz atbalstīta faila | Pēc izvēlētās aiztures parādās priekšskatījums. |
@@ -222,6 +224,7 @@ Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — 
 | [scripts/build.ps1](scripts/build.ps1), [scripts/Install.ps1](scripts/Install.ps1) | Būvēšana un uzstādīšana; saknes skripti nodod tiem parametrus. |
 | [Program.cs](src/App/Program.cs) | Programmas dzīves cikls, teknes ikona, aizture un automātiskā palaišana. |
 | [ShellResolver.cs](src/Windows/ShellResolver.cs) | Faila noteikšana zem peles darbvirsmā vai Explorer. |
+| [ShellInfoTipSuppressor.cs](src/Windows/ShellInfoTipSuppressor.cs), [InfoTipRestoreGuard.cs](src/Windows/InfoTipRestoreGuard.cs) | Explorer failu paskaidrojumu pagaidu deaktivizēšana un atjaunošana pauzē, izejot vai pēc negaidītas apturēšanas. |
 | [PreviewWindow.cs](src/Preview/PreviewWindow.cs) | Priekšskatījuma izkārtojums, zīmēšana un satura pārslēgšana. |
 | [AnimatedGif.cs](src/Preview/AnimatedGif.cs) | GIF kadru aiztures, atkārtošana, ierobežota ielāde un kadru salikšana ar Windows atbalstu. |
 | [MediaPlayback.cs](src/Preview/MediaPlayback.cs) | Audio un video atskaņošana. |

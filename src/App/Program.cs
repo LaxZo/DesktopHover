@@ -13,6 +13,7 @@ namespace DesktopHover
         internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_OpenSettings");
         [STAThread] static void Main(string[] args)
         {
+            if (InfoTipRestoreGuard.TryRunWorker(args)) return;
             if (ShellThumbnailProvider.TryRunWorker(args)) return;
             try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
             catch { Native.SetProcessDPIAware(); }
@@ -79,6 +80,7 @@ namespace DesktopHover
         private readonly NotifyIcon tray;
         private readonly Icon trayIcon;
         private readonly TrayMenu trayMenu;
+        private readonly ShellInfoTipSuppressor infoTips;
         private AppSettings settings;
         private SettingsWindow settingsWindow;
         private readonly System.Windows.Forms.Timer timer;
@@ -88,7 +90,7 @@ namespace DesktopHover
         private volatile bool stopping;
         private bool paused, busy;
         private Point last, requestedPoint;
-        private IntPtr lastSurface, lastNativeTip;
+        private IntPtr lastSurface;
         private int generation, requestGeneration, resultGeneration;
         private HoverItem result, shown;
         private bool resultReady;
@@ -110,6 +112,11 @@ namespace DesktopHover
             trayMenu.Opening+=delegate { Reset(); };
             trayMenu.Closed+=delegate { if(!stopping) Reset(); };
             tray.ContextMenuStrip=trayMenu;
+            infoTips=new ShellInfoTipSuppressor(delegate
+            {
+                return !stopping && !paused && !trayMenu.Visible && !Native.ButtonsDown() &&
+                    (Native.GetAsyncKeyState(27)&0x8000)==0;
+            });
             UpdateTrayText();
             tray.MouseClick+=delegate(object sender,MouseEventArgs e)
             { if(e.Button==MouseButtons.Left) ShowSettings(); };
@@ -166,7 +173,7 @@ namespace DesktopHover
         }
         private void Reset()
         {
-            generation++; shown=null; lastNativeTip=IntPtr.Zero; preview.ClearPreview(); moved=DateTime.UtcNow;
+            generation++; shown=null; infoTips.Clear(); preview.ClearPreview(); moved=DateTime.UtcNow;
             lastCheck=DateTime.MinValue;
         }
         private void Tick(object sender,EventArgs e)
@@ -176,6 +183,13 @@ namespace DesktopHover
             Point now=new Point(p.X,p.Y);
             if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
             { Reset(); last=now; return; }
+            IntPtr surface=Native.WindowFromPoint(p);
+            IntPtr root=Native.GetAncestor(surface,2);
+            bool isShell=Native.IsShellRoot(root);
+            // A Windows infotip can cover the pointer even before our preview's delay expires.
+            // Dismiss it and let the next tick resolve the file through the exposed Explorer view.
+            if(!isShell && infoTips.DismissAtCursor(surface,now)) return;
+            if(!isShell) { Reset(); last=now; return; }
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
             if(motion)
             {
@@ -183,26 +197,11 @@ namespace DesktopHover
                 if(!preview.IsMediaPreview || shown==null || !shown.Bounds.Contains(now)) Reset();
                 last=now;
             }
-            IntPtr surface=Native.WindowFromPoint(p);
-            IntPtr root=Native.GetAncestor(surface,2);
-            bool isShell=Native.IsShellRoot(root);
-            bool nativeTip=false;
-            // Native file infotips can cover part of the original icon; never admit other applications.
-            if(!isShell && shown!=null && shown.Bounds.Contains(now) && Native.Class(root)=="tooltips_class32")
-            { isShell=true; nativeTip=true; }
-            if(!isShell) { if(shown!=null) Reset(); return; }
-            if(!nativeTip && surface!=lastSurface) { Reset(); lastSurface=surface; }
+            if(surface!=lastSurface) { Reset(); lastSurface=surface; }
+            infoTips.Track(surface,root,now);
             if(shown!=null)
             {
                 if(!shown.Bounds.Contains(now)) { Reset(); return; }
-                // ShowFile already makes the preview topmost. Only raise it again for a new
-                // Explorer infotip, rather than touching the video window every 75 ms.
-                if(nativeTip && surface!=lastNativeTip)
-                {
-                    Native.SetWindowPos(preview.Handle,new IntPtr(-1),0,0,0,0,0x0013);
-                    lastNativeTip=surface;
-                }
-                else if(!nativeTip) lastNativeTip=IntPtr.Zero;
             }
             lock(gate)
             {
@@ -213,7 +212,7 @@ namespace DesktopHover
                     {
                         if(result!=null && result.Bounds.Contains(now) && Native.IsShellRoot(result.Root))
                         {
-                            if(!nativeTip && (root!=result.Root || surface!=result.Surface)) { preview.ClearPreview(); shown=null; return; }
+                            if(root!=result.Root || surface!=result.Surface) { preview.ClearPreview(); shown=null; return; }
                             if(shown==null || !string.Equals(shown.Path,result.Path,StringComparison.OrdinalIgnoreCase))
                             {
                                     if(preview.ShowFile(result.Path,now,result.Bounds)) shown=result;
@@ -223,10 +222,10 @@ namespace DesktopHover
                             }
                             else shown=result;
                         }
-                        else if(shown!=null && !nativeTip) { preview.ClearPreview(); shown=null; }
+                        else if(shown!=null) { preview.ClearPreview(); shown=null; }
                     }
                 }
-                if(!busy && !nativeTip && (DateTime.UtcNow-moved).TotalMilliseconds>=delay &&
+                if(!busy && (DateTime.UtcNow-moved).TotalMilliseconds>=delay &&
                    (DateTime.UtcNow-lastCheck).TotalMilliseconds>=(shown==null?600:1500))
                 {
                     busy=true; requestedPoint=now; requestGeneration=generation; lastCheck=DateTime.UtcNow; request.Set();
@@ -254,7 +253,7 @@ namespace DesktopHover
         }
         protected override void ExitThreadCore()
         {
-            stopping=true; request.Set(); timer.Stop(); tray.Visible=false; preview.Close();
+            stopping=true; infoTips.Dispose(); request.Set(); timer.Stop(); tray.Visible=false; preview.Close();
             if(settingsWindow!=null) settingsWindow.Close();
             base.ExitThreadCore();
         }
@@ -262,7 +261,7 @@ namespace DesktopHover
         {
             if(disposing)
             {
-                stopping=true; request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
+                stopping=true; infoTips.Dispose(); request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
                 if(settingsWindow!=null) settingsWindow.Dispose();
             }
             base.Dispose(disposing);
