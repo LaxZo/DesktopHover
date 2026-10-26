@@ -33,7 +33,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | **See images at a glance** | A compact preview with the filename, dimensions and file size. Original proportions are preserved. |
 | **Listen and watch** | Audio plays on hover. Video plays inside the preview with sound. One volume setting controls both. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
-| **Look inside documents and projects** | Word excerpts, Excel worksheets, PowerPoint slides and Photoshop images. Other Adobe projects use saved previews or Windows thumbnails when available. |
+| **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides and Photoshop images. Other Adobe projects use saved previews or Windows thumbnails when available. |
 | **Make it your own** | Dark or light appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
 
 ## Screenshots
@@ -152,14 +152,17 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Text & data** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML and other configuration files. |
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
+| **PDF** | The first page, rendered using the built-in Windows 10/11 PDF renderer. No Adobe application or Windows thumbnail provider is required. |
 | **Photoshop** | PSD/PSB saved thumbnails, or merged 8-bit RGB/grayscale images with raw or RLE compression. |
 | **Word, Excel & PowerPoint** | DOCX, XLSX, PPTX and their macro-enabled/template variants; PPSX/PPSM presentations. Saved preview first, then a simplified excerpt, first visible worksheet or first slide. |
 | **Other Adobe projects** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ and FLA **when a supported embedded preview or Windows thumbnail is available**. |
-| **Other documents** | Legacy DOC/XLS/PPT and templates, XLSB and PDF depend on a Windows thumbnail provider. ODT/ODS/ODP can also use their saved PNG thumbnail. |
+| **Other documents** | Legacy DOC/XLS/PPT and templates, and XLSB depend on a Windows thumbnail provider. ODT/ODS/ODP can also use their saved PNG thumbnail. |
 
 File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) and [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs) for the full extension lists.
 
 Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
+
+PDF rendering runs in a separate helper with a time limit. Leaving the file cancels the preview and stops its helper, keeping the app responsive when a PDF cannot be rendered.
 
 ### Current limits
 
@@ -168,6 +171,7 @@ Document previews load in the background and are canceled when you move away. Th
 - Syntax coloring is a basic lexer, not a full language service. Code is displayed without being executed or edited.
 - Markdown, HTML and SVG are shown as source text, rather than rendered documents.
 - Document/project previews are limited to **512 MiB** per file. Office ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
+- PDFs show **the first page only**, fitted to the configured preview size. Page navigation, editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
 - Office content previews are excerpts, not exact print layouts. Complex formatting, charts, slide masters, animations and embedded objects are not fully rendered. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) and the first slide are considered.
 - Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Other Adobe files use supported XMP/ZIP previews or Windows thumbnails; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
@@ -178,6 +182,8 @@ Document previews load in the background and are canceled when you move away. Th
 ## Build from source
 
 The app uses C#, Windows Forms for its interface, WPF for media playback and image decoding, and Windows Shell/UI Automation to identify hovered files. It has no NuGet package restore step or `.sln`/`.csproj` build entry point.
+
+Build on Windows 10/11 with .NET Framework 4.8. PDF support references the operating system's `System32\WinMetadata` files and the framework's `System.Runtime.dll` / `System.Runtime.WindowsRuntime.dll`; no Windows SDK installation is needed.
 
 ```powershell
 git clone https://github.com/LaxZo/DesktopHover.git
@@ -202,8 +208,8 @@ DesktopHover/
 │   ├── App/                 # Entry point, preferences and translations
 │   ├── UI/                  # Settings, tray menu and visual style
 │   ├── Preview/             # Preview window, images, media and text
-│   │   └── Documents/       # Office/Adobe readers and archive validation
-│   └── Windows/             # Explorer integration and Windows thumbnails
+│   │   └── Documents/       # PDF/Office/Adobe readers and archive validation
+│   └── Windows/             # Explorer integration and document workers
 ├── assets/                  # Application icon and README logo
 ├── scripts/                 # Build and installation implementations
 ├── docs/assets/             # Screenshots and their provenance
@@ -231,7 +237,9 @@ Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/Pr
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Bounded text loading, encoding detection and syntax tokens. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Local document content and embedded project-image readers. |
-| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows thumbnail fallback in a separate helper with a timeout. |
+| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | Render the first PDF page with Windows.Data.Pdf. |
+| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Shared PDF/thumbnail helper process with cancellation, timeout and output limits. |
+| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows thumbnail fallback through the shared document worker. |
 | [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Settings window and quick menu. |
 | [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Theme palettes, icons and translations. |
 | [AppSettings.cs](src/App/AppSettings.cs) | Preference validation and persistence. |
@@ -254,6 +262,7 @@ The startup options register or remove the path of the executable you run. Use t
 | A cloud file does not preview | Make it available offline first. Hovering does not download online-only files. |
 | Audio or video will not play | Check the volume and the file's codec support in Windows. A recognized extension alone does not guarantee decoding. |
 | Text is cut off | Large files and long lines are intentionally shortened. Open the file in an editor to read the rest. |
+| A PDF has no preview | Confirm it is a local file no larger than 512 MiB and can be opened without a password. Damaged or unsupported PDFs may be unavailable; no Adobe installation is needed. |
 | An Adobe or older Office file has no preview | Save it with an embedded preview, or use a compatible Windows thumbnail handler. Recognizing the extension does not guarantee content can be decoded. |
 | A document looks different from the editor | The footer marks simplified content. Open the original application for complete formatting, all pages, worksheets and slides. |
 | Settings is minimized | Restore it from the Windows taskbar or left-click the tray icon. |

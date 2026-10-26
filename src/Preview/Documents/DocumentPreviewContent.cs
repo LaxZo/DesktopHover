@@ -54,19 +54,32 @@ namespace DesktopHover
 
         internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation)
         {
+            string unavailableKey = "document_unavailable";
             try
             {
                 cancellation.ThrowIfCancellationRequested();
                 path = Path.GetFullPath(path);
+                bool pdfFile = String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
+                if (pdfFile) unavailableKey = "document_pdf_unavailable";
                 if (!IsSupported(path) || path.StartsWith(@"\\", StringComparison.Ordinal) ||
                     new DriveInfo(Path.GetPathRoot(path)).DriveType == DriveType.Network)
-                    return new DocumentPreviewResult(null, "document_unavailable");
+                    return new DocumentPreviewResult(null, unavailableKey);
                 FileInfo info = new FileInfo(path);
                 if (!info.Exists || (info.Attributes & (FileAttributes)(0x1000 | 0x40000 | 0x400000)) != 0)
-                    return new DocumentPreviewResult(null, "document_unavailable");
+                    return new DocumentPreviewResult(null, unavailableKey);
                 if (info.Length > MaximumFileBytes)
                     return new DocumentPreviewResult(null, "document_limit");
                 maxSize = new Size(Math.Max(1, Math.Min(1600, maxSize.Width)), Math.Max(1, Math.Min(1200, maxSize.Height)));
+                if (pdfFile)
+                {
+                    Bitmap pdf = DocumentPreviewWorker.TryLoad(path, maxSize, cancellation, true);
+                    if (cancellation.IsCancellationRequested)
+                    {
+                        if (pdf != null) pdf.Dispose();
+                        return null;
+                    }
+                    return new DocumentPreviewResult(pdf, pdf == null ? "document_pdf_unavailable" : "document_pdf");
+                }
                 DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true);
                 if (result == null) result = TryReader(path, maxSize, cancellation, false);
                 if (result != null)
@@ -84,7 +97,7 @@ namespace DesktopHover
                 return new DocumentPreviewResult(thumbnail, thumbnail == null ? "document_unavailable" : "document_shell");
             }
             catch (OperationCanceledException) { return null; }
-            catch { return new DocumentPreviewResult(null, "document_unavailable"); }
+            catch { return new DocumentPreviewResult(null, unavailableKey); }
         }
 
         private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office)

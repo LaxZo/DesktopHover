@@ -33,7 +33,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Ātri apskatīt attēlus** | Kompakts priekšskatījums ar faila nosaukumu, izmēriem un lielumu. Attēla proporcijas saglabājas. |
 | **Klausīties un skatīties** | Audio sāk skanēt pēc peles uzvešanas. Video atskaņojas priekšskatījuma logā ar skaņu. Abiem ir kopīgs skaļuma iestatījums. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
-| **Ieskatīties dokumentos un projektos** | Word fragmenti, Excel lapas, PowerPoint slaidi un Photoshop attēli. Citiem Adobe projektiem izmanto saglabātos priekšskatījumus vai pieejamos Windows sīktēlus. |
+| **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi un Photoshop attēli. Citiem Adobe projektiem izmanto saglabātos priekšskatījumus vai pieejamos Windows sīktēlus. |
 | **Pielāgot sev** | Tumšā vai gaišā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
@@ -152,14 +152,17 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
+| **PDF** | Pirmā lapa, atveidota ar Windows 10/11 iebūvēto PDF atbalstu. Nav vajadzīga Adobe lietotne vai Windows sīktēlu nodrošinātājs. |
 | **Photoshop** | PSD/PSB saglabātie sīktēli vai apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE. |
 | **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Saglabātais priekšskatījums vai vienkāršots fragments, pirmā redzamā lapa vai pirmais slaids. |
 | **Citi Adobe projekti** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ un FLA, **ja pieejams atbalstīts iegultais priekšskatījums vai Windows sīktēls**. |
-| **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, XLSB un PDF nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
+| **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, kā arī XLSB nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
 
 Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) un [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs).
 
 Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
+
+PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizvirzot peli no faila, priekšskatījuma ielāde tiek atcelta un palīgprocess apturēts, lai neatverams PDF nebloķētu lietotni.
 
 ### Pašreizējās robežas
 
@@ -168,6 +171,7 @@ Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajie
 - Sintakses krāsas nodrošina pamata leksiska analīze. Kods netiek izpildīts vai rediģēts.
 - Markdown, HTML un SVG tiek rādīti kā avota teksts.
 - Dokumentu/projektu priekšskatījumiem ir **512 MiB** faila robeža. Office ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
+- PDF rāda **tikai pirmo lapu**, pielāgotu izvēlētajam priekšskatījuma lielumam. Lapu pāršķiršana, rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
 - Office priekšskatījums ir fragments, ne precīzs drukas makets. Sarežģīta formatēšana, diagrammas, slaidu šabloni, animācijas un iegulti objekti netiek pilnībā atveidoti. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām) un pirmais slaids.
 - Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Citiem Adobe failiem izmanto atbalstītu XMP/ZIP priekšskatījumu vai Windows sīktēlu; pilna projektu atveidošana nav paredzēta.
 - Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
@@ -178,6 +182,8 @@ Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajie
 ## Būvēšana no pirmkoda
 
 Lietotne izmanto C#, Windows Forms saskarnei, WPF mediju atskaņošanai un attēlu atvēršanai, kā arī Windows Shell/UI Automation faila noteikšanai zem peles kursora. Nav NuGet pakotņu atjaunošanas soļa vai `.sln`/`.csproj` būvēšanas projekta.
+
+Būvēšanai izmanto Windows 10/11 ar .NET Framework 4.8. PDF atbalsts atsaucas uz operētājsistēmas `System32\WinMetadata` failiem un ietvara `System.Runtime.dll` / `System.Runtime.WindowsRuntime.dll`; Windows SDK uzstādīšana nav vajadzīga.
 
 ```powershell
 git clone https://github.com/LaxZo/DesktopHover.git
@@ -202,8 +208,8 @@ DesktopHover/
 │   ├── App/                 # Palaišana, iestatījumi un tulkojumi
 │   ├── UI/                  # Iestatījumu logs, teknes izvēlne un stils
 │   ├── Preview/             # Priekšskata logs, attēli, mediji un teksts
-│   │   └── Documents/       # Office/Adobe lasītāji un arhīvu pārbaude
-│   └── Windows/             # Explorer integrācija un Windows sīktēli
+│   │   └── Documents/       # PDF/Office/Adobe lasītāji un arhīvu pārbaude
+│   └── Windows/             # Explorer integrācija un dokumentu palīgprocesi
 ├── assets/                  # Lietotnes ikona un README logotips
 ├── scripts/                 # Būvēšanas un uzstādīšanas skripti
 ├── docs/assets/             # Ekrānattēli un to izcelsmes apraksts
@@ -231,7 +237,9 @@ Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — 
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
-| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows sīktēli atsevišķā palīgprocesā ar laika ierobežojumu. |
+| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | PDF pirmās lapas atveidošana ar Windows.Data.Pdf. |
+| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Kopīgs PDF/sīktēlu palīgprocess ar atcelšanu, laika un izvades robežām. |
+| [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows sīktēlu iegūšana kopīgajā dokumentu palīgprocesā. |
 | [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Iestatījumi un ātrā izvēlne. |
 | [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Tēmu krāsas, ikonas un tulkojumi. |
 | [AppSettings.cs](src/App/AppSettings.cs) | Iestatījumu validācija un saglabāšana. |
@@ -254,6 +262,7 @@ Automātiskās palaišanas parametri reģistrē vai noņem izpildītās kopijas 
 | Mākoņa fails netiek rādīts | Vispirms padari failu pieejamu bezsaistē. Peles uzvešana nesāk tā lejupielādi. |
 | Audio vai video neatskaņojas | Pārbaudi skaļumu un Windows kodeku atbalstu. Atpazīts paplašinājums negarantē atskaņošanu. |
 | Teksts ir nogriezts | Lieli faili un garas rindas tiek apzināti saīsināti. Pilnam saturam atver failu redaktorā. |
+| PDF nav priekšskatījuma | Pārbaudi, vai fails ir lokāls, nepārsniedz 512 MiB un ir atverams bez paroles. Bojāti vai neatbalstīti PDF var nebūt pieejami; Adobe uzstādīšana nav vajadzīga. |
 | Adobe vai vecam Office failam nav priekšskatījuma | Saglabā failu ar iegultu priekšskatījumu vai izmanto saderīgu Windows sīktēlu nodrošinātāju. Atpazīts paplašinājums negarantē satura nolasīšanu. |
 | Dokuments izskatās citādi nekā redaktorā | Apakšējā joslā norādīts vienkāršots saturs. Pilnai formatēšanai un visām lapām vai slaidiem atver sākotnējo lietotni. |
 | Iestatījumi ir samazināti | Atjauno logu no Windows uzdevumjoslas vai ar kreiso klikšķi uz teknes ikonas. |

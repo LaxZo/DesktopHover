@@ -14,7 +14,7 @@ namespace DesktopHover
         [STAThread] static void Main(string[] args)
         {
             if (InfoTipRestoreGuard.TryRunWorker(args)) return;
-            if (ShellThumbnailProvider.TryRunWorker(args)) return;
+            if (DocumentPreviewWorker.TryRunWorker(args)) return;
             try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
             catch { Native.SetProcessDPIAware(); }
             Application.EnableVisualStyles();

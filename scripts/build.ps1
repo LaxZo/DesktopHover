@@ -4,6 +4,19 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $sourceRoot = Join-Path $projectRoot 'src'
 $iconPath = Join-Path $projectRoot 'assets\DesktopHover.ico'
 $framework = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319'
+$windowsMetadata = Join-Path $env:WINDIR 'System32\WinMetadata'
+$pdfReferences = @(
+    (Join-Path $framework 'System.Runtime.dll'),
+    (Join-Path $framework 'System.Runtime.WindowsRuntime.dll'),
+    (Join-Path $windowsMetadata 'Windows.Data.winmd'),
+    (Join-Path $windowsMetadata 'Windows.Foundation.winmd'),
+    (Join-Path $windowsMetadata 'Windows.Storage.winmd')
+)
+foreach ($pdfReference in $pdfReferences) {
+    if (-not (Test-Path -LiteralPath $pdfReference -PathType Leaf)) {
+        throw "Missing Windows PDF build reference: $pdfReference. Build on Windows 10/11 with .NET Framework 4.8 installed."
+    }
+}
 $resolvedOutput = [IO.Path]::GetFullPath($OutputPath)
 $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -Recurse -File |
     Sort-Object FullName | ForEach-Object FullName)
@@ -21,7 +34,7 @@ $argsForCompiler = @(
     "/r:$framework\WPF\PresentationCore.dll",
     "/r:$framework\WPF\UIAutomationClient.dll",
     "/r:$framework\WPF\UIAutomationTypes.dll"
-) + $sourceFiles
+) + @($pdfReferences | ForEach-Object { "/r:$_" }) + $sourceFiles
 & "$framework\csc.exe" @argsForCompiler
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }
 Write-Output "Built Desktop Hover: $resolvedOutput"

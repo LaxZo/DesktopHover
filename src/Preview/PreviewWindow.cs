@@ -344,7 +344,7 @@ namespace DesktopHover
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
             string type = Path.GetExtension(CurrentPath).TrimStart('.').ToUpperInvariant();
-            string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_limit"
+            string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_limit" || mediaState == "document_pdf_unavailable"
                 ? "document_preview" : mediaState);
             description = type + " · " + note + " · " + FormatBytes(sourceBytes);
             Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
