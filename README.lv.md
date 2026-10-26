@@ -204,10 +204,6 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 Pirms izpildfaila aizstāšanas aizver palaisto kopiju vai norādi citu izvades vietu ar `-OutputPath`.
 
-Ar `powershell -ExecutionPolicy Bypass -File .\scripts\Test-DocumentPreviews.ps1` var uzbūvēt atsevišķu testa kopiju un pārbaudīt Photoshop/PowerPoint izšķirtspēju, rezerves sīktēlus, atcelšanu un priekšskatījumu logu izmērus. Testa faili un logu attēli tiek saglabāti mapē `.verification/document-previews`.
-
-Ja darbvirsmas PowerPoint ir instalēts un aizvērts, pievieno `-NativePowerPoint`, lai salīdzinātu rezultātu ar noformētu PowerPoint atsauces attēlu un pārbaudītu atcelšanu un sesijas izolāciju.
-
 ### Repozitorija struktūra
 
 ```text

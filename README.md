@@ -204,10 +204,6 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 Stop a running copy before replacing its executable, or build to a separate location with `-OutputPath`.
 
-Run `powershell -ExecutionPolicy Bypass -File .\scripts\Test-DocumentPreviews.ps1` to build an isolated test copy and check Photoshop/PowerPoint resolution, thumbnail fallbacks, cancellation and preview-window sizing. Fixtures and rendered window images are written under `.verification/document-previews`.
-
-With desktop PowerPoint installed and closed, add `-NativePowerPoint` to compare the native result with a styled PowerPoint reference and test cancellation and session isolation.
-
 ### Repository layout
 
 ```text
