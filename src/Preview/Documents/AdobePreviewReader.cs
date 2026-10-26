@@ -66,6 +66,24 @@ namespace DesktopHover
 
         private static DocumentPreviewResult ReadPhotoshop(Stream stream, Size maxSize, CancellationToken cancellation)
         {
+            // Photoshop's saved thumbnail is often only 160 pixels wide, regardless of
+            // canvas size. Prefer the merged image at the requested preview resolution.
+            // Re-read resources only on fallback so a damaged/unsupported composite can
+            // still use its saved thumbnail without retaining two decoded images.
+            DocumentPreviewResult composite = null;
+            try { composite = ReadPhotoshop(stream, maxSize, cancellation, true); }
+            catch (InvalidDataException) { }
+            catch (IOException) { }
+            catch (ArgumentException) { }
+            catch (ExternalException) { }
+            if (composite != null) return composite;
+            cancellation.ThrowIfCancellationRequested();
+            stream.Position = 0;
+            return ReadPhotoshop(stream, maxSize, cancellation, false);
+        }
+
+        private static DocumentPreviewResult ReadPhotoshop(Stream stream, Size maxSize, CancellationToken cancellation, bool readComposite)
+        {
             cancellation.ThrowIfCancellationRequested();
             if (ReadU32(stream) != 0x38425053) return null;
             int version = ReadU16(stream);
@@ -92,7 +110,7 @@ namespace DesktopHover
                 long dataEnd = End(stream, dataLength);
                 long paddedEnd = dataEnd + (dataLength % 2);
                 if (paddedEnd > resourcesEnd) return null;
-                if ((id == 1033 || id == 1036) && dataLength >= 28 && dataLength <= MaximumEncodedImageBytes + 28)
+                if (!readComposite && (id == 1033 || id == 1036) && dataLength >= 28 && dataLength <= MaximumEncodedImageBytes + 28)
                 {
                     Bitmap thumbnail = null;
                     try { thumbnail = ReadThumbnail(stream, dataEnd, id == 1033, maxSize, cancellation); }
@@ -105,7 +123,7 @@ namespace DesktopHover
                 }
                 stream.Position = paddedEnd;
             }
-            if (stream.Position != resourcesEnd) return null;
+            if (stream.Position != resourcesEnd || !readComposite) return null;
             long layerLength = version == 1 ? ReadU32(stream) : ReadU64(stream);
             long layerEnd = End(stream, layerLength);
             bool hasMergedAlpha = false;

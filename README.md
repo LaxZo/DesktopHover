@@ -40,7 +40,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 
 ### Documents and design projects
 
-These are real hover previews of demonstration files. Word, Excel and PowerPoint content is simplified when a usable saved preview is absent; the footer identifies the preview type.
+These are real hover previews of demonstration files. Word and Excel content is simplified when a usable saved preview is absent. PowerPoint uses native or saved slide images to preserve the design. The footer identifies the preview type.
 
 <table>
   <tr><th>Photoshop</th><th>Word</th></tr>
@@ -153,14 +153,18 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
 | **PDF** | The first page, rendered using the built-in Windows 10/11 PDF renderer. No Adobe application or Windows thumbnail provider is required. |
-| **Photoshop** | PSD/PSB saved thumbnails, or merged 8-bit RGB/grayscale images with raw or RLE compression. |
-| **Word, Excel & PowerPoint** | DOCX, XLSX, PPTX and their macro-enabled/template variants; PPSX/PPSM presentations. Saved preview first, then a simplified excerpt, first visible worksheet or first slide. |
+| **Photoshop** | PSD/PSB merged 8-bit RGB/grayscale images with raw or RLE compression, fitted to the preview size. Saved thumbnails are a fallback. |
+| **Word, Excel & PowerPoint** | DOCX, XLSX, PPTX and their macro-enabled/template variants; PPSX/PPSM presentations. Word/Excel use a saved preview, then a simplified excerpt or first visible worksheet. PowerPoint preserves styles using a sufficiently large saved image, native PowerPoint export or the best available saved/Windows thumbnail. |
 | **Other Adobe projects** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ and FLA **when a supported embedded preview or Windows thumbnail is available**. |
 | **Other documents** | Legacy DOC/XLS/PPT and templates, and XLSB depend on a Windows thumbnail provider. ODT/ODS/ODP can also use their saved PNG thumbnail. |
 
 File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) and [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs) for the full extension lists.
 
-Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
+Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications; higher-resolution native PowerPoint export requires the installed desktop PowerPoint application. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
+
+Supported Photoshop composites and native PowerPoint exports fill the configured preview bounds while keeping their proportions, without enabling **Enlarge small images**. PowerPoint themes, fonts, backgrounds and shapes come from an actual slide image; slides are never reconstructed from partial XML content. If only a small saved thumbnail can be read, enlarging it cannot recover missing detail.
+
+Native PowerPoint export handles static PPTX/POTX/PPSX packages when PowerPoint is installed and idle. It opens a temporary read-only copy without a visible window, disables macros, and skips packages containing linked media or active content. If PowerPoint is already open, a saved/Windows preview is used without attaching to that session. The last successful native preview is cached until the file or requested size changes.
 
 PDF rendering runs in a separate helper with a time limit. Leaving the file cancels the preview and stops its helper, keeping the app responsive when a PDF cannot be rendered.
 
@@ -172,7 +176,7 @@ PDF rendering runs in a separate helper with a time limit. Leaving the file canc
 - Markdown, HTML and SVG are shown as source text, rather than rendered documents.
 - Document/project previews are limited to **512 MiB** per file. Office ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
 - PDFs show **the first page only**, fitted to the configured preview size. Page navigation, editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
-- Office content previews are excerpts, not exact print layouts. Complex formatting, charts, slide masters, animations and embedded objects are not fully rendered. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) and the first slide are considered.
+- Word and Excel content previews are excerpts, not exact print layouts. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) is considered. PowerPoint previews show the first slide as a still image; animations and navigation are not provided. Native export has a 12-second limit and falls back to saved/Windows previews when unavailable.
 - Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Other Adobe files use supported XMP/ZIP previews or Windows thumbnails; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
 - Animated GIFs play automatically while hovering, using their frame delays and repeat settings. Moving within the same file's icon keeps the animation playing; leaving the file stops it. Other animated or multi-frame image formats show a still frame.
@@ -199,6 +203,10 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
 Stop a running copy before replacing its executable, or build to a separate location with `-OutputPath`.
+
+Run `powershell -ExecutionPolicy Bypass -File .\scripts\Test-DocumentPreviews.ps1` to build an isolated test copy and check Photoshop/PowerPoint resolution, thumbnail fallbacks, cancellation and preview-window sizing. Fixtures and rendered window images are written under `.verification/document-previews`.
+
+With desktop PowerPoint installed and closed, add `-NativePowerPoint` to compare the native result with a styled PowerPoint reference and test cancellation and session isolation.
 
 ### Repository layout
 
@@ -238,7 +246,8 @@ Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/Pr
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Local document content and embedded project-image readers. |
 | [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | Render the first PDF page with Windows.Data.Pdf. |
-| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Shared PDF/thumbnail helper process with cancellation, timeout and output limits. |
+| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Shared PDF/PowerPoint/thumbnail helper process with cancellation, timeout and output limits. |
+| [PowerPointPreviewReader.cs](src/Preview/Documents/PowerPointPreviewReader.cs) | Native slide export, style-preserving fallback and cache. |
 | [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows thumbnail fallback through the shared document worker. |
 | [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Settings window and quick menu. |
 | [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Theme palettes, icons and translations. |

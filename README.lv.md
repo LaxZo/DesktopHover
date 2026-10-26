@@ -40,7 +40,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 
 ### Dokumenti un dizaina projekti
 
-Īsti priekšskatījumi ar demonstrācijas failiem. Ja nav derīga saglabāta priekšskatījuma, Word, Excel un PowerPoint saturu rāda vienkāršoti; priekšskatījuma veids ir norādīts apakšējā joslā.
+Īsti priekšskatījumi ar demonstrācijas failiem. Ja nav derīga saglabāta priekšskatījuma, Word un Excel saturu rāda vienkāršoti. PowerPoint izmanto oriģināli atveidotus vai saglabātus slaidu attēlus, lai saglabātu noformējumu. Priekšskatījuma veids ir norādīts apakšējā joslā.
 
 <table>
   <tr><th>Photoshop</th><th>Word</th></tr>
@@ -153,14 +153,18 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
 | **PDF** | Pirmā lapa, atveidota ar Windows 10/11 iebūvēto PDF atbalstu. Nav vajadzīga Adobe lietotne vai Windows sīktēlu nodrošinātājs. |
-| **Photoshop** | PSD/PSB saglabātie sīktēli vai apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE. |
-| **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Saglabātais priekšskatījums vai vienkāršots fragments, pirmā redzamā lapa vai pirmais slaids. |
+| **Photoshop** | PSD/PSB apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE, pielāgots priekšskatījuma izmēram. Saglabātos sīktēlus izmanto kā rezerves variantu. |
+| **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Word/Excel izmanto saglabāto priekšskatījumu vai vienkāršotu fragmentu/pirmo redzamo lapu. PowerPoint saglabā stilus, izmantojot pietiekami lielu saglabāto attēlu, paša PowerPoint eksportu vai labāko pieejamo saglabāto/Windows sīktēlu. |
 | **Citi Adobe projekti** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ un FLA, **ja pieejams atbalstīts iegultais priekšskatījums vai Windows sīktēls**. |
 | **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, kā arī XLSB nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
 
 Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) un [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs).
 
-Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
+Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne; lielas izšķirtspējas eksportam ar pašu PowerPoint vajadzīga instalēta PowerPoint darbvirsmas lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
+
+Atbalstītie Photoshop apvienotie attēli un ar pašu PowerPoint eksportētie slaidi izmanto iestatīto priekšskatījuma izmēru, saglabājot proporcijas, arī bez **mazu attēlu palielināšanas**. PowerPoint tēmas, fontus, fonus un formas saglabā īsts slaida attēls; slaidus nepārzīmē no daļēja XML satura. Ja iespējams nolasīt tikai mazu saglabāto sīktēlu, tā palielināšana neatjauno trūkstošās detaļas.
+
+Eksports ar pašu PowerPoint darbojas statiskiem PPTX/POTX/PPSX failiem, ja PowerPoint ir instalēts un pašlaik nav atvērts. Tas atver pagaidu kopiju tikai lasīšanai bez redzama loga, izslēdz makrosus un izlaiž failus ar saistītu ārēju multividi vai aktīvu saturu. Ja PowerPoint jau ir atvērts, izmanto saglabāto/Windows priekšskatījumu, nepieslēdzoties esošajai sesijai. Pēdējo veiksmīgo eksportu glabā kešatmiņā līdz faila vai pieprasītā izmēra maiņai.
 
 PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizvirzot peli no faila, priekšskatījuma ielāde tiek atcelta un palīgprocess apturēts, lai neatverams PDF nebloķētu lietotni.
 
@@ -172,7 +176,7 @@ PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizv
 - Markdown, HTML un SVG tiek rādīti kā avota teksts.
 - Dokumentu/projektu priekšskatījumiem ir **512 MiB** faila robeža. Office ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
 - PDF rāda **tikai pirmo lapu**, pielāgotu izvēlētajam priekšskatījuma lielumam. Lapu pāršķiršana, rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
-- Office priekšskatījums ir fragments, ne precīzs drukas makets. Sarežģīta formatēšana, diagrammas, slaidu šabloni, animācijas un iegulti objekti netiek pilnībā atveidoti. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām) un pirmais slaids.
+- Word un Excel priekšskatījumi ir fragmenti, ne precīzi drukas maketi. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām). PowerPoint rāda pirmo slaidu kā nekustīgu attēlu; animācijas un pāršķiršana nav paredzēta. Eksportam ar pašu PowerPoint ir 12 sekunžu robeža; ja tas nav pieejams, izmanto saglabāto/Windows priekšskatījumu.
 - Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Citiem Adobe failiem izmanto atbalstītu XMP/ZIP priekšskatījumu vai Windows sīktēlu; pilna projektu atveidošana nav paredzēta.
 - Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
 - Animēti GIF atskaņojas automātiski, kamēr pele ir uz faila, ievērojot kadru aiztures un atkārtošanās iestatījumus. Peles kustība vienas faila ikonas robežās animāciju nepārstartē; aizvirzot peli prom, atskaņošana apstājas. Citu animētu vai vairāku kadru attēlu formātiem tiek rādīts nekustīgs kadrs.
@@ -199,6 +203,10 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
 Pirms izpildfaila aizstāšanas aizver palaisto kopiju vai norādi citu izvades vietu ar `-OutputPath`.
+
+Ar `powershell -ExecutionPolicy Bypass -File .\scripts\Test-DocumentPreviews.ps1` var uzbūvēt atsevišķu testa kopiju un pārbaudīt Photoshop/PowerPoint izšķirtspēju, rezerves sīktēlus, atcelšanu un priekšskatījumu logu izmērus. Testa faili un logu attēli tiek saglabāti mapē `.verification/document-previews`.
+
+Ja darbvirsmas PowerPoint ir instalēts un aizvērts, pievieno `-NativePowerPoint`, lai salīdzinātu rezultātu ar noformētu PowerPoint atsauces attēlu un pārbaudītu atcelšanu un sesijas izolāciju.
 
 ### Repozitorija struktūra
 
@@ -238,7 +246,8 @@ Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — 
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
 | [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | PDF pirmās lapas atveidošana ar Windows.Data.Pdf. |
-| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Kopīgs PDF/sīktēlu palīgprocess ar atcelšanu, laika un izvades robežām. |
+| [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Kopīgs PDF/PowerPoint/sīktēlu palīgprocess ar atcelšanu, laika un izvades robežām. |
+| [PowerPointPreviewReader.cs](src/Preview/Documents/PowerPointPreviewReader.cs) | Slaidu eksports ar pašu PowerPoint, stilu saglabāšana un kešatmiņa. |
 | [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows sīktēlu iegūšana kopīgajā dokumentu palīgprocesā. |
 | [SettingsWindow.cs](src/UI/SettingsWindow.cs), [TrayMenu.cs](src/UI/TrayMenu.cs) | Iestatījumi un ātrā izvēlne. |
 | [Brand.cs](src/UI/Brand.cs), [Localization.cs](src/App/Localization.cs) | Tēmu krāsas, ikonas un tulkojumi. |

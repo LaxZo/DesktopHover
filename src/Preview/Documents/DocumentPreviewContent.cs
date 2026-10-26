@@ -80,6 +80,12 @@ namespace DesktopHover
                     }
                     return new DocumentPreviewResult(pdf, pdf == null ? "document_pdf_unavailable" : "document_pdf");
                 }
+                if (PowerPointPreviewReader.IsSupported(path))
+                {
+                    DocumentPreviewResult powerpoint = PowerPointPreviewReader.Load(path, maxSize, cancellation);
+                    if (cancellation.IsCancellationRequested) { if (powerpoint != null) powerpoint.Dispose(); return null; }
+                    return powerpoint;
+                }
                 DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true);
                 if (result == null) result = TryReader(path, maxSize, cancellation, false);
                 if (result != null)

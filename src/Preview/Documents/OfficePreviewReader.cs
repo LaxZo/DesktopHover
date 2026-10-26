@@ -14,7 +14,6 @@ namespace DesktopHover
 {
     // A bounded, read-only OOXML preview, not an Office layout engine.
     // Package relationships: https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document
-    // Slide ordering: https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentations
     internal static class OfficePreviewReader
     {
         private const int MaximumEntries = 4096;
@@ -46,26 +45,51 @@ namespace DesktopHover
                     var package = new Package(zip, cancellation);
                     Dictionary<string, Relation> root = package.Relations("");
                     string main = null;
+                    var thumbnails = new List<string>();
                     foreach (Relation relation in root.Values)
                     {
                         if (relation.Type.EndsWith("/officeDocument", StringComparison.Ordinal)) main = relation.Target;
-                        if (relation.Type.EndsWith("/thumbnail", StringComparison.Ordinal))
-                        {
-                            Bitmap embedded = Thumbnail(package, relation.Target, maxSize);
-                            if (embedded != null) return new DocumentPreviewResult(embedded, "document_embedded");
-                        }
+                        if (relation.Type.EndsWith("/thumbnail", StringComparison.Ordinal) && !thumbnails.Contains(relation.Target))
+                            thumbnails.Add(relation.Target);
                     }
                     foreach (string name in new[] { "docProps/thumbnail.jpeg", "docProps/thumbnail.jpg", "docProps/thumbnail.png" })
+                        if (!thumbnails.Contains(name)) thumbnails.Add(name);
+                    Bitmap fallback = null;
+                    try
                     {
-                        Bitmap embedded = Thumbnail(package, name, maxSize);
-                        if (embedded != null) return new DocumentPreviewResult(embedded, "document_embedded");
+                        foreach (string name in thumbnails)
+                        {
+                            // PowerPoint styles, masters and graphics must come from a real
+                            // rendered preview. Even a uniform saved slide is valid content.
+                            Bitmap embedded = kind == 3 ? package.Image(name, maxSize) : Thumbnail(package, name, maxSize);
+                            if (embedded == null) continue;
+                            if (kind != 3) return new DocumentPreviewResult(embedded, "document_embedded");
+                            if (fallback == null || (long)embedded.Width * embedded.Height > (long)fallback.Width * fallback.Height)
+                            {
+                                if (fallback != null) fallback.Dispose();
+                                fallback = embedded;
+                            }
+                            else embedded.Dispose();
+                        }
+                        if (kind != 3)
+                        {
+                            if (main == null) main = kind == 1 ? "word/document.xml" : "xl/workbook.xml";
+                            XmlDocument document = package.Xml(main);
+                            if (document != null)
+                            {
+                                if (kind == 1) return RenderWord(package, main, document, maxSize);
+                                return RenderSheet(package, main, document, maxSize);
+                            }
+                        }
+                        // Never replace a styled slide with a partial reconstruction.
+                        // A native renderer or Windows thumbnail is tried by the caller.
+                        cancellation.ThrowIfCancellationRequested();
+                        if (fallback == null) return null;
+                        var result = new DocumentPreviewResult(fallback, "document_embedded");
+                        fallback = null;
+                        return result;
                     }
-                    if (main == null) main = kind == 1 ? "word/document.xml" : kind == 2 ? "xl/workbook.xml" : "ppt/presentation.xml";
-                    XmlDocument document = package.Xml(main);
-                    if (document == null) return null;
-                    if (kind == 1) return RenderWord(package, main, document, maxSize);
-                    if (kind == 2) return RenderSheet(package, main, document, maxSize);
-                    return RenderSlide(package, main, document, maxSize);
+                    finally { if (fallback != null) fallback.Dispose(); }
                 }
             }
             catch (OperationCanceledException) { throw; }
@@ -455,122 +479,6 @@ namespace DesktopHover
             catch { image.Dispose(); throw; }
         }
 
-        private static DocumentPreviewResult RenderSlide(Package package, string part, XmlDocument presentation, Size maximum)
-        {
-            XmlNode first = presentation.SelectSingleNode("/*[local-name()='presentation']/*[local-name()='sldIdLst']/*[local-name()='sldId'][1]");
-            Relation relation;
-            if (first == null || !package.Relations(part).TryGetValue(RelationId(first), out relation) || !relation.Type.EndsWith("/slide", StringComparison.Ordinal)) return null;
-            XmlDocument slide = package.Xml(relation.Target);
-            if (slide == null) return null;
-            XmlNode dimensions = presentation.SelectSingleNode("/*[local-name()='presentation']/*[local-name()='sldSz']");
-            double slideWidth = Number(Attr(dimensions, "cx"), 9144000), slideHeight = Number(Attr(dimensions, "cy"), 6858000);
-            if (slideWidth <= 0 || slideHeight <= 0 || slideWidth > 100000000 || slideHeight > 100000000) return null;
-            Size size = Fit(slideWidth, slideHeight, maximum, true);
-            var image = new Bitmap(size.Width, size.Height);
-            try
-            {
-                Dictionary<string, Relation> relations = package.Relations(relation.Target);
-                XmlDocument layout = null;
-                foreach (Relation item in relations.Values)
-                    if (item.Type.EndsWith("/slideLayout", StringComparison.Ordinal)) { layout = package.Xml(item.Target); break; }
-                using (Graphics g = Graphics.FromImage(image))
-                {
-                    Prepare(g);
-                    Color background = ReadColor(slide.SelectSingleNode("/*[local-name()='sld']/*[local-name()='cSld']/*[local-name()='bg']/*[local-name()='bgPr']/*[local-name()='solidFill']"), Color.White);
-                    g.Clear(background);
-                    int index = 0;
-                    XmlNode tree = slide.SelectSingleNode("/*[local-name()='sld']/*[local-name()='cSld']/*[local-name()='spTree']");
-                    if (tree == null) { image.Dispose(); return null; }
-                    foreach (XmlNode shape in tree.ChildNodes)
-                    {
-                        package.Cancellation.ThrowIfCancellationRequested();
-                        if (shape.LocalName != "sp" && shape.LocalName != "pic" && shape.LocalName != "graphicFrame") continue;
-                        if (++index > 300) break;
-                        XmlNode transform = shape.SelectSingleNode("./*[local-name()='spPr']/*[local-name()='xfrm'] | ./*[local-name()='xfrm']");
-                        XmlNode inherited = Placeholder(shape, layout);
-                        if (transform == null && inherited != null) transform = inherited.SelectSingleNode("./*[local-name()='spPr']/*[local-name()='xfrm']");
-                        RectangleF box = new RectangleF(size.Width * 0.07F, size.Height * 0.08F + (index - 1) * size.Height * 0.19F, size.Width * 0.86F, size.Height * 0.18F);
-                        if (transform != null)
-                        {
-                            XmlNode offset = transform.SelectSingleNode("./*[local-name()='off']"), extent = transform.SelectSingleNode("./*[local-name()='ext']");
-                            box = new RectangleF((float)(Number(Attr(offset, "x"), 0) / slideWidth * size.Width), (float)(Number(Attr(offset, "y"), 0) / slideHeight * size.Height),
-                                (float)(Number(Attr(extent, "cx"), slideWidth) / slideWidth * size.Width), (float)(Number(Attr(extent, "cy"), slideHeight / 5) / slideHeight * size.Height));
-                        }
-                        if (box.Width <= 0 || box.Height <= 0 || box.Width > size.Width * 10 || box.Height > size.Height * 10 || Math.Abs(box.X) > size.Width * 10 || Math.Abs(box.Y) > size.Height * 10) continue;
-                        if (shape.LocalName == "pic")
-                        {
-                            XmlNode blip = shape.SelectSingleNode(".//*[local-name()='blip']");
-                            Relation picture;
-                            if (relations.TryGetValue(Attr(blip, "embed"), out picture))
-                            using (Bitmap bitmap = package.Image(picture.Target, maximum))
-                            { if (bitmap != null) g.DrawImage(bitmap, box); }
-                            continue;
-                        }
-                        Color fill = ReadColor(shape.SelectSingleNode("./*[local-name()='spPr']/*[local-name()='solidFill']"), Color.Transparent);
-                        if (fill.A != 0) using (var brush = new SolidBrush(fill)) g.FillRectangle(brush, box);
-                        XmlNodeList paragraphs = shape.SelectNodes("./*[local-name()='txBody']/*[local-name()='p'] | ./*[local-name()='graphic']//*[local-name()='tc']/*[local-name()='txBody']/*[local-name()='p']");
-                        float y = box.Y + 3;
-                        foreach (XmlNode paragraph in paragraphs)
-                        {
-                            string text = ParagraphText(paragraph, 6000);
-                            if (text.Length == 0) continue;
-                            XmlNode properties = paragraph.SelectSingleNode("./*[local-name()='r']/*[local-name()='rPr'] | ./*[local-name()='pPr']/*[local-name()='defRPr']");
-                            float points = (float)Number(Attr(properties, "sz"), index < 4 ? 2800 : 1800) / 100F;
-                            float pixels = Math.Max(8, Math.Min(60, points * 12700F / (float)slideHeight * size.Height));
-                            Color color = ReadColor(properties == null ? null : properties.SelectSingleNode("./*[local-name()='solidFill']"), Contrast(background));
-                            using (var font = new Font("Segoe UI", pixels, Attr(properties, "b") == "1" ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel))
-                            using (var brush = new SolidBrush(color))
-                            using (var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter })
-                            {
-                                string align = Attr(paragraph.SelectSingleNode("./*[local-name()='pPr']"), "algn");
-                                if (align == "ctr") format.Alignment = StringAlignment.Center;
-                                else if (align == "r") format.Alignment = StringAlignment.Far;
-                                float height = Math.Min(box.Bottom - y, g.MeasureString(text, font, (int)Math.Max(1, box.Width - 8), format).Height + 3);
-                                if (height <= 0) break;
-                                g.DrawString(text, font, brush, new RectangleF(box.X + 4, y, Math.Max(1, box.Width - 8), height), format);
-                                y += height + 2;
-                            }
-                        }
-                    }
-                }
-                return new DocumentPreviewResult(image, "document_slide");
-            }
-            catch { image.Dispose(); throw; }
-        }
-
-        private static Color ReadColor(XmlNode fill, Color fallback)
-        {
-            if (fill == null) return fallback;
-            XmlNode rgb = fill.SelectSingleNode("./*[local-name()='srgbClr']");
-            int value;
-            if (rgb != null && Attr(rgb, "val").Length == 6 && Int32.TryParse(Attr(rgb, "val"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value))
-                return Color.FromArgb(255, (value >> 16) & 255, (value >> 8) & 255, value & 255);
-            return fallback;
-        }
-
-        private static XmlNode Placeholder(XmlNode shape, XmlDocument layout)
-        {
-            if (layout == null) return null;
-            XmlNode placeholder = shape.SelectSingleNode("./*[local-name()='nvSpPr']/*[local-name()='nvPr']/*[local-name()='ph']");
-            if (placeholder == null) return null;
-            string index = Attr(placeholder, "idx"), type = Attr(placeholder, "type");
-            if (index == "") index = "0";
-            if (type == "") type = "obj";
-            foreach (XmlNode candidate in layout.SelectNodes("/*[local-name()='sldLayout']/*[local-name()='cSld']/*[local-name()='spTree']/*[local-name()='sp']"))
-            {
-                XmlNode ph = candidate.SelectSingleNode("./*[local-name()='nvSpPr']/*[local-name()='nvPr']/*[local-name()='ph']");
-                if (ph == null) continue;
-                string otherIndex = Attr(ph, "idx"), otherType = Attr(ph, "type");
-                if (otherIndex == "") otherIndex = "0";
-                if (otherType == "") otherType = "obj";
-                if (index == otherIndex && (index != "0" || type == otherType || (type == "title" && otherType == "ctrTitle"))) return candidate;
-            }
-            return null;
-        }
-
-        private static Color Contrast(Color background)
-        { return background.R * 299 + background.G * 587 + background.B * 114 < 128000 ? Color.White : Ink; }
-
         private static string FormatNumber(string value, int format, bool date1904)
         {
             double number;
@@ -633,8 +541,6 @@ namespace DesktopHover
         private static string TextOf(XmlNode node) { return node == null ? "" : node.InnerText; }
         private static string Limit(string value, int limit) { return value.Length <= limit ? value : value.Substring(0, limit - 1) + "…"; }
         private static int Int(string text, int fallback) { int value; return Int32.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? value : fallback; }
-        private static double Number(string text, double fallback)
-        { double value; return Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && !Double.IsInfinity(value) && !Double.IsNaN(value) ? value : fallback; }
         private static Size Fit(double width, double height, Size maximum, bool upscale)
         {
             double scale = Math.Min(maximum.Width / width, maximum.Height / height);

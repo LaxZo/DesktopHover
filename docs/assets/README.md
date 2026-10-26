@@ -23,4 +23,6 @@ On 2026-10-24, four document previews were rendered from the updated application
 
 The Office samples were generated with python-docx, openpyxl and python-pptx; they are test fixtures, not user documents. The PSD sample was written according to its file structure. Previews were captured with the real `PreviewWindow.DrawToBitmap` after asynchronous loading completed. Fixture generators and test programs remain outside the repository.
 
+On 2026-10-26, `powerpoint-preview.png` was replaced with a native PowerPoint preview of the original styled fixture in `tests/fixtures`. It shows Georgia italic text, a rotated rounded shape and custom colors. The screenshot uses the real preview window at the same 720 × 540 limit; the native-render regression tests now live in `tests`.
+
 The application icon and README logo live in the separate [assets folder](../../assets). This folder contains documentation screenshots only.

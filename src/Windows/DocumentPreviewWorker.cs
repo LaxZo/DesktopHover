@@ -8,6 +8,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace DesktopHover
@@ -18,15 +19,27 @@ namespace DesktopHover
     {
         private const string WorkerArgument = "--shell-thumbnail";
         private const string PdfWorkerArgument = "--pdf-preview";
+        private const string PowerPointWorkerArgument = "--powerpoint-preview";
         private const int ShellTimeoutMilliseconds = 4000;
         private const int PdfTimeoutMilliseconds = 8000;
+        private const int PowerPointTimeoutMilliseconds = 12000;
         private const int MaximumEdge = 1600;
         private const long MaximumOutputBytes = 16L * 1024L * 1024L;
         private static readonly string TemporaryDirectory = Path.Combine(Path.GetTempPath(), "DesktopHoverThumbnails");
 
         internal static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, bool pdf)
         {
-            int timeoutMilliseconds = pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds;
+            return TryLoad(path, maxSize, cancellation, pdf ? PdfWorkerArgument : WorkerArgument,
+                pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds);
+        }
+
+        internal static Bitmap TryLoadPowerPoint(string path, Size maxSize, CancellationToken cancellation)
+        {
+            return TryLoad(path, maxSize, cancellation, PowerPointWorkerArgument, PowerPointTimeoutMilliseconds);
+        }
+
+        private static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, string argument, int timeoutMilliseconds)
+        {
             Process worker = null;
             string output = null;
             try
@@ -36,12 +49,12 @@ namespace DesktopHover
                 maxSize = BoundedSize(maxSize);
                 Directory.CreateDirectory(TemporaryDirectory);
                 output = Path.Combine(TemporaryDirectory, Guid.NewGuid().ToString("N") + ".png");
-                var start = new ProcessStartInfo(Application.ExecutablePath)
+                var start = new ProcessStartInfo(typeof(DocumentPreviewWorker).Assembly.Location)
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
-                    Arguments = (pdf ? PdfWorkerArgument : WorkerArgument) + " " + QuoteArgument(path) + " " + QuoteArgument(output) + " " +
+                    Arguments = argument + " " + QuoteArgument(path) + " " + QuoteArgument(output) + " " +
                         maxSize.Width.ToString(CultureInfo.InvariantCulture) + " " + maxSize.Height.ToString(CultureInfo.InvariantCulture),
                     WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
                 };
@@ -68,26 +81,44 @@ namespace DesktopHover
             catch { return null; }
             finally
             {
-                if (worker != null)
+                if (argument == PowerPointWorkerArgument && worker != null && !worker.HasExited && cancellation.IsCancellationRequested)
                 {
-                    try { if (!worker.HasExited) { worker.Kill(); worker.WaitForExit(500); } }
-                    catch { }
-                    worker.Dispose();
+                    // Killing a client during COM activation can orphan PowerPoint.
+                    // The hover closes immediately; let the bounded helper finish and
+                    // release its own document/server before collecting its temp files.
+                    Process finishing = worker;
+                    string temporary = output;
+                    Task.Factory.StartNew(delegate
+                    {
+                        try { finishing.WaitForExit(PowerPointTimeoutMilliseconds + 3000); }
+                        finally { CleanupWorker(finishing, temporary, path, true); }
+                    });
                 }
-                if (output != null)
-                {
-                    try { File.Delete(output); }
-                    catch { }
-                }
+                else CleanupWorker(worker, output, path, argument == PowerPointWorkerArgument);
             }
+        }
+
+        private static void CleanupWorker(Process worker, string output, string path, bool powerpoint)
+        {
+            if (worker != null)
+            {
+                try { if (!worker.HasExited) { worker.Kill(); worker.WaitForExit(500); } }
+                catch { }
+                worker.Dispose();
+            }
+            if (output == null) return;
+            try { File.Delete(output); } catch { }
+            if (powerpoint) PowerPointPreviewReader.DeleteTemporaryFiles(output, path);
         }
 
         // Program.Main is STA and calls this before its singleton mutex or tray setup.
         internal static bool TryRunWorker(string[] args)
         {
-            if (args == null || args.Length == 0 || (args[0] != WorkerArgument && args[0] != PdfWorkerArgument)) return false;
+            if (args == null || args.Length == 0 || (args[0] != WorkerArgument && args[0] != PdfWorkerArgument &&
+                args[0] != PowerPointWorkerArgument)) return false;
             bool pdf = args[0] == PdfWorkerArgument;
-            int timeoutMilliseconds = pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds;
+            bool powerpoint = args[0] == PowerPointWorkerArgument;
+            int timeoutMilliseconds = powerpoint ? PowerPointTimeoutMilliseconds : pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds;
             Environment.ExitCode = 1;
             int width, height;
             if (args.Length != 5 || !Int32.TryParse(args[3], NumberStyles.None, CultureInfo.InvariantCulture, out width) ||
@@ -107,7 +138,9 @@ namespace DesktopHover
                     SetErrorMode(0x0001 | 0x0002 | 0x8000);
                     if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA || !IsLocalFile(args[1]) ||
                         !IsWorkerOutput(args[2])) return true;
-                    using (Bitmap image = pdf
+                    using (Bitmap image = powerpoint
+                        ? PowerPointPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height), args[2])
+                        : pdf
                         ? PdfPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height))
                         : ShellThumbnailProvider.Extract(Path.GetFullPath(args[1]), new Size(width, height)))
                     {

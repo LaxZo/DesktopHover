@@ -29,12 +29,13 @@ namespace DesktopHover
 
         internal void Track(IntPtr surface, IntPtr shellRoot, Point cursor)
         {
+            if (handlingEvent) return;
             if (disposed || !canSuppress()) { Clear(); return; }
             IntPtr fileView = FindFileView(surface);
             if (fileView == IntPtr.Zero || Native.GetAncestor(fileView, 2) != shellRoot ||
                 !Native.IsShellRoot(shellRoot)) { Clear(); return; }
             bool changed = root != shellRoot || view != fileView;
-            if (changed) RestoreTips();
+            if (changed) Clear();
             root = shellRoot;
             view = fileView;
             // Catch a tooltip that predates our hook/scope, and retain a fallback if hooks fail.
@@ -50,6 +51,20 @@ namespace DesktopHover
         }
 
         internal bool DismissAtCursor(IntPtr window, Point cursor)
+        {
+            // WinEvent callbacks can reenter while native calls or Process.Start pump
+            // messages. Guard every entry path, including the timer's EnumWindows sweep.
+            if (handlingEvent || disposed) return false;
+            handlingEvent = true;
+            try { return DismissAtCursorCore(window, cursor); }
+            finally
+            {
+                handlingEvent = false;
+                if (disposed) restoreGuard.Dispose();
+            }
+        }
+
+        private bool DismissAtCursorCore(IntPtr window, Point cursor)
         {
             if (disposed || root == IntPtr.Zero || view == IntPtr.Zero || !canSuppress() ||
                 Native.Class(window) != "tooltips_class32" || !IsWindowVisible(window)) return false;
@@ -73,12 +88,21 @@ namespace DesktopHover
             if (!disabled.ContainsKey(window))
             {
                 if (disabled.Count >= 64) return false;
+                IntPtr targetView = view;
                 uint process;
                 uint thread = Native.GetWindowThreadProcessId(window, out process);
                 var lease = new InfoTipRestoreGuard.Lease { Window = window, Process = process,
                     Thread = thread, Owner = owner, Root = root };
                 // Record before changing Explorer. If our process dies, pipe EOF triggers restoration.
                 if (!restoreGuard.Remember(lease)) return false;
+                // A nested pause, view change or exit may have cleared the scope while
+                // the restore helper was starting. Do not deactivate a stale control.
+                bool stillAllowed = canSuppress() && lease.MatchesWindow();
+                if (!stillAllowed || disposed || root != lease.Root || view != targetView)
+                {
+                    restoreGuard.Forget(window);
+                    return false;
+                }
                 disabled.Add(window, lease);
             }
             return InfoTipRestoreGuard.PostMessage(window, TtmActivate, IntPtr.Zero, IntPtr.Zero);
@@ -88,14 +112,12 @@ namespace DesktopHover
             int objectId, int childId, uint threadId, uint eventTime)
         {
             if (disposed || handlingEvent || window == IntPtr.Zero || objectId != 0 || childId != 0) return;
-            handlingEvent = true;
             try
             {
                 Native.POINT cursor;
                 if (Native.GetCursorPos(out cursor)) DismissAtCursor(window, new Point(cursor.X, cursor.Y));
             }
             catch { /* A closing/restarting Explorer window must never interrupt the application. */ }
-            finally { handlingEvent = false; }
         }
 
         private static IntPtr FindFileView(IntPtr window)
@@ -118,18 +140,20 @@ namespace DesktopHover
 
         internal void Clear()
         {
-            RestoreTips();
             root = view = IntPtr.Zero;
             lastSweep = DateTime.MinValue;
+            RestoreTips();
         }
 
         private void RestoreTips()
         {
-            foreach (InfoTipRestoreGuard.Lease lease in disabled.Values)
+            var leases = new InfoTipRestoreGuard.Lease[disabled.Count];
+            disabled.Values.CopyTo(leases, 0);
+            disabled.Clear();
+            foreach (InfoTipRestoreGuard.Lease lease in leases)
             {
                 if (lease.Restore()) restoreGuard.Forget(lease.Window);
             }
-            disabled.Clear();
         }
 
         public void Dispose()
