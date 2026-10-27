@@ -30,6 +30,7 @@ namespace DesktopHover
         private Bitmap preview;
         private AnimatedGif animatedGif;
         private readonly Timer animationTimer;
+        private readonly Timer slideshowTimer;
         private string fileName;
         private string description;
         private Rectangle imageArea;
@@ -59,6 +60,9 @@ namespace DesktopHover
         private readonly Timer mediaTimer;
         private Task<DocumentPreviewResult> documentTask;
         private System.Threading.CancellationTokenSource documentCancellation;
+        private byte[][] documentSlides;
+        private int documentSlideIndex;
+        private int slideIntervalSeconds=3;
 
         public string CurrentPath { get; private set; }
         internal DrawingSize DisplayedImageSize { get { return imageArea.Size; } }
@@ -73,6 +77,7 @@ namespace DesktopHover
             maximumPreviewWidth=settings.MaxWidth;
             maximumPreviewHeight=settings.MaxHeight;
             volumePercent=Math.Max(0,Math.Min(100,settings.VolumePercent));
+            slideIntervalSeconds=Math.Max(1,Math.Min(10,settings.SlideIntervalSeconds));
             upscale=settings.Upscale;
             language=L10n.Normalize(settings.Language);
             UpdateLanguage();
@@ -98,6 +103,8 @@ namespace DesktopHover
             SetFonts();
             animationTimer = new Timer();
             animationTimer.Tick += AdvanceAnimation;
+            slideshowTimer = new Timer();
+            slideshowTimer.Tick += AdvanceDocumentSlide;
             mediaTimer = new Timer { Interval = 200 };
             mediaTimer.Tick += delegate
             {
@@ -306,11 +313,46 @@ namespace DesktopHover
                     LoadDocument(CurrentPath, mediaCursor, mediaItemBounds, false);
                     return;
                 }
-                else if (result != null) { preview = result.Image; result.Image = null; }
+                else if (result != null)
+                {
+                    preview = result.Image; result.Image = null;
+                    documentSlides = result.Slides; result.Slides = null;
+                    documentSlideIndex = 0;
+                }
             }
             LayoutDocument();
             SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
             Invalidate();
+            if (documentSlides != null && documentSlides.Length > 1)
+            {
+                slideshowTimer.Interval = slideIntervalSeconds * 1000;
+                slideshowTimer.Start();
+            }
+        }
+
+        private void AdvanceDocumentSlide(object sender, EventArgs e)
+        {
+            if (documentSlides == null || documentSlides.Length < 2 || !Visible || mediaKind != MediaKind.Document)
+            {
+                slideshowTimer.Stop();
+                return;
+            }
+            int next = (documentSlideIndex + 1) % documentSlides.Length;
+            try
+            {
+                Bitmap replacement;
+                using (var stream = new MemoryStream(documentSlides[next], false))
+                using (Image image = Image.FromStream(stream, false, true))
+                    replacement = DocumentPreviewWorker.CopyImage(image, new DrawingSize(maximumPreviewWidth, maximumPreviewHeight));
+                Bitmap previous = preview;
+                preview = replacement;
+                if (previous != null) previous.Dispose();
+                documentSlideIndex = next;
+                LayoutDocument();
+                SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+                Invalidate();
+            }
+            catch { slideshowTimer.Stop(); }
         }
 
         private void CancelDocumentLoad()
@@ -345,7 +387,9 @@ namespace DesktopHover
             if (preview != null)
             {
                 double fit = Math.Min((double)maxWidth / preview.Width, (double)maxHeight / preview.Height);
-                if (!upscale) fit = Math.Min(1.0, fit);
+                // Presentation size follows the configured bounds even when only a
+                // saved thumbnail is available; Upscale controls ordinary images.
+                if (!upscale && !PowerPointPreviewReader.IsSupported(CurrentPath)) fit = Math.Min(1.0, fit);
                 width = Math.Max(1, (int)Math.Round(preview.Width * fit));
                 height = Math.Max(1, (int)Math.Round(preview.Height * fit));
             }
@@ -360,7 +404,9 @@ namespace DesktopHover
             string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_adobe_unavailable" ||
                 mediaState == "document_limit" || mediaState == "document_pdf_unavailable"
                 ? "document_preview" : mediaState);
-            description = type + " · " + note + " · " + FormatBytes(sourceBytes);
+            string slidePosition = documentSlides != null && documentSlides.Length > 1
+                ? " · " + (documentSlideIndex + 1) + "/" + documentSlides.Length : "";
+            description = type + " · " + note + slidePosition + " · " + FormatBytes(sourceBytes);
             Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
         }
 
@@ -687,6 +733,7 @@ namespace DesktopHover
         {
             CancelDocumentLoad();
             if (mediaTimer != null) mediaTimer.Stop();
+            if (slideshowTimer != null) slideshowTimer.Stop();
             MediaPlayback previousMedia = media;
             media = null;
             if (previousMedia != null) previousMedia.Dispose();
@@ -705,6 +752,9 @@ namespace DesktopHover
         private void ClearImage()
         {
             if (animationTimer != null) animationTimer.Stop();
+            if (slideshowTimer != null) slideshowTimer.Stop();
+            documentSlides = null;
+            documentSlideIndex = 0;
             Bitmap previous = preview;
             preview = null;
             if (animatedGif != null)
@@ -846,6 +896,7 @@ namespace DesktopHover
             {
                 ClearPreview();
                 if (animationTimer != null) animationTimer.Dispose();
+                if (slideshowTimer != null) slideshowTimer.Dispose();
                 if (mediaTimer != null) mediaTimer.Dispose();
                 if (preview != null)
                 {

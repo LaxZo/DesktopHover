@@ -22,9 +22,11 @@ namespace DesktopHover
         private const string PowerPointWorkerArgument = "--powerpoint-preview";
         private const int ShellTimeoutMilliseconds = 4000;
         private const int PdfTimeoutMilliseconds = 8000;
-        private const int PowerPointTimeoutMilliseconds = 12000;
+        private const int PowerPointTimeoutMilliseconds = 60000;
         private const int MaximumEdge = 1600;
         private const long MaximumOutputBytes = 16L * 1024L * 1024L;
+        private const long MaximumPowerPointSlidesBytes = 64L * 1024L * 1024L;
+        private const int MaximumPowerPointSlides = 200;
         private static readonly string TemporaryDirectory = Path.Combine(Path.GetTempPath(), "DesktopHoverThumbnails");
 
         internal static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, bool pdf)
@@ -33,9 +35,70 @@ namespace DesktopHover
                 pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds);
         }
 
-        internal static Bitmap TryLoadPowerPoint(string path, Size maxSize, CancellationToken cancellation)
+        internal static byte[][] TryLoadPowerPointSlides(string path, Size maxSize, CancellationToken cancellation)
         {
-            return TryLoad(path, maxSize, cancellation, PowerPointWorkerArgument, PowerPointTimeoutMilliseconds);
+            Process worker = null;
+            string output = null;
+            try
+            {
+                if (cancellation.IsCancellationRequested || !IsLocalFile(path)) return null;
+                path = Path.GetFullPath(path);
+                maxSize = BoundedSize(maxSize);
+                Directory.CreateDirectory(TemporaryDirectory);
+                output = Path.Combine(TemporaryDirectory, Guid.NewGuid().ToString("N") + ".slides");
+                var start = new ProcessStartInfo(typeof(DocumentPreviewWorker).Assembly.Location)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    Arguments = PowerPointWorkerArgument + " " + QuoteArgument(path) + " " + QuoteArgument(output) + " " +
+                        maxSize.Width.ToString(CultureInfo.InvariantCulture) + " " + maxSize.Height.ToString(CultureInfo.InvariantCulture),
+                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                };
+                cancellation.ThrowIfCancellationRequested();
+                Stopwatch elapsed = Stopwatch.StartNew();
+                worker = Process.Start(start);
+                if (worker == null) return null;
+                while (!worker.WaitForExit(40))
+                {
+                    if (cancellation.IsCancellationRequested || elapsed.ElapsedMilliseconds >= PowerPointTimeoutMilliseconds)
+                        return null;
+                }
+                if (cancellation.IsCancellationRequested || worker.ExitCode != 0 || !Directory.Exists(output)) return null;
+                string[] files = Directory.GetFiles(output, "slide-*.png");
+                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+                if (files.Length < 1 || files.Length > MaximumPowerPointSlides) return null;
+                var slides = new byte[files.Length][];
+                long totalBytes = 0;
+                for (int i = 0; i < files.Length; i++)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    string expected = Path.Combine(output, "slide-" + (i + 1).ToString("D4", CultureInfo.InvariantCulture) + ".png");
+                    if (!String.Equals(files[i], expected, StringComparison.OrdinalIgnoreCase)) return null;
+                    var info = new FileInfo(files[i]);
+                    if (!info.Exists || info.Length < 8 || info.Length > MaximumOutputBytes) return null;
+                    totalBytes += info.Length;
+                    if (totalBytes > MaximumPowerPointSlidesBytes) return null;
+                    slides[i] = File.ReadAllBytes(files[i]);
+                }
+                return slides;
+            }
+            catch { return null; }
+            finally
+            {
+                if (worker != null && !worker.HasExited && cancellation.IsCancellationRequested)
+                {
+                    Process finishing = worker;
+                    string temporary = output;
+                    string source = path;
+                    Task.Factory.StartNew(delegate
+                    {
+                        try { finishing.WaitForExit(PowerPointTimeoutMilliseconds + 3000); }
+                        finally { CleanupWorker(finishing, temporary, source, true); }
+                    });
+                }
+                else CleanupWorker(worker, output, path, true);
+            }
         }
 
         private static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, string argument, int timeoutMilliseconds)
@@ -81,20 +144,7 @@ namespace DesktopHover
             catch { return null; }
             finally
             {
-                if (argument == PowerPointWorkerArgument && worker != null && !worker.HasExited && cancellation.IsCancellationRequested)
-                {
-                    // Killing a client during COM activation can orphan PowerPoint.
-                    // The hover closes immediately; let the bounded helper finish and
-                    // release its own document/server before collecting its temp files.
-                    Process finishing = worker;
-                    string temporary = output;
-                    Task.Factory.StartNew(delegate
-                    {
-                        try { finishing.WaitForExit(PowerPointTimeoutMilliseconds + 3000); }
-                        finally { CleanupWorker(finishing, temporary, path, true); }
-                    });
-                }
-                else CleanupWorker(worker, output, path, argument == PowerPointWorkerArgument);
+                CleanupWorker(worker, output, path, false);
             }
         }
 
@@ -136,18 +186,24 @@ namespace DesktopHover
                 try
                 {
                     SetErrorMode(0x0001 | 0x0002 | 0x8000);
-                    if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA || !IsLocalFile(args[1]) ||
-                        !IsWorkerOutput(args[2])) return true;
-                    using (Bitmap image = powerpoint
-                        ? PowerPointPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height), args[2])
-                        : pdf
-                        ? PdfPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height))
-                        : ShellThumbnailProvider.Extract(Path.GetFullPath(args[1]), new Size(width, height)))
+                    if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA || !IsLocalFile(args[1])) return true;
+                    if (powerpoint)
                     {
-                        if (image == null) return true;
-                        // Never overwrite a caller's existing file, even if the flag is used manually.
-                        using (var stream = new FileStream(args[2], FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                            image.Save(stream, ImageFormat.Png);
+                        if (!IsWorkerSlideDirectory(args[2]) ||
+                            !PowerPointPreviewReader.RenderSlides(Path.GetFullPath(args[1]), new Size(width, height), args[2])) return true;
+                    }
+                    else
+                    {
+                        if (!IsWorkerOutput(args[2])) return true;
+                        using (Bitmap image = pdf
+                            ? PdfPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height))
+                            : ShellThumbnailProvider.Extract(Path.GetFullPath(args[1]), new Size(width, height)))
+                        {
+                            if (image == null) return true;
+                            // Never overwrite a caller's existing file, even if the flag is used manually.
+                            using (var stream = new FileStream(args[2], FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                                image.Save(stream, ImageFormat.Png);
+                        }
                     }
                     Environment.ExitCode = 0;
                 }
@@ -166,6 +222,20 @@ namespace DesktopHover
                     return false;
                 Guid value;
                 return Guid.TryParseExact(Path.GetFileNameWithoutExtension(full), "N", out value) && !File.Exists(full);
+            }
+            catch { return false; }
+        }
+
+        private static bool IsWorkerSlideDirectory(string path)
+        {
+            try
+            {
+                string full = Path.GetFullPath(path);
+                if (!String.Equals(Path.GetDirectoryName(full), Path.GetFullPath(TemporaryDirectory).TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase) || !String.Equals(Path.GetExtension(full), ".slides", StringComparison.OrdinalIgnoreCase) ||
+                    Directory.Exists(full) || File.Exists(full)) return false;
+                Guid value;
+                return Guid.TryParseExact(Path.GetFileNameWithoutExtension(full), "N", out value);
             }
             catch { return false; }
         }

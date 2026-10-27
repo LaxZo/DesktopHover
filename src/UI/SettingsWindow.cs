@@ -22,7 +22,7 @@ namespace DesktopHover
         private readonly ContextMenuStrip languageMenu;
         private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
-        private readonly HoverSlider widthSlider, volumeSlider;
+        private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
         private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle;
         private bool paused, syncing;
         private readonly Font headingFont = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
@@ -45,7 +45,7 @@ namespace DesktopHover
             this.changed = changed;
             this.pauseChanged = pauseChanged;
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(424, 768);
+            ClientSize = new Size(424, 840);
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             ShowInTaskbar = true;
@@ -76,16 +76,16 @@ namespace DesktopHover
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft
             };
-            autosavedLabel.SetBounds(24, 716, 162, 32);
+            autosavedLabel.SetBounds(24, 798, 162, 32);
             Controls.Add(autosavedLabel);
 
             githubProject = new HoverButton { Name = "github-project", Compact = true, ProjectLink = true };
-            githubProject.SetBounds(194, 716, 40, 32);
+            githubProject.SetBounds(194, 798, 40, 32);
             githubProject.Click += delegate { OpenProject(); };
             Controls.Add(githubProject);
 
             themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
-            themeToggle.SetBounds(242, 716, 40, 32);
+            themeToggle.SetBounds(242, 798, 40, 32);
             themeToggle.Click += delegate
             {
                 this.settings.Theme = Brand.IsLight ? "dark" : "light";
@@ -100,7 +100,7 @@ namespace DesktopHover
                 LanguageSelector = true,
                 Font = smallFont
             };
-            languagePicker.SetBounds(290, 716, 110, 32);
+            languagePicker.SetBounds(290, 798, 110, 32);
             languageMenu = new ContextMenuStrip
             {
                 Name = "language-menu",
@@ -209,11 +209,28 @@ namespace DesktopHover
             };
             Controls.Add(volumeSlider);
 
-            upscaleToggle = AddToggle(533);
+            slideIntervalSlider = new HoverSlider
+            {
+                Name = "slide-interval-slider",
+                Minimum = 1,
+                Maximum = 10,
+                Step = 1,
+                Value = 3
+            };
+            slideIntervalSlider.SetBounds(24, 560, 376, 30);
+            slideIntervalSlider.ValueChanged += delegate
+            {
+                if (syncing) return;
+                this.settings.SlideIntervalSeconds = slideIntervalSlider.Value;
+                Apply();
+            };
+            Controls.Add(slideIntervalSlider);
+
+            upscaleToggle = AddToggle(616);
             upscaleToggle.Click += delegate { this.settings.Upscale = !this.settings.Upscale; Apply(); };
-            startupToggle = AddToggle(587);
+            startupToggle = AddToggle(670);
             startupToggle.Click += delegate { this.settings.StartWithWindows = !this.settings.StartWithWindows; Apply(); };
-            enabledToggle = AddToggle(641);
+            enabledToggle = AddToggle(724);
             enabledToggle.Click += delegate
             {
                 UpdatePaused(!this.paused);
@@ -347,6 +364,10 @@ namespace DesktopHover
             volumeSlider.Value = settings.VolumePercent;
             volumeSlider.AccessibleName = String.Format(L10n.Culture(settings.Language), T("volume_accessible"), settings.VolumePercent);
             volumeSlider.AccessibleDescription = T("volume_detail");
+            slideIntervalSlider.Value = settings.SlideIntervalSeconds;
+            slideIntervalSlider.AccessibleName = String.Format(L10n.Culture(settings.Language), T("slide_interval_accessible"),
+                settings.SlideIntervalSeconds);
+            slideIntervalSlider.AccessibleDescription = T("slide_interval_detail");
             upscaleToggle.Checked = settings.Upscale;
             LocalizeToggle(upscaleToggle, "upscale", "upscale_detail");
             startupToggle.Checked = settings.StartWithWindows;
@@ -442,7 +463,11 @@ namespace DesktopHover
             DrawText(g, settings.VolumePercent + "%", Font, Brand.Accent,
                 new Rectangle(330, 449, 70, 23), TextFormatFlags.Right);
             DrawText(g, T("volume_detail"), smallFont, Brand.Muted, new Rectangle(24, 474, 376, 20));
-            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 704, 400, 704);
+            DrawText(g, T("slide_interval"), headingFont, Brand.Text, new Rectangle(24, 530, 278, 24));
+            DrawText(g, String.Format(L10n.Culture(settings.Language), T("slide_interval_value"), settings.SlideIntervalSeconds),
+                Font, Brand.Accent, new Rectangle(302, 530, 98, 24), TextFormatFlags.Right);
+            DrawText(g, T("slide_interval_detail"), smallFont, Brand.Muted, new Rectangle(24, 590, 376, 20));
+            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 786, 400, 786);
         }
 
         private static void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle)

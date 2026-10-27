@@ -10,6 +10,7 @@ namespace DesktopHover
         internal Bitmap Image;
         internal string NoteKey;
         internal string MediaPath;
+        internal byte[][] Slides;
 
         internal DocumentPreviewResult(Bitmap image, string noteKey)
         {
@@ -22,6 +23,7 @@ namespace DesktopHover
             if (Image != null) Image.Dispose();
             Image = null;
             MediaPath = null;
+            Slides = null;
         }
     }
 
