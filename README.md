@@ -33,7 +33,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | **See images at a glance** | A compact preview with the filename, dimensions and file size. Original proportions are preserved. |
 | **Listen and watch** | Audio plays on hover. Video plays inside the preview with sound. One volume setting controls both. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
-| **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides and Photoshop images. Other Adobe projects use saved previews or Windows thumbnails when available. |
+| **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides, Photoshop composites and PDF-compatible Illustrator artwork. Other Adobe projects use embedded previews, matching image/video preview files or Windows thumbnails. |
 | **Make it your own** | Dark or light appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
 
 ## Screenshots
@@ -146,19 +146,21 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 
 | Kind | Recognized formats and examples |
 | --- | --- |
-| **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF (including animation), TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
+| **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF (including animation), TIFF, ICO, WebP, HEIC/HEIF, AVIF and Adobe DNG (requires a compatible Windows RAW decoder). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
-| **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM. |
+| **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; playback requires a compatible Windows codec. |
 | **Text & data** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML and other configuration files. |
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
 | **PDF** | The first page, rendered using the built-in Windows 10/11 PDF renderer. No Adobe application or Windows thumbnail provider is required. |
-| **Photoshop** | PSD/PSB merged 8-bit RGB/grayscale images with raw or RLE compression, fitted to the preview size. Saved thumbnails are a fallback. |
+| **Photoshop** | PSD/PSB/PSDT merged 8-bit RGB/grayscale images with raw or RLE compression, fitted to the preview size. Saved thumbnails are a fallback. |
 | **Word, Excel & PowerPoint** | DOCX, XLSX, PPTX and their macro-enabled/template variants; PPSX/PPSM presentations. Word/Excel use a saved preview, then a simplified excerpt or first visible worksheet. PowerPoint preserves styles using a sufficiently large saved image, native PowerPoint export or the best available saved/Windows thumbnail. |
-| **Other Adobe projects** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ and FLA **when a supported embedded preview or Windows thumbnail is available**. |
+| **Illustrator** | AI/AIT with PDF-compatible content render their first page at the selected size. EPS/EPSF/EPSI can use a saved TIFF or XMP preview, a matching preview file or a Windows thumbnail. PostScript is not executed. |
+| **Adobe layout and motion projects** | INDD/INDT/INDB/IDML/INX, ICML/ICMT, XD, AEP/AEPX/AET/AETX, PRPROJ/PRTL, MOGRT/AEGRAPHIC, FLA/XFL/SWF and CHPROJ/PUPPET are recognized. **A supported embedded preview, matching image/video preview file or Windows thumbnail is required.** SWF content is not executed. |
+| **Other Adobe projects** | Captivate CP/CPT/CPTX/CPTL, Audition SESX, Dimension DN and Substance SBS/SBSAR/SPP/SSA/ALCH/SSG/SMOD use supported saved previews, matching image/video preview files or Windows thumbnails. Proprietary project scenes and timelines are not rendered. |
 | **Other documents** | Legacy DOC/XLS/PPT and templates, and XLSB depend on a Windows thumbnail provider. ODT/ODS/ODP can also use their saved PNG thumbnail. |
 
-File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) and [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs) for the full extension lists.
+File extensions identify preview candidates; **actual image decoding and media playback depend on the Windows codecs installed on your machine**. See [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs), [AdobeProjectFiles.cs](src/Preview/Documents/AdobeProjectFiles.cs) and [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs) for the full extension lists.
 
 Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications; higher-resolution native PowerPoint export requires the installed desktop PowerPoint application. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
 
@@ -168,16 +170,24 @@ Native PowerPoint export handles static PPTX/POTX/PPSX packages when PowerPoint 
 
 PDF rendering runs in a separate helper with a time limit. Leaving the file cancels the preview and stops its helper, keeping the app responsive when a PDF cannot be rendered.
 
+### Adobe image and video previews
+
+Illustrator artwork saved with **Create PDF Compatible File** can be rendered directly. Other Adobe readers look for explicitly named PNG/JPEG previews and XMP thumbnails, including ZIP metadata and bounded gzip-compressed Premiere project metadata. The largest usable saved image is selected. EPS files with a DOS binary header can use their embedded TIFF preview.
+
+For a project without a usable embedded preview, export an image or video into the same folder with `.preview` in its name. For example, `Campaign.aep` can use `Campaign.preview.mp4` or `Campaign.preview.png`. `Campaign.aep.preview.mp4` also works and takes priority over the shorter name. These deliberately named preview files take priority over embedded previews; source footage linked inside the project is not played as a substitute for the finished composition.
+
+Preview files support MP4/MOV/WebM/M4V/AVI/WMV video and PNG/JPG/JPEG/WebP/BMP images. Video follows the normal volume setting and stops when the pointer leaves the project. The footer keeps the project's filename and marks the content as a **Preview file**. Export the preview again after changing the project. Images are limited to 64 MiB and 40 million pixels; videos to 512 MiB. A larger project can still use a preview file because its project contents are not parsed.
+
 ### Current limits
 
 - Previews work with **locally available files**. Network shares, mapped network drives and online-only cloud files are skipped.
 - Text previews read up to **256 KiB**, **300 lines** and **500 characters per line**. Only the beginning that fits in the preview is visible; shortened previews are marked in the footer.
 - Syntax coloring is a basic lexer, not a full language service. Code is displayed without being executed or edited.
 - Markdown, HTML and SVG are shown as source text, rather than rendered documents.
-- Document/project previews are limited to **512 MiB** per file. Office ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
+- Document/project parsing is limited to **512 MiB** per file; Adobe preview files have the separate limits above. ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
 - PDFs show **the first page only**, fitted to the configured preview size. Page navigation, editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
 - Word and Excel content previews are excerpts, not exact print layouts. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) is considered. PowerPoint previews show the first slide as a still image; animations and navigation are not provided. Native export has a 12-second limit and falls back to saved/Windows previews when unavailable.
-- Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Other Adobe files use supported XMP/ZIP previews or Windows thumbnails; full project rendering is not provided.
+- Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Adobe project recognition does not guarantee an embedded image exists. After Effects/Premiere timelines, Animate animations, 3D scenes and other proprietary projects need a saved preview or an exported preview file; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
 - Animated GIFs play automatically while hovering, using their frame delays and repeat settings. Moving within the same file's icon keeps the animation playing; leaving the file stops it. Other animated or multi-frame image formats show a still frame.
 - Images over **100 MiB** or **100 million pixels** are skipped. GIFs also have a limit of **2,000 frames** and **100 million pixels summed across frame rectangles**. Missing or very short GIF delays (0–10 ms) use 100 ms.
@@ -268,7 +278,8 @@ The startup options register or remove the path of the executable you run. Use t
 | Audio or video will not play | Check the volume and the file's codec support in Windows. A recognized extension alone does not guarantee decoding. |
 | Text is cut off | Large files and long lines are intentionally shortened. Open the file in an editor to read the rest. |
 | A PDF has no preview | Confirm it is a local file no larger than 512 MiB and can be opened without a password. Damaged or unsupported PDFs may be unavailable; no Adobe installation is needed. |
-| An Adobe or older Office file has no preview | Save it with an embedded preview, or use a compatible Windows thumbnail handler. Recognizing the extension does not guarantee content can be decoded. |
+| An Adobe project has no preview | Save Illustrator with PDF compatibility, enable saved preview images in InDesign, or export a matching `.preview.png`/`.preview.mp4` beside the project. See Adobe image and video previews above. |
+| An older Office file has no preview | Save it with an embedded preview, or use a compatible Windows thumbnail handler. Recognizing the extension does not guarantee content can be decoded. |
 | A document looks different from the editor | The footer marks simplified content. Open the original application for complete formatting, all pages, worksheets and slides. |
 | Settings is minimized | Restore it from the Windows taskbar or left-click the tray icon. |
 | The app still runs after clicking **×** | This closes Settings and keeps previews running. Right-click the tray icon and choose **Quit app** to quit completely. |

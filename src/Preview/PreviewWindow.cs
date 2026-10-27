@@ -52,6 +52,7 @@ namespace DesktopHover
         private MediaPlayback media;
         private MediaKind mediaKind;
         private string mediaState;
+        private string documentMediaNoteKey;
         private DrawingPoint mediaCursor;
         private Rectangle mediaItemBounds;
         private DateTime mediaDeadline;
@@ -248,6 +249,11 @@ namespace DesktopHover
 
         private bool ShowDocument(string path, DrawingPoint cursor, Rectangle itemBounds)
         {
+            return LoadDocument(path, cursor, itemBounds, true);
+        }
+
+        private bool LoadDocument(string path, DrawingPoint cursor, Rectangle itemBounds, bool allowVideo)
+        {
             if (IsDisposed) return false;
             ClearPreview();
             try
@@ -270,7 +276,8 @@ namespace DesktopHover
                 documentCancellation = new System.Threading.CancellationTokenSource();
                 var token = documentCancellation.Token;
                 var bounds = new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
-                documentTask = Task.Factory.StartNew(() => DocumentPreviewContent.Load(path, bounds, token),
+                documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token)
+                    : DocumentPreviewContent.LoadStill(path, bounds, token),
                     System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
                 mediaTimer.Start();
                 Invalidate();
@@ -293,7 +300,13 @@ namespace DesktopHover
             using (result)
             {
                 mediaState = result == null ? "document_unavailable" : result.NoteKey;
-                if (result != null) { preview = result.Image; result.Image = null; }
+                if (result != null && !String.IsNullOrEmpty(result.MediaPath))
+                {
+                    if (StartDocumentMedia(result.MediaPath, result.NoteKey)) return;
+                    LoadDocument(CurrentPath, mediaCursor, mediaItemBounds, false);
+                    return;
+                }
+                else if (result != null) { preview = result.Image; result.Image = null; }
             }
             LayoutDocument();
             SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
@@ -344,7 +357,8 @@ namespace DesktopHover
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
             string type = Path.GetExtension(CurrentPath).TrimStart('.').ToUpperInvariant();
-            string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_limit" || mediaState == "document_pdf_unavailable"
+            string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_adobe_unavailable" ||
+                mediaState == "document_limit" || mediaState == "document_pdf_unavailable"
                 ? "document_preview" : mediaState);
             description = type + " · " + note + " · " + FormatBytes(sourceBytes);
             Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
@@ -512,35 +526,7 @@ namespace DesktopHover
                 UpdateLanguage();
                 AccessibleName = L10n.Text(language, kind == MediaKind.Video ? "video_preview" : "audio_preview");
                 Text = AccessibleName + " — Desktop Hover";
-                var session = new MediaPlayback(Handle, volumePercent);
-                media = session;
-                session.Opened += delegate
-                {
-                    if (media != session || IsDisposed) return;
-                    try
-                    {
-                        mediaState = "media_playing";
-                        LayoutMedia();
-                        session.Play();
-                        UpdateMediaDescription();
-                        Invalidate();
-                    }
-                    catch { MediaFailed(session); }
-                };
-                session.Ended += delegate
-                {
-                    if (media != session || IsDisposed) return;
-                    mediaState = "media_ended";
-                    mediaTimer.Stop();
-                    UpdateMediaDescription();
-                    Invalidate();
-                };
-                session.Failed += delegate { MediaFailed(session); };
-                mediaDeadline = DateTime.UtcNow.AddSeconds(15);
-                LayoutMedia();
-                UpdateMediaDescription();
-                mediaTimer.Start();
-                session.Open(path);
+                StartMediaSession(path, false);
                 return true;
             }
             catch
@@ -550,12 +536,87 @@ namespace DesktopHover
             }
         }
 
+        private bool StartDocumentMedia(string path, string noteKey)
+        {
+            try
+            {
+                // Recheck the sidecar immediately before opening it. Its filename never
+                // replaces the hovered project's identity or its footer metadata.
+                path = Path.GetFullPath(path);
+                if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
+                    new DriveInfo(Path.GetPathRoot(path)).DriveType == DriveType.Network) return false;
+                var file = new FileInfo(path);
+                if (!file.Exists || file.Length == 0 || file.Length > DocumentPreviewContent.MaximumFileBytes ||
+                    (file.Attributes & (FileAttributes)(0x1000 | 0x40000 | 0x400000 | 0x400)) != 0) return false;
+                documentMediaNoteKey = String.IsNullOrEmpty(noteKey) ? "document_sidecar" : noteKey;
+                mediaKind = MediaKind.Video;
+                mediaState = "media_loading";
+                AccessibleName = L10n.Text(language, "video_preview");
+                Text = AccessibleName + " — Desktop Hover";
+                StartMediaSession(path, true);
+                return true;
+            }
+            catch
+            {
+                MediaPlayback failed = media;
+                media = null;
+                if (failed != null) failed.Dispose();
+                mediaTimer.Stop();
+                documentMediaNoteKey = null;
+                mediaKind = MediaKind.Document;
+                return false;
+            }
+        }
+
+        private void StartMediaSession(string path, bool requireVideo)
+        {
+            var session = new MediaPlayback(Handle, volumePercent);
+            media = session;
+            session.Opened += delegate
+            {
+                if (media != session || IsDisposed) return;
+                // A project video preview must contain frames, even if a renamed
+                // audio file happens to be accepted by the installed decoder.
+                if (requireVideo && !session.HasVideo) { MediaFailed(session); return; }
+                try
+                {
+                    mediaState = "media_playing";
+                    LayoutMedia();
+                    session.Play();
+                    UpdateMediaDescription();
+                    Invalidate();
+                }
+                catch { MediaFailed(session); }
+            };
+            session.Ended += delegate
+            {
+                if (media != session || IsDisposed) return;
+                mediaState = "media_ended";
+                mediaTimer.Stop();
+                UpdateMediaDescription();
+                Invalidate();
+            };
+            session.Failed += delegate { MediaFailed(session); };
+            mediaDeadline = DateTime.UtcNow.AddSeconds(15);
+            LayoutMedia();
+            UpdateMediaDescription();
+            mediaTimer.Start();
+            session.Open(path);
+        }
+
         private void MediaFailed(MediaPlayback session)
         {
             if (media != session || IsDisposed) return;
             media = null;
             session.Dispose();
             mediaTimer.Stop();
+            if (documentMediaNoteKey != null)
+            {
+                // Unsupported codecs or damaged exports must not hide a usable image.
+                // This retry excludes videos, so it cannot enter a playback retry loop.
+                LoadDocument(CurrentPath, mediaCursor, mediaItemBounds, false);
+                return;
+            }
             mediaState = "media_unavailable";
             UpdateMediaDescription();
             Invalidate();
@@ -598,19 +659,22 @@ namespace DesktopHover
 
         private void UpdateMediaDescription()
         {
+            string prefix = documentMediaNoteKey == null ? String.Empty :
+                Path.GetExtension(CurrentPath).TrimStart('.').ToUpperInvariant() + " · " +
+                L10n.Text(language, documentMediaNoteKey) + " · ";
             if (mediaState == "media_unavailable")
             {
-                description = FormatBytes(sourceBytes);
+                description = prefix + FormatBytes(sourceBytes);
                 return;
             }
             if (media != null && media.IsOpen && mediaState != "media_loading")
             {
-                description = FormatTime(media.Position);
+                description = prefix + FormatTime(media.Position);
                 if (media.Duration > TimeSpan.Zero) description += " / " + FormatTime(media.Duration);
                 description += "  ·  " + FormatBytes(sourceBytes);
                 if (mediaState == "media_ended") description += "  ·  " + L10n.Text(language, mediaState);
             }
-            else description = L10n.Text(language, mediaState ?? "media_loading") + "  ·  " + FormatBytes(sourceBytes);
+            else description = prefix + L10n.Text(language, mediaState ?? "media_loading") + "  ·  " + FormatBytes(sourceBytes);
         }
 
         private static string FormatTime(TimeSpan value)
@@ -628,6 +692,7 @@ namespace DesktopHover
             if (previousMedia != null) previousMedia.Dispose();
             mediaKind = MediaKind.None;
             mediaState = null;
+            documentMediaNoteKey = null;
             textPreview = null;
             if (!IsDisposed)
                 Hide();

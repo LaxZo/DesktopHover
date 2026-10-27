@@ -17,6 +17,8 @@ namespace DesktopHover
     {
         private const int MaximumEncodedImageBytes = 8 * 1024 * 1024;
         private const int MaximumScanBytes = 16 * 1024 * 1024;
+        private const int MaximumPreviewCandidates = 32;
+        private const long MaximumArchivePreviewBytes = 32L * 1024L * 1024L;
         private const long MaximumImagePixels = 40000000;
         private const string ThumbnailNamespace = "http://ns.adobe.com/xap/1.0/g/img/";
 
@@ -34,26 +36,40 @@ namespace DesktopHover
         private static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation)
         {
             string extension = Path.GetExtension(path).ToLowerInvariant();
-            switch (extension)
-            {
-                case ".psd": case ".psb":
-                    using (var stream = Open(path)) return ReadPhotoshop(stream, maxSize, cancellation);
-                case ".ai": case ".eps": case ".indd": case ".indt": case ".idml":
-                case ".xd": case ".aep": case ".aepx": case ".prproj": case ".fla":
-                case ".odt": case ".ods": case ".odp":
-                    break;
-                default: return null;
-            }
+            if (extension == ".psd" || extension == ".psb" || extension == ".psdt")
+                using (var stream = Open(path)) return ReadPhotoshop(stream, maxSize, cancellation);
+            if (!AdobeProjectFiles.IsSupported(path) && extension != ".odt" && extension != ".ods" && extension != ".odp")
+                return null;
             cancellation.ThrowIfCancellationRequested();
             using (var stream = Open(path))
             {
-                if (stream.Length >= 4 && ReadU32(stream) == 0x504b0304)
+                uint signature = stream.Length >= 4 ? ReadU32(stream) : 0;
+                if (signature == 0xc5d0d3c6 && (extension == ".eps" || extension == ".epsf" || extension == ".epsi" || extension == ".ai"))
+                {
+                    stream.Position = 0;
+                    Bitmap eps = EpsPreviewReader.TryLoad(stream, maxSize, cancellation);
+                    if (eps != null) return new DocumentPreviewResult(eps, "document_embedded");
+                }
+                if (signature == 0x504b0304)
                 {
                     stream.Position = 0;
                     DocumentPreviewResult zipped = ReadZip(stream, maxSize, cancellation);
                     if (zipped != null) return zipped;
                 }
                 stream.Position = 0;
+                if (extension == ".prproj" && (signature >> 16) == 0x1f8b)
+                {
+                    // Premiere projects can wrap their XML in gzip. Never expand an
+                    // unbounded project or treat a linked source clip as its preview.
+                    byte[] compressed = ReadBytes(stream, (int)Math.Min(stream.Length, MaximumScanBytes), cancellation);
+                    using (var input = new MemoryStream(compressed, false))
+                    using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+                    {
+                        byte[] xml = ReadBounded(gzip, MaximumScanBytes, cancellation);
+                        Bitmap saved = ExtractXmp(DecodeXmlText(xml), maxSize, cancellation);
+                        return saved == null ? null : new DocumentPreviewResult(saved, "document_embedded");
+                    }
+                }
                 Bitmap image = ReadXmp(stream, maxSize, cancellation);
                 return image == null ? null : new DocumentPreviewResult(image, "document_embedded");
             }
@@ -265,26 +281,49 @@ namespace DesktopHover
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, true))
             {
                 if (archive.Entries.Count > 4096) return null;
-                // Try document previews before any other archive assets; never show an arbitrary media item.
-                string[] names = { "Thumbnails/thumbnail.png", "preview.png", "preview.jpg", "thumbnail.png", "thumbnail.jpg", "META-INF/thumbnail.png", "designmap.xml" };
-                foreach (string name in names)
+                // Only explicit document previews, never LIBRARY/resources/renditions
+                // assets. IDML's container metadata is specified in its UCF appendix.
+                string[] names = { "preview.png", "preview.jpg", "preview.jpeg", "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg",
+                    "Thumbnails/thumbnail.png", "Thumbnails/thumbnail.jpg", "Thumbnails/thumbnail.jpeg",
+                    "META-INF/thumbnail.png", "META-INF/thumbnail.jpg", "META-INF/metadata.xml", "metadata.xml", "designmap.xml" };
+                Bitmap best = null;
+                int attempts = 0;
+                long remainingBytes = MaximumArchivePreviewBytes;
+                try
                 {
-                    cancellation.ThrowIfCancellationRequested();
-                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    foreach (string name in names)
                     {
-                        if (!String.Equals(entry.FullName, name, StringComparison.OrdinalIgnoreCase)) continue;
-                        if (entry.Length < 1 || entry.Length > MaximumEncodedImageBytes) continue;
-                        byte[] bytes;
-                        using (Stream content = entry.Open()) bytes = ReadBounded(content, MaximumEncodedImageBytes, cancellation);
-                        Bitmap image;
-                        if (name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                            image = ExtractXmp(Encoding.UTF8.GetString(bytes), maxSize, cancellation);
-                        else image = DecodeImage(bytes, maxSize, cancellation);
-                        if (image != null) return new DocumentPreviewResult(image, "document_embedded");
+                        foreach (ZipArchiveEntry entry in archive.Entries)
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            if (!String.Equals(entry.FullName, name, StringComparison.OrdinalIgnoreCase)) continue;
+                            int limit = name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? MaximumScanBytes : MaximumEncodedImageBytes;
+                            if (entry.Length < 1 || entry.Length > limit || attempts >= MaximumPreviewCandidates ||
+                                entry.Length > remainingBytes) continue;
+                            attempts++;
+                            try
+                            {
+                                byte[] bytes;
+                                using (Stream content = entry.Open()) bytes = ReadPreviewEntry(content, limit, ref remainingBytes, cancellation);
+                                KeepLarger(ref best, name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                                    ? ExtractXmp(DecodeXmlText(bytes), maxSize, cancellation)
+                                    : DecodeImage(bytes, maxSize, cancellation));
+                            }
+                            catch (OperationCanceledException) { throw; }
+                            catch (InvalidDataException) { }
+                            catch (IOException) { }
+                            catch (ArgumentException) { }
+                            catch (ExternalException) { }
+                            catch (XmlException) { }
+                        }
                     }
+                    if (best == null) return null;
+                    var result = new DocumentPreviewResult(best, "document_embedded");
+                    best = null;
+                    return result;
                 }
+                finally { if (best != null) best.Dispose(); }
             }
-            return null;
         }
 
         private static Bitmap ReadXmp(Stream stream, Size maxSize, CancellationToken cancellation)
@@ -292,65 +331,129 @@ namespace DesktopHover
             // XMP can appear near either end of a project; do not scan a whole large file on hover.
             int head = (int)Math.Min(MaximumScanBytes, stream.Length);
             byte[] bytes = ReadBytes(stream, head, cancellation);
-            Bitmap image = ExtractXmp(Encoding.UTF8.GetString(bytes), maxSize, cancellation);
-            if (image != null || stream.Length <= head) return image;
-            stream.Position = Math.Max(head, stream.Length - MaximumScanBytes);
-            bytes = ReadBytes(stream, (int)(stream.Length - stream.Position), cancellation);
-            return ExtractXmp(Encoding.UTF8.GetString(bytes), maxSize, cancellation);
+            Bitmap best = ExtractXmp(DecodeXmlText(bytes), maxSize, cancellation);
+            try
+            {
+                if (stream.Length > head)
+                {
+                    stream.Position = Math.Max(head, stream.Length - MaximumScanBytes);
+                    bytes = ReadBytes(stream, (int)(stream.Length - stream.Position), cancellation);
+                    KeepLarger(ref best, ExtractXmp(DecodeXmlText(bytes), maxSize, cancellation));
+                }
+                Bitmap result = best;
+                best = null;
+                return result;
+            }
+            finally { if (best != null) best.Dispose(); }
         }
 
         private static Bitmap ExtractXmp(string data, Size maxSize, CancellationToken cancellation)
         {
+            Bitmap best = null;
             int search = 0;
-            for (int attempt = 0; attempt < 16; attempt++)
+            int candidates = 0;
+            try
             {
-                cancellation.ThrowIfCancellationRequested();
-                int start = data.IndexOf("<x:xmpmeta", search, StringComparison.Ordinal);
-                string closing = "</x:xmpmeta>";
-                if (start < 0)
+                for (int attempt = 0; attempt < 16 && candidates < MaximumPreviewCandidates; attempt++)
                 {
-                    start = data.IndexOf("<xmpmeta", search, StringComparison.Ordinal);
-                    closing = "</xmpmeta>";
-                }
-                if (start < 0) return null;
-                int openEnd = data.IndexOf('>', start);
-                if (openEnd < 0) return null;
-                int end;
-                if (data[openEnd - 1] == '/') end = openEnd + 1;
-                else
-                {
-                    end = data.IndexOf(closing, openEnd, StringComparison.Ordinal);
-                    if (end < 0) return null;
-                    end += closing.Length;
-                }
-                search = end;
-                if (end - start > MaximumEncodedImageBytes * 2) continue;
-                try
-                {
-                    var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = MaximumEncodedImageBytes * 2L };
-                    using (var text = new StringReader(data.Substring(start, end - start)))
-                    using (var reader = XmlReader.Create(text, settings))
+                    cancellation.ThrowIfCancellationRequested();
+                    int start = data.IndexOf("<x:xmpmeta", search, StringComparison.Ordinal);
+                    int unprefixed = data.IndexOf("<xmpmeta", search, StringComparison.Ordinal);
+                    string closing = "</x:xmpmeta>";
+                    if (unprefixed >= 0 && (start < 0 || unprefixed < start)) { start = unprefixed; closing = "</xmpmeta>"; }
+                    if (start < 0)
                     {
-                        while (reader.Read())
+                        // Standalone XML may use a different xmpmeta prefix or bare RDF.
+                        // XmlReader resolves namespace URIs and never external entities.
+                        if (attempt == 0 && data.TrimStart('\ufeff', ' ', '\t', '\r', '\n').StartsWith("<", StringComparison.Ordinal))
+                            ReadXmlThumbnails(data, maxSize, cancellation, ref best, ref candidates);
+                        break;
+                    }
+                    int openEnd = data.IndexOf('>', start);
+                    if (openEnd < 0) break;
+                    int end = data[openEnd - 1] == '/' ? openEnd + 1 : data.IndexOf(closing, openEnd, StringComparison.Ordinal);
+                    if (end < 0) { search = openEnd + 1; continue; }
+                    if (data[openEnd - 1] != '/') end += closing.Length;
+                    search = end;
+                    if (end - start <= MaximumScanBytes)
+                        ReadXmlThumbnails(data.Substring(start, end - start), maxSize, cancellation, ref best, ref candidates);
+                }
+                Bitmap result = best;
+                best = null;
+                return result;
+            }
+            finally { if (best != null) best.Dispose(); }
+        }
+
+        private static void ReadXmlThumbnails(string xml, Size maxSize, CancellationToken cancellation, ref Bitmap best, ref int candidates)
+        {
+            try
+            {
+                var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = MaximumScanBytes };
+                using (var text = new StringReader(xml))
+                using (var reader = XmlReader.Create(text, settings))
+                {
+                    while (!reader.EOF && candidates < MaximumPreviewCandidates)
+                    {
+                        cancellation.ThrowIfCancellationRequested();
+                        if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                        string encoded = reader.GetAttribute("image", ThumbnailNamespace);
+                        bool imageElement = reader.LocalName == "image" && reader.NamespaceURI == ThumbnailNamespace;
+                        if (encoded == null && imageElement) encoded = reader.ReadElementContentAsString();
+                        else reader.Read();
+                        if (encoded == null) continue;
+                        candidates++;
+                        if (encoded.Length > MaximumEncodedImageBytes * 2) continue;
+                        try
                         {
-                            cancellation.ThrowIfCancellationRequested();
-                            if (reader.NodeType != XmlNodeType.Element) continue;
-                            string encoded = reader.GetAttribute("image", ThumbnailNamespace);
-                            if (encoded == null && reader.LocalName == "image" && reader.NamespaceURI == ThumbnailNamespace)
-                                encoded = reader.ReadElementContentAsString();
-                            if (encoded == null || encoded.Length > MaximumEncodedImageBytes * 2) continue;
                             byte[] bytes = Convert.FromBase64String(encoded);
-                            if (bytes.Length > MaximumEncodedImageBytes) continue;
-                            Bitmap image = DecodeImage(bytes, maxSize, cancellation);
-                            if (image != null) return image;
+                            if (bytes.Length <= MaximumEncodedImageBytes) KeepLarger(ref best, DecodeImage(bytes, maxSize, cancellation));
                         }
+                        catch (FormatException) { }
+                        catch (ArgumentException) { }
+                        catch (ExternalException) { }
+                        catch (InvalidDataException) { }
                     }
                 }
-                catch (XmlException) { }
-                catch (FormatException) { }
-                catch (ArgumentException) { }
             }
-            return null;
+            catch (XmlException) { }
+        }
+
+        private static string DecodeXmlText(byte[] bytes)
+        {
+            if (bytes.Length >= 2 && ((bytes[0] == 0xff && bytes[1] == 0xfe) || (bytes[0] == '<' && bytes[1] == 0)))
+                return Encoding.Unicode.GetString(bytes);
+            if (bytes.Length >= 2 && ((bytes[0] == 0xfe && bytes[1] == 0xff) || (bytes[0] == 0 && bytes[1] == '<')))
+                return Encoding.BigEndianUnicode.GetString(bytes);
+            return Encoding.UTF8.GetString(bytes);
+        }
+
+        private static byte[] ReadPreviewEntry(Stream stream, int maximum, ref long remaining, CancellationToken cancellation)
+        {
+            using (var output = new MemoryStream())
+            {
+                byte[] buffer = new byte[65536];
+                int count;
+                while ((count = stream.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    remaining -= count;
+                    if (remaining < 0 || output.Length + count > maximum) throw new InvalidDataException("Preview data is too large.");
+                    output.Write(buffer, 0, count);
+                }
+                return output.ToArray();
+            }
+        }
+
+        private static void KeepLarger(ref Bitmap best, Bitmap candidate)
+        {
+            if (candidate == null) return;
+            if (best == null || (long)candidate.Width * candidate.Height > (long)best.Width * best.Height)
+            {
+                if (best != null) best.Dispose();
+                best = candidate;
+            }
+            else candidate.Dispose();
         }
 
         private static Bitmap DecodeImage(byte[] bytes, Size maxSize, CancellationToken cancellation)

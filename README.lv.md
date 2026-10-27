@@ -33,7 +33,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Ātri apskatīt attēlus** | Kompakts priekšskatījums ar faila nosaukumu, izmēriem un lielumu. Attēla proporcijas saglabājas. |
 | **Klausīties un skatīties** | Audio sāk skanēt pēc peles uzvešanas. Video atskaņojas priekšskatījuma logā ar skaņu. Abiem ir kopīgs skaļuma iestatījums. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
-| **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi un Photoshop attēli. Citiem Adobe projektiem izmanto saglabātos priekšskatījumus vai pieejamos Windows sīktēlus. |
+| **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi, Photoshop apvienotie attēli un ar PDF saderīgs Illustrator saturs. Citiem Adobe projektiem izmanto iegultos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. |
 | **Pielāgot sev** | Tumšā vai gaišā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
@@ -146,19 +146,21 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 
 | Veids | Atpazītie formāti un piemēri |
 | --- | --- |
-| **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF (arī animēti), TIFF, ICO, WebP, HEIC/HEIF, AVIF. |
+| **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF (arī animēti), TIFF, ICO, WebP, HEIC/HEIF, AVIF un Adobe DNG (vajadzīgs saderīgs Windows RAW dekodētājs). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
-| **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM. |
+| **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; atskaņošanai vajadzīgs saderīgs Windows kodeks. |
 | **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
 | **PDF** | Pirmā lapa, atveidota ar Windows 10/11 iebūvēto PDF atbalstu. Nav vajadzīga Adobe lietotne vai Windows sīktēlu nodrošinātājs. |
-| **Photoshop** | PSD/PSB apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE, pielāgots priekšskatījuma izmēram. Saglabātos sīktēlus izmanto kā rezerves variantu. |
+| **Photoshop** | PSD/PSB/PSDT apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE, pielāgots priekšskatījuma izmēram. Saglabātos sīktēlus izmanto kā rezerves variantu. |
 | **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Word/Excel izmanto saglabāto priekšskatījumu vai vienkāršotu fragmentu/pirmo redzamo lapu. PowerPoint saglabā stilus, izmantojot pietiekami lielu saglabāto attēlu, paša PowerPoint eksportu vai labāko pieejamo saglabāto/Windows sīktēlu. |
-| **Citi Adobe projekti** | AI, EPS, INDD/INDT, IDML, XD, AEP/AEPX, PRPROJ un FLA, **ja pieejams atbalstīts iegultais priekšskatījums vai Windows sīktēls**. |
+| **Illustrator** | AI/AIT ar PDF saderīgu saturu rāda pirmo lapu izvēlētajā izmērā. EPS/EPSF/EPSI var izmantot saglabātu TIFF vai XMP priekšskatījumu, atbilstošu priekšskatījuma failu vai Windows sīktēlu. PostScript netiek izpildīts. |
+| **Adobe maketu un animācijas projekti** | Tiek atpazīti INDD/INDT/INDB/IDML/INX, ICML/ICMT, XD, AEP/AEPX/AET/AETX, PRPROJ/PRTL, MOGRT/AEGRAPHIC, FLA/XFL/SWF un CHPROJ/PUPPET. **Vajadzīgs atbalstīts iegultais priekšskatījums, atbilstošs attēla/video priekšskatījuma fails vai Windows sīktēls.** SWF saturs netiek izpildīts. |
+| **Citi Adobe projekti** | Captivate CP/CPT/CPTX/CPTL, Audition SESX, Dimension DN un Substance SBS/SBSAR/SPP/SSA/ALCH/SSG/SMOD izmanto atbalstītus saglabātos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. Slēgto projektu formātu ainas un montāža netiek atveidota. |
 | **Citi dokumenti** | Vecajiem DOC/XLS/PPT un to veidnēm, kā arī XLSB nepieciešams Windows sīktēlu atbalsts. ODT/ODS/ODP var izmantot arī failā saglabāto PNG sīktēlu. |
 
-Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) un [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs).
+Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvēršana un audio/video atskaņošana ir atkarīga no datorā uzstādītajiem Windows kodekiem**. Pilnie paplašinājumu saraksti ir [MediaFiles.cs](src/Preview/MediaFiles.cs), [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs), [AdobeProjectFiles.cs](src/Preview/Documents/AdobeProjectFiles.cs) un [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs).
 
 Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne; lielas izšķirtspējas eksportam ar pašu PowerPoint vajadzīga instalēta PowerPoint darbvirsmas lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
 
@@ -168,16 +170,24 @@ Eksports ar pašu PowerPoint darbojas statiskiem PPTX/POTX/PPSX failiem, ja Powe
 
 PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizvirzot peli no faila, priekšskatījuma ielāde tiek atcelta un palīgprocess apturēts, lai neatverams PDF nebloķētu lietotni.
 
+### Adobe attēlu un video priekšskatījumi
+
+Illustrator darbu var atveidot tieši, ja tas saglabāts ar **Create PDF Compatible File**. Citiem Adobe failiem lasītāji meklē skaidri nosauktus PNG/JPEG priekšskatījumus un XMP sīktēlus, arī ZIP metadatos un ar gzip saspiestos Premiere projekta metadatos ar ierobežotu apjomu. Tiek izvēlēts lielākais izmantojamais saglabātais attēls. EPS faili ar DOS bināro galveni var izmantot iegulto TIFF priekšskatījumu.
+
+Ja projektā nav derīga iegultā priekšskatījuma, eksportē attēlu vai video tajā pašā mapē un nosaukumā pievieno `.preview`. Piemēram, `Reklama.aep` var izmantot `Reklama.preview.mp4` vai `Reklama.preview.png`. Der arī `Reklama.aep.preview.mp4`; šim pilnajam nosaukumam ir priekšroka. Šādi nosauktiem priekšskatījuma failiem ir priekšroka pār iegulto attēlu; projekta avota video netiek atskaņots gatavās kompozīcijas vietā.
+
+Priekšskatījuma faili atbalsta MP4/MOV/WebM/M4V/AVI/WMV video un PNG/JPG/JPEG/WebP/BMP attēlus. Video ievēro izvēlēto skaļumu un apstājas, aizvirzot peli no projekta. Apakšējā joslā saglabājas projekta nosaukums un norāde **Priekšskatījuma fails**. Pēc projekta izmaiņām priekšskatījums jāeksportē no jauna. Attēlu robeža ir 64 MiB un 40 miljoni pikseļu, video — 512 MiB. Lielāks projekts joprojām var izmantot šādu priekšskatījumu, jo projekta saturs netiek parsēts.
+
 ### Pašreizējās robežas
 
 - Priekšskatījumi darbojas ar **lokāli pieejamiem failiem**. Tīkla mapes, piesaistīti tīkla diski un tikai mākonī pieejami faili tiek izlaisti.
 - Tekstam nolasa līdz **256 KiB**, **300 rindām** un **500 rakstzīmēm rindā**. Redzama tikai daļa, kas ietilpst logā; par saīsinājumu informē apakšējā josla.
 - Sintakses krāsas nodrošina pamata leksiska analīze. Kods netiek izpildīts vai rediģēts.
 - Markdown, HTML un SVG tiek rādīti kā avota teksts.
-- Dokumentu/projektu priekšskatījumiem ir **512 MiB** faila robeža. Office ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
+- Dokumentu/projektu satura nolasīšanai ir **512 MiB** faila robeža; Adobe priekšskatījuma failiem ir iepriekš norādītie atsevišķie ierobežojumi. ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
 - PDF rāda **tikai pirmo lapu**, pielāgotu izvēlētajam priekšskatījuma lielumam. Lapu pāršķiršana, rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
 - Word un Excel priekšskatījumi ir fragmenti, ne precīzi drukas maketi. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām). PowerPoint rāda pirmo slaidu kā nekustīgu attēlu; animācijas un pāršķiršana nav paredzēta. Eksportam ar pašu PowerPoint ir 12 sekunžu robeža; ja tas nav pieejams, izmanto saglabāto/Windows priekšskatījumu.
-- Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Citiem Adobe failiem izmanto atbalstītu XMP/ZIP priekšskatījumu vai Windows sīktēlu; pilna projektu atveidošana nav paredzēta.
+- Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Adobe projekta atpazīšana negarantē iegulta attēla esamību. After Effects/Premiere montāžai, Animate animācijām, 3D ainām un citiem slēgto formātu projektiem vajadzīgs saglabāts priekšskatījums vai eksportēts priekšskatījuma fails; pilna projektu atveidošana nav paredzēta.
 - Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
 - Animēti GIF atskaņojas automātiski, kamēr pele ir uz faila, ievērojot kadru aiztures un atkārtošanās iestatījumus. Peles kustība vienas faila ikonas robežās animāciju nepārstartē; aizvirzot peli prom, atskaņošana apstājas. Citu animētu vai vairāku kadru attēlu formātiem tiek rādīts nekustīgs kadrs.
 - Attēli virs **100 MiB** vai **100 miljoniem pikseļu** tiek izlaisti. GIF papildus ir **2000 kadru** un **100 miljonu pikseļu summas visu kadru taisnstūros** robeža. Ja GIF kadra aizture nav norādīta vai ir ļoti īsa (0–10 ms), izmanto 100 ms.
@@ -268,7 +278,8 @@ Automātiskās palaišanas parametri reģistrē vai noņem izpildītās kopijas 
 | Audio vai video neatskaņojas | Pārbaudi skaļumu un Windows kodeku atbalstu. Atpazīts paplašinājums negarantē atskaņošanu. |
 | Teksts ir nogriezts | Lieli faili un garas rindas tiek apzināti saīsināti. Pilnam saturam atver failu redaktorā. |
 | PDF nav priekšskatījuma | Pārbaudi, vai fails ir lokāls, nepārsniedz 512 MiB un ir atverams bez paroles. Bojāti vai neatbalstīti PDF var nebūt pieejami; Adobe uzstādīšana nav vajadzīga. |
-| Adobe vai vecam Office failam nav priekšskatījuma | Saglabā failu ar iegultu priekšskatījumu vai izmanto saderīgu Windows sīktēlu nodrošinātāju. Atpazīts paplašinājums negarantē satura nolasīšanu. |
+| Adobe projektam nav priekšskatījuma | Saglabā Illustrator failu ar PDF saderību, ieslēdz priekšskatījumu saglabāšanu InDesign vai blakus projektam eksportē atbilstošu `.preview.png`/`.preview.mp4`. Skati sadaļu par Adobe attēlu un video priekšskatījumiem. |
+| Vecam Office failam nav priekšskatījuma | Saglabā failu ar iegultu priekšskatījumu vai izmanto saderīgu Windows sīktēlu nodrošinātāju. Atpazīts paplašinājums negarantē satura nolasīšanu. |
 | Dokuments izskatās citādi nekā redaktorā | Apakšējā joslā norādīts vienkāršots saturs. Pilnai formatēšanai un visām lapām vai slaidiem atver sākotnējo lietotni. |
 | Iestatījumi ir samazināti | Atjauno logu no Windows uzdevumjoslas vai ar kreiso klikšķi uz teknes ikonas. |
 | Pēc **×** nospiešanas lietotne joprojām darbojas | Šī poga aizver iestatījumus un atstāj priekšskatījumus ieslēgtus. Lai izietu pilnībā, ar labo klikšķi uz teknes ikonas izvēlies **Aizvērt lietotni**. |

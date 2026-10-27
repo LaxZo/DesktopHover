@@ -18,13 +18,13 @@ namespace DesktopHover
             {
                 case ".jpg": case ".jpeg": case ".jfif": case ".png": case ".bmp":
                 case ".gif": case ".tif": case ".tiff": case ".ico": case ".webp":
-                case ".heic": case ".heif": case ".avif":
+                case ".heic": case ".heif": case ".avif": case ".dng":
                     return MediaKind.Image;
                 case ".mp3": case ".wav": case ".wma": case ".m4a": case ".aac":
                 case ".flac": case ".aif": case ".aiff":
                     return MediaKind.Audio;
                 case ".mp4": case ".m4v": case ".mov": case ".avi": case ".wmv":
-                case ".mpg": case ".mpeg": case ".mkv": case ".webm":
+                case ".mpg": case ".mpeg": case ".mkv": case ".webm": case ".flv": case ".f4v":
                     return MediaKind.Video;
                 default:
                     if (DocumentPreviewContent.IsSupported(path)) return MediaKind.Document;
