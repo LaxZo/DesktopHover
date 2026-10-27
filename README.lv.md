@@ -51,7 +51,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
   <tr><th>Excel</th><th>PowerPoint</th></tr>
   <tr>
     <td><img src="docs/assets/excel-preview.png" width="360" alt="XLSX pirmā lapa ar saglabātām vērtībām"></td>
-    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PPTX pirmais slaids ar tekstu un attēlu"></td>
+    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slaids Desktop Hover tumšajā noformējumā ar piparmētru krāsas akcentiem"></td>
   </tr>
 </table>
 

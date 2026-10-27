@@ -51,7 +51,7 @@ These are real hover previews of demonstration files. Word and Excel content is 
   <tr><th>Excel</th><th>PowerPoint</th></tr>
   <tr>
     <td><img src="docs/assets/excel-preview.png" width="360" alt="XLSX first worksheet with cached values"></td>
-    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PPTX first slide with text and an embedded image"></td>
+    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slide in Desktop Hover's charcoal and mint visual style"></td>
   </tr>
 </table>
 
