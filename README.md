@@ -72,6 +72,8 @@ The preview highlights keywords, strings, comments, numbers and other tokens. It
 
 Change the appearance with the sun/moon button beside the language selector. Settings save automatically and take effect immediately.
 
+Settings open with a short fade and rise, buttons and switches respond smoothly, and tray/language menus fade in. Preview cards have a brief entrance motion. Turn **Animations** off in Settings or the tray menu to disable these effects immediately; this preference is saved. GIFs, videos and automatic slide changes keep playing normally.
+
 <table>
   <tr><th>Dark theme</th><th>Light theme</th></tr>
   <tr>
@@ -136,6 +138,7 @@ While previews are enabled, DesktopHover temporarily deactivates Windows file in
 | Slide interval | 1–10 seconds for PowerPoint presentations. |
 | Playback volume | 0–100% for audio and video. Set 0% to mute. |
 | Appearance | Dark or light, including menus and code previews. |
+| Animations | Enable or disable interface motion in Settings or the tray menu. Enabled by default. |
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
 | Start with Windows | Run automatically after you sign in. |
 

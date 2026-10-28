@@ -13,6 +13,7 @@ namespace DesktopHover
         public int VolumePercent=100;
         public int SlideIntervalSeconds=3;
         public bool Upscale=false;
+        public bool AnimationsEnabled=true;
         public bool StartWithWindows;
         public string Language="en";
         public string Theme="dark";
@@ -52,6 +53,7 @@ namespace DesktopHover
                         if(name=="volume_percent" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.VolumePercent=n;
                         if(name=="slide_interval_seconds" && int.TryParse(value,NumberStyles.Integer,CultureInfo.InvariantCulture,out n)) settings.SlideIntervalSeconds=n;
                         if(name=="upscale" && bool.TryParse(value,out b)) settings.Upscale=b;
+                        if(name=="animations_enabled" && bool.TryParse(value,out b)) settings.AnimationsEnabled=b;
                         if(name=="language") settings.Language=value;
                         if(name=="theme") settings.Theme=value;
                     }
@@ -71,8 +73,8 @@ namespace DesktopHover
             try
             {
                 string text=string.Format(CultureInfo.InvariantCulture,
-                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\ntheme={6}\r\nslide_interval_seconds={7}\r\n",
-                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent,Theme,SlideIntervalSeconds);
+                    "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\ntheme={6}\r\nslide_interval_seconds={7}\r\nanimations_enabled={8}\r\n",
+                    MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent,Theme,SlideIntervalSeconds,AnimationsEnabled.ToString().ToLowerInvariant());
                 File.WriteAllText(temporary,text,new UTF8Encoding(false));
                 if(File.Exists(path)) File.Replace(temporary,path,null);
                 else File.Move(temporary,path);

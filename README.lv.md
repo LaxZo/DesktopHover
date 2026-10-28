@@ -72,6 +72,8 @@ Atslēgvārdi, virknes, komentāri, skaitļi un citi elementi ir iekrāsoti. Kod
 
 Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi saglabājas automātiski un stājas spēkā uzreiz.
 
+Iestatījumu logs atveras ar īsu uzpeldēšanu, pogas un slēdži reaģē plūstoši, bet teknes un valodu izvēlnes pakāpeniski parādās. Arī priekšskatījumiem ir īsa parādīšanās kustība. Izslēdz **Animācijas** iestatījumos vai teknes izvēlnē, lai šos efektus noņemtu uzreiz; izvēle saglabājas. GIF, video un automātiskā slaidu maiņa turpina darboties kā iepriekš.
+
 <table>
   <tr><th>Tumšā tēma</th><th>Gaišā tēma</th></tr>
   <tr>
@@ -136,6 +138,7 @@ Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows
 | Slaidu maiņas intervāls | 1–10 sekundes PowerPoint prezentācijām. |
 | Atskaņošanas skaļums | 0–100% audio un video failiem. 0% izslēdz skaņu. |
 | Izskats | Tumšā vai gaišā tēma, arī izvēlnēs un koda priekšskatījumos. |
+| Animācijas | Ieslēgt vai izslēgt saskarnes kustību iestatījumos vai teknes izvēlnē. Sākotnēji ieslēgtas. |
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
 | Palaišana kopā ar Windows | Automātiska palaišana pēc pierakstīšanās. |
 

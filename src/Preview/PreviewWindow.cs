@@ -31,6 +31,7 @@ namespace DesktopHover
         private AnimatedGif animatedGif;
         private readonly Timer animationTimer;
         private readonly Timer slideshowTimer;
+        private readonly WindowMotion entranceMotion;
         private string fileName;
         private string description;
         private Rectangle imageArea;
@@ -71,6 +72,7 @@ namespace DesktopHover
         internal TimeSpan PlaybackPosition { get { return media == null ? TimeSpan.Zero : media.Position; } }
         internal void Configure(AppSettings settings)
         {
+            UiMotion.Enabled = settings.AnimationsEnabled;
             Brand.SetTheme(settings.Theme);
             BackColor=Brand.Background;
             ForeColor=Brand.Text;
@@ -101,6 +103,7 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer, true);
             SetFonts();
+            entranceMotion = new WindowMotion(this, false, false);
             animationTimer = new Timer();
             animationTimer.Tick += AdvanceAnimation;
             slideshowTimer = new Timer();
@@ -223,8 +226,7 @@ namespace DesktopHover
                     footerWidth, Px(17));
 
                 Location = ChooseLocation(cursor, itemBounds, workingArea, Size, Px(18));
-                if (!Visible)
-                    Show();
+                entranceMotion.ShowAt(Location);
                 SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height,
                     SwpNoActivate | SwpShowWindow);
                 Invalidate();
@@ -278,7 +280,7 @@ namespace DesktopHover
                 AccessibleName = L10n.Text(language, "document_preview");
                 Text = AccessibleName + " — Desktop Hover";
                 LayoutDocument();
-                if (!Visible) Show();
+                entranceMotion.ShowAt(Location);
                 SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 documentCancellation = new System.Threading.CancellationTokenSource();
                 var token = documentCancellation.Token;
@@ -477,7 +479,7 @@ namespace DesktopHover
                 description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
                 if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
                 Location = ChooseLocation(cursor, itemBounds, workingArea, Size, Px(18));
-                if (!Visible) Show();
+                entranceMotion.ShowAt(Location);
                 SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 Invalidate();
                 return true;
@@ -697,7 +699,7 @@ namespace DesktopHover
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
             Location = ChooseLocation(mediaCursor, mediaItemBounds, workingArea, Size, Px(18));
-            if (!Visible) Show();
+            entranceMotion.ShowAt(Location);
             if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
             SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
             Invalidate();
@@ -731,6 +733,7 @@ namespace DesktopHover
 
         public void ClearPreview()
         {
+            if (entranceMotion != null) entranceMotion.Finish();
             CancelDocumentLoad();
             if (mediaTimer != null) mediaTimer.Stop();
             if (slideshowTimer != null) slideshowTimer.Stop();
@@ -895,6 +898,7 @@ namespace DesktopHover
             if (disposing)
             {
                 ClearPreview();
+                if (entranceMotion != null) entranceMotion.Dispose();
                 if (animationTimer != null) animationTimer.Dispose();
                 if (slideshowTimer != null) slideshowTimer.Dispose();
                 if (mediaTimer != null) mediaTimer.Dispose();

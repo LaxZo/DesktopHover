@@ -23,13 +23,14 @@ namespace DesktopHover
         private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
         private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
-        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle;
+        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle;
         private bool paused, syncing;
         private readonly Font headingFont = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
         private readonly Font titleFont = new Font("Segoe UI", 21, FontStyle.Bold, GraphicsUnit.Pixel);
         private readonly Font smallFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly Font bodyFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly Icon windowIcon;
+        private readonly WindowMotion windowMotion;
         private static readonly int[] SizeWidths = { 480, 720, 1080, 1440 };
         private static readonly int[] SizeHeights = { 360, 540, 810, 1080 };
         private static readonly int[] DelayValues = { 0, 250, 450, 750, 1000 };
@@ -113,6 +114,7 @@ namespace DesktopHover
                 Padding = new Padding(5),
                 Renderer = new HoverMenuRenderer()
             };
+            MenuMotion.Attach(languageMenu);
             foreach (L10n.LanguageOption language in L10n.Languages)
             {
                 string code = language.Code;
@@ -228,17 +230,25 @@ namespace DesktopHover
 
             upscaleToggle = AddToggle(616);
             upscaleToggle.Click += delegate { this.settings.Upscale = !this.settings.Upscale; Apply(); };
-            startupToggle = AddToggle(670);
+            startupToggle = AddToggle(658);
             startupToggle.Click += delegate { this.settings.StartWithWindows = !this.settings.StartWithWindows; Apply(); };
-            enabledToggle = AddToggle(724);
+            enabledToggle = AddToggle(700);
             enabledToggle.Click += delegate
             {
                 UpdatePaused(!this.paused);
                 if (this.pauseChanged != null) this.pauseChanged(this.paused);
             };
+            animationsToggle = AddToggle(742);
+            animationsToggle.Name = "animations-toggle";
+            animationsToggle.Click += delegate
+            {
+                this.settings.AnimationsEnabled = !this.settings.AnimationsEnabled;
+                Apply();
+            };
 
             Controls.Add(languagePicker);
             SyncControls();
+            windowMotion = new WindowMotion(this, true, true);
         }
 
         private void ShowLanguageMenu()
@@ -266,7 +276,7 @@ namespace DesktopHover
         private HoverToggle AddToggle(int y)
         {
             var toggle = new HoverToggle();
-            toggle.SetBounds(24, y, 376, 48);
+            toggle.SetBounds(24, y, 376, 40);
             Controls.Add(toggle);
             return toggle;
         }
@@ -305,6 +315,7 @@ namespace DesktopHover
         private void SyncControls()
         {
             syncing = true;
+            UiMotion.Enabled = settings.AnimationsEnabled;
             settings.Language = L10n.Normalize(settings.Language);
             Brand.SetTheme(settings.Theme);
             BackColor = Brand.Background;
@@ -374,6 +385,8 @@ namespace DesktopHover
             LocalizeToggle(startupToggle, "startup", "startup_detail");
             enabledToggle.Checked = !paused;
             LocalizeToggle(enabledToggle, paused ? "preview_paused" : "preview_on", "preview_detail");
+            animationsToggle.Checked = settings.AnimationsEnabled;
+            LocalizeToggle(animationsToggle, "animations", "animations_detail");
             syncing = false;
             Invalidate(true);
         }
@@ -396,8 +409,7 @@ namespace DesktopHover
             Rectangle area = Screen.FromPoint(screenPoint).WorkingArea;
             int x = area.Left + Math.Max(0, (area.Width - Width) / 2);
             int y = area.Top + Math.Max(0, (area.Height - Height) / 2);
-            Location = new Point(x, y);
-            if (!Visible) Show();
+            windowMotion.ShowAt(new Point(x, y));
             Activate();
         }
 
@@ -491,6 +503,7 @@ namespace DesktopHover
         {
             if (disposing)
             {
+                if (windowMotion != null) windowMotion.Dispose();
                 languageMenu.Dispose();
                 windowToolTip.Dispose();
                 headingFont.Dispose();
@@ -542,11 +555,13 @@ namespace DesktopHover
         protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
         {
             var item = e.Item as ToolStripMenuItem;
-            if (e.Item.Selected || (item != null && item.Checked))
+            bool isChecked = item != null && item.Checked;
+            double hover = MenuMotion.HoverAmount(e.Item);
+            if (hover > 0 || isChecked)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 SettingsWindow.FillRound(e.Graphics, new RectangleF(0, 0, e.Item.Width, e.Item.Height), 6,
-                    e.Item.Selected ? Brand.HoverSurface : Brand.SelectedSurface);
+                    UiMotion.Blend(isChecked ? Brand.SelectedSurface : Brand.Surface, Brand.HoverSurface, hover));
             }
         }
 
@@ -576,16 +591,29 @@ namespace DesktopHover
 
     internal sealed class HoverButton : Button
     {
-        private bool selected, hovering;
+        private bool selected;
+        private readonly UiTween hoverMotion, selectionMotion, pressMotion;
         public string Detail { get; set; }
         public bool Compact { get; set; }
         public bool LanguageSelector { get; set; }
         public bool ThemeSelector { get; set; }
         public bool ProjectLink { get; set; }
-        public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
+        public bool Selected
+        {
+            get { return selected; }
+            set
+            {
+                if (selected == value) return;
+                selected = value;
+                UpdateMotion(selectionMotion, value ? 1 : 0, 180);
+            }
+        }
 
         public HoverButton()
         {
+            hoverMotion = new UiTween(delegate(double value) { Invalidate(); });
+            selectionMotion = new UiTween(delegate(double value) { Invalidate(); });
+            pressMotion = new UiTween(delegate(double value) { Invalidate(); });
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
@@ -594,26 +622,61 @@ namespace DesktopHover
             AccessibleRole = AccessibleRole.PushButton;
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hovering = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hovering = false; Invalidate(); base.OnMouseLeave(e); }
+        private void UpdateMotion(UiTween motion, double target, int duration)
+        {
+            if (!IsHandleCreated || !Visible) motion.Snap(target);
+            else motion.AnimateTo(target, duration);
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            hoverMotion.Snap(0);
+            pressMotion.Snap(0);
+            selectionMotion.Snap(selected ? 1 : 0);
+        }
+        protected override void OnMouseEnter(EventArgs e) { UpdateMotion(hoverMotion, 1, 140); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { UpdateMotion(hoverMotion, 0, 180); UpdateMotion(pressMotion, 0, 100); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) UpdateMotion(pressMotion, 1, 70);
+            base.OnMouseDown(e);
+        }
+        protected override void OnMouseUp(MouseEventArgs e) { UpdateMotion(pressMotion, 0, 150); base.OnMouseUp(e); }
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            if (!Capture) UpdateMotion(pressMotion, 0, 150);
+            base.OnMouseCaptureChanged(e);
+        }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) UpdateMotion(pressMotion, 1, 70);
+            base.OnKeyDown(e);
+        }
+        protected override void OnKeyUp(KeyEventArgs e) { UpdateMotion(pressMotion, 0, 150); base.OnKeyUp(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
-        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { UpdateMotion(pressMotion, 0, 100); Invalidate(); base.OnLostFocus(e); }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color fill = selected ? Brand.SelectedSurface : (hovering ? Brand.HoverSurface : Brand.Surface);
-            SettingsWindow.FillRound(g, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 9, fill);
-            using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), 9))
-            using (var pen = new Pen(selected || Focused ? Brand.Accent : Brand.Border))
+            Color fill = UiMotion.Blend(Brand.Surface, Brand.SelectedSurface, selectionMotion.Value);
+            fill = UiMotion.Blend(fill, Brand.HoverSurface, hoverMotion.Value * (1 - .5 * selectionMotion.Value));
+            fill = UiMotion.Blend(fill, Brand.SelectedSurface, pressMotion.Value * .5);
+            float inset = (float)pressMotion.Value * 1.5f;
+            var bounds = new RectangleF(.5f + inset, .5f + inset, Width - 1 - inset * 2, Height - 1 - inset * 2);
+            SettingsWindow.FillRound(g, bounds, 9, fill);
+            using (var path = Brand.RoundRect(bounds, 9))
+            using (var pen = new Pen(UiMotion.Blend(Brand.Border, Brand.Accent, Focused ? 1 : selectionMotion.Value)))
                 g.DrawPath(pen, path);
+            Color textColor = UiMotion.Blend(Brand.Text, Brand.Accent, selectionMotion.Value);
             if (LanguageSelector)
             {
                 Brand.DrawLanguageIcon(g, new Rectangle(10, (Height - 21) / 2, 21, 21), Brand.Accent);
                 TextRenderer.DrawText(g, Text, Font, new Rectangle(40, 0, Width - 69, Height),
-                    selected ? Brand.Accent : Brand.Text,
+                    textColor,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
                     TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
                 int mid = Height / 2;
@@ -635,13 +698,13 @@ namespace DesktopHover
             }
             else if (Compact)
             {
-                TextRenderer.DrawText(g, Text, Font, ClientRectangle, selected ? Brand.Accent : Brand.Text,
+                TextRenderer.DrawText(g, Text, Font, ClientRectangle, textColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
             else
             {
                 TextRenderer.DrawText(g, Text, Font, new Rectangle(13, 5, Width - 34, 21),
-                    selected ? Brand.Accent : Brand.Text, TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
+                    textColor, TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
                 using (var detailFont = new Font("Segoe UI", 11, FontStyle.Regular, GraphicsUnit.Pixel))
                     TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(13, 25, Width - 26, 16),
                         Brand.Muted, TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
@@ -651,6 +714,17 @@ namespace DesktopHover
                         g.DrawLines(pen, new[] { new Point(Width - 24, 18), new Point(Width - 20, 22), new Point(Width - 13, 14) });
                 }
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                hoverMotion.Dispose();
+                selectionMotion.Dispose();
+                pressMotion.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         // GitHub Octicons mark-github-16, converted to GDI+ curves. See THIRD-PARTY-NOTICES.md.
@@ -740,17 +814,26 @@ namespace DesktopHover
 
     internal sealed class HoverToggle : Button
     {
-        private bool isChecked, hovering;
+        private bool isChecked;
+        private readonly UiTween checkMotion, hoverMotion;
         public string Detail { get; set; }
         public string DefaultActionText { get; set; }
         public bool Checked
         {
             get { return isChecked; }
-            set { isChecked = value; Invalidate(); AccessibilityNotifyClients(AccessibleEvents.StateChange, -1); }
+            set
+            {
+                if (isChecked == value) return;
+                isChecked = value;
+                UpdateMotion(checkMotion, value ? 1 : 0, 180);
+                AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
+            }
         }
 
         public HoverToggle()
         {
+            checkMotion = new UiTween(delegate(double value) { Invalidate(); });
+            hoverMotion = new UiTween(delegate(double value) { Invalidate(); });
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
@@ -759,8 +842,20 @@ namespace DesktopHover
             AccessibleRole = AccessibleRole.CheckButton;
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hovering = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hovering = false; Invalidate(); base.OnMouseLeave(e); }
+        private void UpdateMotion(UiTween motion, double target, int duration)
+        {
+            if (!IsHandleCreated || !Visible) motion.Snap(target);
+            else motion.AnimateTo(target, duration);
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            hoverMotion.Snap(0);
+            checkMotion.Snap(isChecked ? 1 : 0);
+        }
+        protected override void OnMouseEnter(EventArgs e) { UpdateMotion(hoverMotion, 1, 140); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { UpdateMotion(hoverMotion, 0, 180); base.OnMouseLeave(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
@@ -769,19 +864,28 @@ namespace DesktopHover
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            if (hovering) SettingsWindow.FillRound(g, new RectangleF(0, 0, Width, Height), 8, Brand.Surface);
+            SettingsWindow.FillRound(g, new RectangleF(0, 0, Width, Height), 8,
+                UiMotion.Blend(Brand.Background, Brand.Surface, hoverMotion.Value));
             if (Focused)
                 using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), 8))
                 using (var pen = new Pen(Brand.Accent)) g.DrawPath(pen, path);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 4, Width - 58, 22), Brand.Text,
-                TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width - 58, 22), Brand.Text,
+                TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             using (var detailFont = new Font("Segoe UI", 11, FontStyle.Regular, GraphicsUnit.Pixel))
-                TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(0, 27, Width - 58, 16), Brand.Muted,
-                    TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
-            SettingsWindow.FillRound(g, new RectangleF(Width - 43, 12, 42, 24), 12,
-                isChecked ? Brand.Accent : Brand.ToggleOff);
-            using (var brush = new SolidBrush(isChecked && !Brand.IsLight ? Brand.Background : Brand.ToggleThumb))
-                g.FillEllipse(brush, Width - (isChecked ? 22 : 40), 15, 18, 18);
+                TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(0, 22, Width - 58, 16), Brand.Muted,
+                    TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            float trackTop = (Height - 24) / 2f;
+            SettingsWindow.FillRound(g, new RectangleF(Width - 43, trackTop, 42, 24), 12,
+                UiMotion.Blend(Brand.ToggleOff, Brand.Accent, checkMotion.Value));
+            using (var brush = new SolidBrush(UiMotion.Blend(Brand.ToggleThumb,
+                Brand.IsLight ? Brand.ToggleThumb : Brand.Background, checkMotion.Value)))
+                g.FillEllipse(brush, Width - 40 + 18 * (float)checkMotion.Value, trackTop + 3, 18, 18);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { checkMotion.Dispose(); hoverMotion.Dispose(); }
+            base.Dispose(disposing);
         }
 
         protected override AccessibleObject CreateAccessibilityInstance() { return new ToggleAccessibleObject(this); }
@@ -798,7 +902,8 @@ namespace DesktopHover
     internal sealed class HoverSlider : Control
     {
         private int value;
-        private bool dragging;
+        private bool dragging, hovering;
+        private readonly UiTween valueMotion, hoverMotion;
         public int Minimum { get; set; }
         public int Maximum { get; set; }
         public int Step { get; set; }
@@ -811,7 +916,9 @@ namespace DesktopHover
                 int next = Math.Max(Minimum, Math.Min(Maximum, value));
                 if (this.value == next) return;
                 this.value = next;
-                Invalidate();
+                // The saved value changes immediately; only the painted thumb eases into place.
+                if (!IsHandleCreated || !Visible || dragging) valueMotion.Snap(next);
+                else valueMotion.AnimateTo(next, 150);
                 AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
                 if (ValueChanged != null) ValueChanged(this, EventArgs.Empty);
             }
@@ -819,10 +926,13 @@ namespace DesktopHover
 
         public HoverSlider()
         {
+            valueMotion = new UiTween(delegate(double next) { Invalidate(); });
+            hoverMotion = new UiTween(delegate(double next) { Invalidate(); });
             Minimum = 320;
             Maximum = 1600;
             Step = 40;
             value = 720;
+            valueMotion.Snap(value);
             TabStop = true;
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.Slider;
@@ -867,26 +977,56 @@ namespace DesktopHover
             if (e.Button != MouseButtons.Left) return;
             Focus();
             dragging = true;
+            UpdateHover();
             Capture = true;
             SetFromX(e.X);
         }
         protected override void OnMouseMove(MouseEventArgs e) { base.OnMouseMove(e); if (dragging) SetFromX(e.X); }
-        protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); dragging = false; Capture = false; }
-        protected override void OnMouseCaptureChanged(EventArgs e) { base.OnMouseCaptureChanged(e); if (!Capture) dragging = false; }
-        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
-        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); dragging = false; Capture = false; UpdateHover(); }
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            if (!Capture) { dragging = false; UpdateHover(); }
+        }
+        protected override void OnMouseEnter(EventArgs e) { hovering = true; UpdateHover(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hovering = false; UpdateHover(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { UpdateHover(); Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { UpdateHover(); Invalidate(); base.OnLostFocus(e); }
+        private void UpdateHover()
+        {
+            double target = hovering || dragging || Focused ? 1 : 0;
+            if (!IsHandleCreated || !Visible) hoverMotion.Snap(target);
+            else hoverMotion.AnimateTo(target, 150);
+        }
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            dragging = hovering = false;
+            hoverMotion.Snap(0);
+            valueMotion.Snap(value);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            float x = 10 + (Width - 20) * (value - Minimum) / (float)Math.Max(1, Maximum - Minimum);
+            double shownValue = Math.Max(Minimum, Math.Min(Maximum, valueMotion.Value));
+            float x = 10 + (Width - 20) * (float)(shownValue - Minimum) / Math.Max(1, Maximum - Minimum);
             SettingsWindow.FillRound(g, new RectangleF(10, 12, Width - 20, 5), 2.5f, Brand.Border);
             if (x > 10) SettingsWindow.FillRound(g, new RectangleF(10, 12, x - 10, 5), 2.5f, Brand.Accent);
+            float radius = 7 + (float)hoverMotion.Value * 1.5f;
+            using (var halo = new SolidBrush(UiMotion.Blend(Brand.Background, Brand.SelectedSurface, hoverMotion.Value)))
+                g.FillEllipse(halo, x - 11, 3.5f, 22, 22);
             if (Focused)
                 using (var pen = new Pen(Brand.Accent)) g.DrawEllipse(pen, x - 11, 3.5f, 22, 22);
-            using (var brush = new SolidBrush(Brand.Accent)) g.FillEllipse(brush, x - 7, 7.5f, 14, 14);
+            using (var brush = new SolidBrush(Brand.Accent)) g.FillEllipse(brush, x - radius, 14.5f - radius, radius * 2, radius * 2);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { valueMotion.Dispose(); hoverMotion.Dispose(); }
+            base.Dispose(disposing);
         }
 
         protected override AccessibleObject CreateAccessibilityInstance() { return new SliderAccessibleObject(this); }

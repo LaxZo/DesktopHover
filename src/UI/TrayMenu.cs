@@ -11,7 +11,7 @@ namespace DesktopHover
         private readonly Func<bool> readPaused;
         private readonly Action<AppSettings> applySettings;
         private readonly Font menuFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
-        private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, upscale, startup, quit;
+        private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, upscale, startup, animations, quit;
         private readonly ToolStripMenuItem[] sizes = new ToolStripMenuItem[4];
         private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[5];
         private readonly ToolStripMenuItem[] volumes = new ToolStripMenuItem[5];
@@ -75,6 +75,7 @@ namespace DesktopHover
             });
             upscale = AddItem(Items, "upscale", delegate { Change(delegate(AppSettings value) { value.Upscale = !value.Upscale; }); });
             startup = AddItem(Items, "startup", delegate { Change(delegate(AppSettings value) { value.StartWithWindows = !value.StartWithWindows; }); });
+            animations = AddItem(Items, "animations", delegate { Change(delegate(AppSettings value) { value.AnimationsEnabled = !value.AnimationsEnabled; }); });
             Items.Add(new ToolStripSeparator());
             quit = AddItem(Items, "quit", delegate { exit(); });
             Opening += delegate { RefreshState(); };
@@ -99,6 +100,7 @@ namespace DesktopHover
             menu.DropShadowEnabled = false;
             menu.Padding = new Padding(5);
             menu.Renderer = new HoverMenuRenderer();
+            MenuMotion.Attach(menu);
             menu.Opened += delegate
             {
                 using (GraphicsPath path = Brand.RoundRect(new RectangleF(0, 0, menu.Width, menu.Height), 9))
@@ -126,6 +128,7 @@ namespace DesktopHover
         internal void RefreshState()
         {
             AppSettings current = readSettings();
+            UiMotion.Enabled = current.AnimationsEnabled;
             Brand.SetTheme(current.Theme);
             RefreshColors(this);
             string language = current.Language;
@@ -144,6 +147,8 @@ namespace DesktopHover
             upscale.Checked = current.Upscale;
             startup.Text = L10n.Text(language, "startup");
             startup.Checked = current.StartWithWindows;
+            animations.Text = L10n.Text(language, "animations");
+            animations.Checked = current.AnimationsEnabled;
             quit.Text = L10n.Text(language, "exit");
             for (int i = 0; i < sizes.Length; i++)
             {
