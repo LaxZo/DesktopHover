@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -18,15 +18,23 @@ namespace DesktopHover
 
         internal static Bitmap Render(string path, System.Drawing.Size maxSize)
         {
+            int count; return RenderPage(path, maxSize, 0, out count);
+        }
+
+        internal static Bitmap RenderPage(string path, System.Drawing.Size maxSize, int pageIndex, out int pageCount)
+        {
+            pageCount = 0;
             int maxWidth = Math.Max(1, Math.Min(1600, maxSize.Width));
             int maxHeight = Math.Max(1, Math.Min(1200, maxSize.Height));
             StorageFile file = Wait(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
             PdfDocument document = Wait(PdfDocument.LoadFromFileAsync(file));
+            pageCount = checked((int)document.PageCount);
+            if (pageIndex < 0 || pageIndex >= pageCount) throw new InvalidDataException("Invalid PDF page index.");
             if (document.PageCount == 0) throw new InvalidDataException("The PDF has no pages.");
 
             // PdfDocument has no Close/Dispose API; the short-lived worker releases
             // its remaining native state and file handles when it exits.
-            using (PdfPage page = document.GetPage(0))
+            using (PdfPage page = document.GetPage((uint)pageIndex))
             using (var output = new InMemoryRandomAccessStream())
             {
                 double width = page.Size.Width, height = page.Size.Height;

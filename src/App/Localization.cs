@@ -142,7 +142,7 @@ namespace DesktopHover
         internal static string Text(string language, string key)
         {
             string[] translations;
-            if (!Strings.TryGetValue(key, out translations)) return key;
+            if (!Strings.TryGetValue(key, out translations)) return FeatureText.Text(language, key);
             int index = LanguageIndex(language);
             return index < translations.Length && !String.IsNullOrEmpty(translations[index])
                 ? translations[index] : translations[0];

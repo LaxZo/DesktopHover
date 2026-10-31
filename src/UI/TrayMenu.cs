@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -9,6 +9,9 @@ namespace DesktopHover
     {
         private readonly Func<AppSettings> readSettings;
         private readonly Func<bool> readPaused;
+        private readonly Func<bool> canPin;
+        private readonly ToolStripMenuItem pin, autoPlay, loopVideo, fileTypes;
+        private readonly ToolStripMenuItem[] fileTypeItems = new ToolStripMenuItem[5];
         private readonly Action<AppSettings> applySettings;
         private readonly Font menuFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, upscale, startup, animations, quit;
@@ -23,14 +26,15 @@ namespace DesktopHover
         private static readonly string[] DelayKeys = { "instant", "fast", "natural", "slow", "one_second" };
 
         internal TrayMenu(Func<AppSettings> readSettings, Func<bool> readPaused,
-            Action<AppSettings> applySettings, Action<bool> setPaused, Action showSettings, Action exit)
+            Action<AppSettings> applySettings, Action<bool> setPaused, Action showSettings, Action exit, Action pinPreview = null, Func<bool> canPin = null)
         {
             this.readSettings = readSettings;
-            this.readPaused = readPaused;
+            this.readPaused = readPaused; this.canPin = canPin;
             this.applySettings = applySettings;
             Font = menuFont;
             Style(this);
             open = AddItem(Items, "settings", delegate { showSettings(); });
+            pin = AddItem(Items, "pin", pinPreview);
             Items.Add(new ToolStripSeparator());
             enabled = AddItem(Items, "preview", delegate { setPaused(!readPaused()); RefreshState(); });
             size = AddItem(Items, "image-size", null);
@@ -63,6 +67,29 @@ namespace DesktopHover
                     Change(delegate(AppSettings value) { value.VolumePercent = Volumes[index]; });
                 });
             }
+            autoPlay = AddItem(Items, "autoplay", delegate { Change(value => value.AutoPlayMedia = !value.AutoPlayMedia); });
+            loopVideo = AddItem(Items, "loop_video", delegate { Change(value => value.LoopVideo = !value.LoopVideo); });
+            fileTypes = AddItem(Items, "file-types", null);
+            Style((ToolStripDropDownMenu)fileTypes.DropDown);
+            string[] typeKeys = { "type_images", "type_documents", "type_text", "type_audio", "type_video" };
+            for (int i = 0; i < fileTypeItems.Length; i++)
+            {
+                int index = i;
+                fileTypeItems[i] = AddItem(fileTypes.DropDownItems, typeKeys[i], delegate
+                {
+                    Change(value =>
+                    {
+                        switch(index)
+                        {
+                            case 0: value.PreviewImages = !value.PreviewImages; break;
+                            case 1: value.PreviewDocuments = !value.PreviewDocuments; break;
+                            case 2: value.PreviewText = !value.PreviewText; break;
+                            case 3: value.PreviewAudio = !value.PreviewAudio; break;
+                            case 4: value.PreviewVideo = !value.PreviewVideo; break;
+                        }
+                    });
+                });
+            }
             theme = AddItem(Items, "theme", null);
             Style((ToolStripDropDownMenu)theme.DropDown);
             darkTheme = AddItem(theme.DropDownItems, "theme-dark", delegate
@@ -80,6 +107,15 @@ namespace DesktopHover
             quit = AddItem(Items, "quit", delegate { exit(); });
             Opening += delegate { RefreshState(); };
             RefreshState();
+        }
+
+        internal void SetHotkeyState(bool toggleRegistered, bool pinRegistered)
+        {
+            enabled.ShortcutKeyDisplayString = toggleRegistered ? "Ctrl+Alt+H" : "";
+            pin.ShortcutKeyDisplayString = pinRegistered ? "Ctrl+Alt+P" : "";
+            if (!toggleRegistered) enabled.ToolTipText = L10n.Text(readSettings().Language, "hotkey_unavailable");
+            if (!pinRegistered) pin.ToolTipText = L10n.Text(readSettings().Language, "hotkey_unavailable");
+            ShowItemToolTips = true;
         }
 
         private static ToolStripMenuItem AddItem(ToolStripItemCollection items, string name, Action action)
@@ -133,6 +169,13 @@ namespace DesktopHover
             RefreshColors(this);
             string language = current.Language;
             open.Text = L10n.Text(language, "settings");
+            pin.Text = L10n.Text(language, "pin"); pin.Enabled = canPin != null && canPin();
+            autoPlay.Text = L10n.Text(language, "autoplay"); autoPlay.Checked = current.AutoPlayMedia;
+            loopVideo.Text = L10n.Text(language, "loop_video"); loopVideo.Checked = current.LoopVideo;
+            fileTypes.Text = L10n.Text(language, "file_types");
+            bool[] allowed = { current.PreviewImages, current.PreviewDocuments, current.PreviewText, current.PreviewAudio, current.PreviewVideo };
+            for (int i = 0; i < fileTypeItems.Length; i++)
+            { fileTypeItems[i].Text = L10n.Text(language, fileTypeItems[i].Name); fileTypeItems[i].Checked = allowed[i]; }
             enabled.Text = L10n.Text(language, readPaused() ? "preview_paused" : "preview_on");
             enabled.Checked = !readPaused();
             size.Text = L10n.Text(language, "image_size");

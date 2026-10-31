@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -34,6 +34,7 @@ namespace DesktopHover
         internal event EventHandler Failed;
 
         internal bool IsOpen { get; private set; }
+        internal bool HasEnded { get; private set; }
         internal bool HasVideo { get; private set; }
         internal int NaturalWidth { get; private set; }
         internal int NaturalHeight { get; private set; }
@@ -75,10 +76,23 @@ namespace DesktopHover
             catch { Fail(); }
         }
 
+        internal void SetVolume(int percent)
+        {
+            if (disposed) return;
+            player.Volume = Math.Max(0, Math.Min(100, percent)) / 100.0;
+            player.IsMuted = percent == 0;
+        }
+
+        internal void Pause() { if (!disposed && IsOpen) player.Pause(); }
+
         internal void Play()
         {
             if (disposed || failed || !IsOpen) return;
-            try { player.Play(); }
+            try
+            {
+                if (HasEnded) { player.Position = TimeSpan.Zero; HasEnded = false; }
+                player.Play();
+            }
             catch { Fail(); }
         }
 
@@ -183,6 +197,7 @@ namespace DesktopHover
         private void OnEnded(object sender, EventArgs args)
         {
             if (disposed || failed) return;
+            HasEnded = true;
             EventHandler handler = Ended;
             if (handler != null) handler(this, EventArgs.Empty);
         }

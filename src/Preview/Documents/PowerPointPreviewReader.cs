@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.IO.Compression;
@@ -18,14 +19,24 @@ namespace DesktopHover
         private const long MaximumSlideBytes = 16L * 1024L * 1024L;
         private const long MaximumSlidesBytes = 64L * 1024L * 1024L;
         private static readonly object CacheGate = new object();
-        private static string cachedPath;
-        private static long cachedLength, cachedWriteTime;
-        private static Size cachedSize;
-        private static byte[][] cachedSlides;
-        private static Task<byte[][]> pendingExport;
-        private static string pendingPath;
-        private static long pendingLength, pendingWriteTime;
-        private static Size pendingSize;
+        private static readonly LinkedList<SlideCache> cache = new LinkedList<SlideCache>();
+        private static long cacheBytes;
+        private const long MaximumCacheBytes = 128L * 1024 * 1024;
+        internal static string NativeFailureReason = "ppt_export_failed";
+        private static ExportWork pendingExport;
+        private sealed class SlideCache
+        {
+            internal string Key;
+            internal byte[][] Slides;
+            internal long Bytes;
+        }
+        private sealed class ExportWork
+        {
+            internal string Key, Reason;
+            internal Task<byte[][]> Task;
+            internal volatile byte[][] Slides;
+            internal volatile int Total;
+        }
 
         internal static bool IsSupported(string path)
         {
@@ -37,14 +48,25 @@ namespace DesktopHover
             }
         }
 
-        internal static DocumentPreviewResult Load(string path, Size maximum, CancellationToken cancellation)
+        internal static DocumentPreviewResult Load(string path, Size maximum, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null)
         {
             cancellation.ThrowIfCancellationRequested();
             var file = new FileInfo(path);
             long length = file.Length, writeTime = file.LastWriteTimeUtc.Ticks;
+            string failureReason = null;
             if (SupportsNative(path))
             {
-                byte[][] slides = LoadSlides(path, length, writeTime, maximum, cancellation);
+                if (progress != null)
+                {
+                    DocumentPreviewResult thumbnail = OfficePreviewReader.TryLoad(path, maximum, cancellation);
+                    if (thumbnail != null) progress(thumbnail);
+                }
+                byte[][] slides = LoadSlides(path, length, writeTime, maximum, cancellation,
+                    delegate(byte[][] available, int total)
+                    {
+                        if (progress != null) progress(new DocumentPreviewResult(LoadSlide(available[0], maximum), "document_powerpoint")
+                            { Slides = available, SlideCount = total });
+                    }, out failureReason);
                 if (slides != null && slides.Length > 0)
                 {
                     cancellation.ThrowIfCancellationRequested();
@@ -55,6 +77,7 @@ namespace DesktopHover
             }
             cancellation.ThrowIfCancellationRequested();
             DocumentPreviewResult saved = OfficePreviewReader.TryLoad(path, maximum, cancellation);
+            if (saved != null) saved.DetailKey = failureReason;
             if (saved != null && Fills(saved.Image, maximum)) return saved;
             try
             {
@@ -66,55 +89,69 @@ namespace DesktopHover
                     if (saved == null || (long)shell.Width * shell.Height > (long)saved.Image.Width * saved.Image.Height)
                     {
                         if (saved != null) saved.Dispose();
-                        return new DocumentPreviewResult(shell, "document_shell");
+                        return new DocumentPreviewResult(shell, "document_shell") { DetailKey = failureReason };
                     }
                     shell.Dispose();
                 }
                 cancellation.ThrowIfCancellationRequested();
                 if (saved != null) return saved;
-                return new DocumentPreviewResult(null, "document_unavailable");
+                return new DocumentPreviewResult(null, "document_unavailable") { DetailKey = failureReason };
             }
             catch { if (saved != null) saved.Dispose(); throw; }
         }
 
-        private static byte[][] LoadSlides(string path, long length, long writeTime, Size maximum, CancellationToken cancellation)
+        private static byte[][] LoadSlides(string path, long length, long writeTime, Size maximum,
+            CancellationToken cancellation, Action<byte[][], int> progress, out string reason)
         {
-            // Moving away cancels only this waiter. Keep one bounded export alive so
-            // hovering the same file again can reuse it instead of falling back while
-            // its PowerPoint helper still owns the native export mutex.
+            string key = path + "|" + length + "|" + writeTime + "|" + maximum.Width + "x" + maximum.Height;
+            reason = null;
             while (true)
             {
                 cancellation.ThrowIfCancellationRequested();
-                Task<byte[][]> export;
-                bool requestedFile;
+                ExportWork work;
                 lock (CacheGate)
                 {
-                    if (cachedSlides != null && String.Equals(path, cachedPath, StringComparison.OrdinalIgnoreCase) &&
-                        cachedLength == length && cachedWriteTime == writeTime && cachedSize == maximum) return cachedSlides;
-                    if (pendingExport == null || pendingExport.IsCompleted)
-                    {
-                        pendingPath = path; pendingLength = length; pendingWriteTime = writeTime; pendingSize = maximum;
-                        pendingExport = Task.Factory.StartNew(delegate
+                    for (var node = cache.First; node != null; node = node.Next)
+                        if (String.Equals(node.Value.Key, key, StringComparison.OrdinalIgnoreCase))
                         {
-                            byte[][] result = DocumentPreviewWorker.TryLoadPowerPointSlides(path, maximum, CancellationToken.None);
-                            if (result != null && result.Length > 0)
+                            byte[][] hit = node.Value.Slides; cache.Remove(node); cache.AddFirst(node); return hit;
+                        }
+                    if (pendingExport == null || pendingExport.Task.IsCompleted)
+                    {
+                        var created = new ExportWork { Key = key };
+                        created.Task = Task.Factory.StartNew(delegate
+                        {
+                            byte[][] result = DocumentPreviewWorker.TryLoadPowerPointSlides(path, maximum, CancellationToken.None,
+                                delegate(byte[][] slides, int total) { created.Total = total; created.Slides = slides; },
+                                delegate(string failure) { created.Reason = failure; });
+                            if (result != null)
                             {
+                                long bytes = 0; foreach (byte[] slide in result) bytes += slide.Length;
                                 lock (CacheGate)
                                 {
-                                    cachedSlides = result;
-                                    cachedPath = path; cachedLength = length; cachedWriteTime = writeTime; cachedSize = maximum;
+                                    while (cache.Count >= 4 || (cache.Count > 0 && cacheBytes + bytes > MaximumCacheBytes))
+                                    { cacheBytes -= cache.Last.Value.Bytes; cache.RemoveLast(); }
+                                    cache.AddFirst(new SlideCache { Key = key, Slides = result, Bytes = bytes }); cacheBytes += bytes;
                                 }
                             }
                             return result;
                         }, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+                        pendingExport = created;
                     }
-                    export = pendingExport;
-                    requestedFile = String.Equals(path, pendingPath, StringComparison.OrdinalIgnoreCase) &&
-                        pendingLength == length && pendingWriteTime == writeTime && pendingSize == maximum;
+                    work = pendingExport;
                 }
-                while (!export.Wait(40, cancellation)) { }
+                byte[][] last = null;
+                bool requested = String.Equals(work.Key, key, StringComparison.OrdinalIgnoreCase);
+                while (true)
+                {
+                    bool complete = work.Task.Wait(40, cancellation);
+                    byte[][] available = work.Slides;
+                    if (requested && available != null && available != last)
+                    { last = available; progress(available, work.Total); }
+                    if (complete) break;
+                }
                 cancellation.ThrowIfCancellationRequested();
-                if (requestedFile) return export.GetAwaiter().GetResult();
+                if (requested) { reason = work.Reason; return work.Task.GetAwaiter().GetResult(); }
             }
         }
 
@@ -149,9 +186,9 @@ namespace DesktopHover
                 {
                     try { acquired = gate.WaitOne(0); }
                     catch (AbandonedMutexException) { acquired = true; }
-                    if (!acquired || PowerPointIsRunning()) return false;
+                    if (!acquired || PowerPointIsRunning()) { NativeFailureReason = "ppt_busy"; return false; }
                     Type applicationType = Type.GetTypeFromProgID("PowerPoint.Application", false);
-                    if (applicationType == null) return false;
+                    if (applicationType == null) { NativeFailureReason = "ppt_missing"; return false; }
                     string copy = SourceCopy(outputDirectory, path);
                     try
                     {
@@ -166,7 +203,8 @@ namespace DesktopHover
                                 target.Write(buffer, 0, count);
                             }
                         }
-                        if (!PowerPointPreviewCopy.Prepare(copy) || !IsStaticPackage(copy) || PowerPointIsRunning()) return false;
+                        if (!PowerPointPreviewCopy.Prepare(copy) || !IsStaticPackage(copy)) { NativeFailureReason = "ppt_unsupported"; return false; }
+                        if (PowerPointIsRunning()) { NativeFailureReason = "ppt_busy"; return false; }
                         Directory.CreateDirectory(outputDirectory);
                         return ExportSlides(applicationType, copy, outputDirectory, maximum);
                     }
@@ -209,19 +247,22 @@ namespace DesktopHover
                 int pixelsHigh = Math.Max(1, (int)Math.Round(height * fit));
                 slides = ((dynamic)presentation).Slides;
                 int slideCount = (int)((dynamic)slides).Count;
-                if (slideCount < 1 || slideCount > MaximumSlides) return false;
+                if (slideCount < 1 || slideCount > MaximumSlides) { NativeFailureReason = "ppt_slide_limit"; return false; }
+                File.WriteAllText(Path.Combine(outputDirectory, "count.tmp"), slideCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                File.Move(Path.Combine(outputDirectory, "count.tmp"), Path.Combine(outputDirectory, "slides.count"));
                 long totalBytes = 0;
                 for (int i = 1; i <= slideCount; i++)
                 {
                     slide = ((dynamic)slides)[i];
                     string rendered = Path.Combine(outputDirectory,
                         "slide-" + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".png");
-                    ((dynamic)slide).Export(rendered, "PNG", pixelsWide, pixelsHigh);
+                    ((dynamic)slide).Export(rendered + ".writing.png", "PNG", pixelsWide, pixelsHigh);
                     Release(slide); slide = null;
-                    var info = new FileInfo(rendered);
+                    var info = new FileInfo(rendered + ".writing.png");
                     if (!info.Exists || info.Length < 8 || info.Length > MaximumSlideBytes) return false;
                     totalBytes += info.Length;
                     if (totalBytes > MaximumSlidesBytes) return false;
+                    File.Move(rendered + ".writing.png", rendered);
                 }
                 return true;
             }
@@ -284,6 +325,7 @@ namespace DesktopHover
             try { File.Delete(SourceCopy(output, path)); } catch { }
             try { File.Delete(SourceCopy(output, path) + ".sanitized"); } catch { }
             try { File.Delete(output + ".slide.png"); } catch { }
+            try { File.Delete(output + ".reason"); } catch { }
             try { if (Directory.Exists(output)) Directory.Delete(output, true); } catch { }
         }
 

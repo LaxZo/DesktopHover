@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Threading;
@@ -11,6 +11,13 @@ namespace DesktopHover
     {
         internal static string StatusFile;
         internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_OpenSettings");
+        private static void WaitForTestImage(PreviewWindow window)
+        {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (window.IsImageLoading && elapsed.ElapsedMilliseconds < 30000)
+            { Application.DoEvents(); Thread.Sleep(10); }
+            if (!window.HasImage) throw new InvalidOperationException("Image load failed or timed out.");
+        }
         [STAThread] static void Main(string[] args)
         {
             if (InfoTipRestoreGuard.TryRunWorker(args)) return;
@@ -28,6 +35,7 @@ namespace DesktopHover
                 {
                     if(!f.ShowImage(args[1],new Point(300,300),new Rectangle(280,280,80,80)))
                         throw new InvalidOperationException("Image render failed.");
+                    WaitForTestImage(f);
                     using(var b=new Bitmap(f.Width,f.Height))
                     { f.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size)); b.Save(args[2],System.Drawing.Imaging.ImageFormat.Png); }
                     // A preview must not retain a file handle that blocks normal file operations.
@@ -54,6 +62,7 @@ namespace DesktopHover
                 using(var f=new PreviewWindow())
                 {
                     bool ok=f.ShowImage(args[1],new Point(300,300),new Rectangle(280,280,80,80));
+                    if(ok) { WaitForTestImage(f); ok=f.HasImage; }
                     File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"preview-test.txt"),ok?"PASS":"FAIL");
                     var t=new System.Windows.Forms.Timer {Interval=5000};
                     t.Tick+=delegate { t.Stop(); f.Close(); Application.ExitThread(); };
@@ -83,6 +92,9 @@ namespace DesktopHover
         private readonly ShellInfoTipSuppressor infoTips;
         private AppSettings settings;
         private SettingsWindow settingsWindow;
+        private PreviewWindow pinnedWindow;
+        private string lastPreviewPath;
+        private readonly AppHotkeys hotkeys;
         private readonly System.Windows.Forms.Timer timer;
         private readonly AutoResetEvent request=new AutoResetEvent(false);
         private readonly object gate=new object();
@@ -106,9 +118,11 @@ namespace DesktopHover
             preview.Configure(settings);
             trayIcon=Brand.CreateIcon();
             tray=new NotifyIcon {Icon=trayIcon,Visible=true};
+            hotkeys=new AppHotkeys(delegate { SetPaused(!paused); }, PinPreview);
             trayMenu=new TrayMenu(
                 delegate { settings.StartWithWindows=Startup.IsEnabled(); return settings.Clone(); },
-                delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); });
+                delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); }, PinPreview, delegate { return !String.IsNullOrEmpty(lastPreviewPath); });
+            trayMenu.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
             trayMenu.Opening+=delegate { Reset(); };
             trayMenu.Closed+=delegate { if(!stopping) Reset(); };
             tray.ContextMenuStrip=trayMenu;
@@ -139,6 +153,22 @@ namespace DesktopHover
             settingsWindow.UpdatePaused(paused);
             settingsWindow.ShowCentered(Cursor.Position);
         }
+        private void PinPreview()
+        {
+            string path = preview.CurrentPath ?? lastPreviewPath;
+            if (String.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            Reset();
+            if (pinnedWindow == null || pinnedWindow.IsDisposed)
+            {
+                pinnedWindow = new PreviewWindow(true);
+                pinnedWindow.FormClosed += delegate { pinnedWindow = null; };
+            }
+            pinnedWindow.Configure(settings);
+            pinnedWindow.ShowFile(path, Cursor.Position, Rectangle.Empty);
+            if (pinnedWindow.WindowState == FormWindowState.Minimized) pinnedWindow.WindowState = FormWindowState.Normal;
+            pinnedWindow.Activate();
+        }
+
         private void SetPaused(bool value)
         {
             paused=value;
@@ -149,7 +179,7 @@ namespace DesktopHover
         private void ApplySettings(AppSettings updated)
         {
             updated.Validate();
-            bool previousStartup=Startup.IsEnabled();
+            bool previousStartup=settings.StartWithWindows;
             try
             {
                 if(previousStartup!=updated.StartWithWindows) Startup.SetEnabled(updated.StartWithWindows);
@@ -163,8 +193,9 @@ namespace DesktopHover
             settings=updated.Clone();
             delay=settings.DelayMs;
             preview.Configure(settings);
+            if(pinnedWindow!=null && !pinnedWindow.IsDisposed) pinnedWindow.Configure(settings);
             UpdateTrayText();
-            Reset();
+            if(preview.CurrentPath==null) Reset();
             if(settingsWindow!=null && !settingsWindow.IsDisposed) settingsWindow.UpdateSettings(settings);
         }
         private void UpdateTrayText()
@@ -210,12 +241,12 @@ namespace DesktopHover
                     resultReady=false;
                     if(resultGeneration==generation)
                     {
-                        if(result!=null && result.Bounds.Contains(now) && Native.IsShellRoot(result.Root))
+                        if(result!=null && settings.Allows(MediaFiles.Kind(result.Path)) && result.Bounds.Contains(now) && Native.IsShellRoot(result.Root))
                         {
                             if(root!=result.Root || surface!=result.Surface) { preview.ClearPreview(); shown=null; return; }
                             if(shown==null || !string.Equals(shown.Path,result.Path,StringComparison.OrdinalIgnoreCase))
                             {
-                                    if(preview.ShowFile(result.Path,now,result.Bounds)) shown=result;
+                                    if(preview.ShowFile(result.Path,now,result.Bounds)) { shown=result; lastPreviewPath=result.Path; }
                                 else shown=null;
                                 if(Program.StatusFile!=null)
                                     try { File.WriteAllText(Program.StatusFile,shown==null?"RENDER_FAILED":"SHOWN "+shown.Path+"\r\n"+preview.Bounds); } catch { }
@@ -255,6 +286,7 @@ namespace DesktopHover
         {
             stopping=true; infoTips.Dispose(); request.Set(); timer.Stop(); tray.Visible=false; preview.Close();
             if(settingsWindow!=null) settingsWindow.Close();
+            if(pinnedWindow!=null) pinnedWindow.Close();
             base.ExitThreadCore();
         }
         protected override void Dispose(bool disposing)
@@ -263,6 +295,8 @@ namespace DesktopHover
             {
                 stopping=true; infoTips.Dispose(); request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
                 if(settingsWindow!=null) settingsWindow.Dispose();
+                if(pinnedWindow!=null) pinnedWindow.Dispose();
+                hotkeys.Dispose();
             }
             base.Dispose(disposing);
         }

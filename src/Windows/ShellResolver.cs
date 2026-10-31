@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -60,6 +60,7 @@ namespace DesktopHover
     internal sealed class ShellResolver : IDisposable
     {
         private object shell;
+        private readonly FolderLookupCache folderCache = new FolderLookupCache();
         internal string Diagnostic="";
         internal static bool Supported(string path)
         {
@@ -151,37 +152,41 @@ namespace DesktopHover
             finally { Release(windows); }
             return null;
         }
-        private static string FindUnique(object folder,string name)
+        private string FindUnique(object folder, string name)
         {
-            if(folder==null) return null;
-            object items=null;
-            string match=null;
-            try
+            if (folder == null) return null;
+            object self = null;
+            string directory = null;
+            try { self = ((dynamic)folder).Self; directory = (string)((dynamic)self).Path; }
+            catch (COMException) { }
+            finally { Release(self); }
+            return folderCache.Resolve(directory, name, delegate
             {
-                items=((dynamic)folder).Items();
-                int count=((dynamic)items).Count;
-                if(count>20000) return null;
-                for(int i=0;i<count;i++)
+                var index = new FolderNameIndex();
+                object items = null;
+                try
                 {
-                    object item=null;
-                    try
+                    items = ((dynamic)folder).Items();
+                    int count = ((dynamic)items).Count;
+                    for (int i = 0; i < count; i++)
                     {
-                        item=((dynamic)items).Item(i);
-                        string display=((dynamic)item).Name;
-                        string path=((dynamic)item).Path;
-                        if(!string.Equals(display,name,StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(System.IO.Path.GetFileName(path),name,StringComparison.OrdinalIgnoreCase)) continue;
-                        if(!(bool)((dynamic)item).IsFileSystem || (bool)((dynamic)item).IsFolder || !Supported(path)) return null;
-                        if(match!=null && !string.Equals(match,path,StringComparison.OrdinalIgnoreCase)) return null;
-                        match=path;
+                        object item = null;
+                        try
+                        {
+                            item = ((dynamic)items).Item(i);
+                            string display = ((dynamic)item).Name, path = ((dynamic)item).Path;
+                            bool valid = (bool)((dynamic)item).IsFileSystem && !(bool)((dynamic)item).IsFolder && Supported(path);
+                            index.Add(display, path, valid);
+                            index.Add(System.IO.Path.GetFileName(path), path, valid);
+                        }
+                        finally { Release(item); }
                     }
-                    finally { Release(item); }
                 }
-            }
-            finally { Release(items); }
-            return match;
+                finally { Release(items); }
+                return index;
+            });
         }
         private static void Release(object o) { if(o!=null && Marshal.IsComObject(o)) Marshal.ReleaseComObject(o); }
-        public void Dispose() { Release(shell); shell=null; }
+        public void Dispose() { folderCache.Dispose(); Release(shell); shell=null; }
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Threading;
@@ -11,6 +11,9 @@ namespace DesktopHover
         internal string NoteKey;
         internal string MediaPath;
         internal byte[][] Slides;
+        internal int SlideCount;
+        internal int PageCount;
+        internal string DetailKey;
 
         internal DocumentPreviewResult(Bitmap image, string noteKey)
         {
@@ -54,9 +57,9 @@ namespace DesktopHover
             }
         }
 
-        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation)
+        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null)
         {
-            return LoadCore(path, maxSize, cancellation, true);
+            return LoadCore(path, maxSize, cancellation, true, progress);
         }
 
         internal static DocumentPreviewResult LoadStill(string path, Size maxSize, CancellationToken cancellation)
@@ -64,7 +67,7 @@ namespace DesktopHover
             return LoadCore(path, maxSize, cancellation, false);
         }
 
-        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo)
+        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo, Action<DocumentPreviewResult> progress = null)
         {
             string unavailableKey = "document_unavailable";
             try
@@ -96,17 +99,18 @@ namespace DesktopHover
                     return new DocumentPreviewResult(null, "document_limit");
                 if (pdfFile)
                 {
-                    Bitmap pdf = DocumentPreviewWorker.TryLoad(path, maxSize, cancellation, true);
+                    int pages;
+                    Bitmap pdf = DocumentPreviewWorker.TryLoadPdfPage(path, maxSize, cancellation, 0, out pages);
                     if (cancellation.IsCancellationRequested)
                     {
                         if (pdf != null) pdf.Dispose();
                         return null;
                     }
-                    return new DocumentPreviewResult(pdf, pdf == null ? "document_pdf_unavailable" : "document_pdf");
+                    return new DocumentPreviewResult(pdf, pdf == null ? "document_pdf_unavailable" : "document_pdf") { PageCount = pages };
                 }
                 if (PowerPointPreviewReader.IsSupported(path))
                 {
-                    DocumentPreviewResult powerpoint = PowerPointPreviewReader.Load(path, maxSize, cancellation);
+                    DocumentPreviewResult powerpoint = PowerPointPreviewReader.Load(path, maxSize, cancellation, progress);
                     if (cancellation.IsCancellationRequested) { if (powerpoint != null) powerpoint.Dispose(); return null; }
                     return powerpoint;
                 }

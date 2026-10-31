@@ -20,7 +20,7 @@
 
 ---
 
-Desktop Hover is a Windows tray app that previews a local file when you rest the pointer over it on the desktop or in File Explorer. See an image, listen to an audio clip, watch a video, or inspect a source file. Move away and the preview closes; media playback stops with it.
+Desktop Hover is a Windows tray app that previews a local file when you rest the pointer over it on the desktop or in File Explorer. See an image, listen to an audio clip, watch a video, or inspect a source file. Move away and the preview closes; media playback stops with it. Press **Ctrl+Alt+P** to keep the last preview open in an interactive window.
 
 <p align="center">
   <img src="docs/assets/image-preview.png" width="720" alt="Desktop Hover showing a sample landscape image with its filename, dimensions and file size">
@@ -31,7 +31,8 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | Feature | What it does |
 | --- | --- |
 | **See images at a glance** | A compact preview with the filename, dimensions and file size. Original proportions are preserved. |
-| **Listen and watch** | Audio plays on hover. Video plays inside the preview with sound. One volume setting controls both. |
+| **Listen and watch** | Audio and video play on hover, with a shared volume setting and an option to disable autoplay. |
+| **Keep a preview open** | Pin the last preview, browse PDF pages or slides, pause playback, zoom and pan images, or scroll text. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
 | **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides, Photoshop composites and PDF-compatible Illustrator artwork. Other Adobe projects use embedded previews, matching image/video preview files or Windows thumbnails. |
 | **Make it your own** | Dark or light appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
@@ -70,7 +71,7 @@ The preview highlights keywords, strings, comments, numbers and other tokens. It
 
 ### One settings window. Two themes.
 
-Change the appearance with the sun/moon button beside the language selector. Settings save automatically and take effect immediately.
+Change the appearance with the sun/moon button beside the language selector. Settings open in a resizable application window with a 1000 × 780 content area at 100% scaling, bounded by your screen. Use the title bar to maximize or minimize it. Wide windows show two columns; narrow windows switch to a scrolling single column. Reopening an existing window preserves its size and maximized state. Switches apply immediately; slider changes are saved after a 300 ms pause or when you close Settings.
 
 Settings open with a short fade and rise, buttons and switches respond smoothly, and tray/language menus fade in. Preview cards have a brief entrance motion. Turn **Animations** off in Settings or the tray menu to disable these effects immediately; this preference is saved. GIFs, videos and automatic slide changes keep playing normally.
 
@@ -122,12 +123,17 @@ While previews are enabled, DesktopHover temporarily deactivates Windows file in
 | --- | --- |
 | Hover over a supported file | Show its preview after the selected delay. |
 | Move off the file | Close the preview and stop playback. |
-| Left-click the tray icon | Open Settings in the center of the pointer's monitor. |
+| Left-click the tray icon | Open Settings, or restore the existing window. New windows open on the pointer's monitor. |
 | Right-click the tray icon | Open quick settings for previews, size, delay, volume, theme and startup. |
-| Click **−** in Settings | Minimize Settings to the Windows taskbar. Click its taskbar button to restore it. |
+| Click the **down-chevron** in Settings | Minimize Settings to the Windows taskbar. Click its taskbar button to restore it. |
+| Click the **up-chevron** or drag a window edge | Maximize/restore Settings or choose its size; controls reflow with the available width. The caption buttons stay visible while scrolling. |
 | Click **×** in Settings | Close the settings window and keep Desktop Hover running in the system tray. |
 | Choose **Quit app** in the tray menu | Quit Desktop Hover completely. |
 | Switch off **Previews enabled** | Pause previews without closing the app. |
+| **Ctrl+Alt+H** | Enable or pause hover previews. |
+| **Ctrl+Alt+P**, or **Pin last preview** in the tray menu | Open the last preview in an independent window that stays open when the pointer moves away. |
+
+In the pinned window, use the toolbar or **Left/Right** to browse PDF pages and slides, **Space** to play/pause, **+ / −** or **Ctrl+wheel** to zoom, and **0** to fit the image. Drag a zoomed image to pan. The mouse wheel scrolls text and browses pages/slides. **Escape** closes the pinned window. If another app already owns a global shortcut, use the tray menu instead.
 
 ### Available settings
 
@@ -137,6 +143,9 @@ While previews are enabled, DesktopHover temporarily deactivates Windows file in
 | Hover delay | 0, 0.25, 0.45, 0.75 or 1.00 seconds. Zero removes the added wait; file detection and loading still take time. |
 | Slide interval | 1–10 seconds for PowerPoint presentations. |
 | Playback volume | 0–100% for audio and video. Set 0% to mute. |
+| Autoplay audio and video | Start playback on hover, or open paused and play from a pinned window. |
+| Loop videos | Restart videos after playback ends. Enabled by default; available in Settings and the tray menu. Pausing or leaving a hover preview stops playback. Audio is not looped. |
+| Enabled file types | Independently enable images/GIFs, documents/design projects, text/code, audio and video. |
 | Appearance | Dark or light, including menus and code previews. |
 | Animations | Enable or disable interface motion in Settings or the tray menu. Enabled by default. |
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
@@ -156,7 +165,7 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Text & data** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML and other configuration files. |
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
-| **PDF** | The first page, rendered using the built-in Windows 10/11 PDF renderer. No Adobe application or Windows thumbnail provider is required. |
+| **PDF** | First page on hover; page navigation in the pinned window. Uses the built-in Windows 10/11 PDF renderer without Adobe or a thumbnail provider. |
 | **Photoshop** | PSD/PSB/PSDT merged 8-bit RGB/grayscale images with raw or RLE compression, fitted to the preview size. Saved thumbnails are a fallback. |
 | **Word, Excel & PowerPoint** | DOCX, XLSX, PPTX and their macro-enabled/template variants; PPSX/PPSM presentations. Word/Excel use a saved preview, then a simplified excerpt or first visible worksheet. PowerPoint preserves styles using a sufficiently large saved image, native PowerPoint export or the best available saved/Windows thumbnail. |
 | **Illustrator** | AI/AIT with PDF-compatible content render their first page at the selected size. EPS/EPSF/EPSI can use a saved TIFF or XMP preview, a matching preview file or a Windows thumbnail. PostScript is not executed. |
@@ -170,9 +179,11 @@ Document previews load in the background and are canceled when you move away. Th
 
 Supported Photoshop composites and native PowerPoint exports fill the configured preview bounds while keeping their proportions, without enabling **Enlarge small images**. PowerPoint themes, fonts, backgrounds and shapes come from an actual slide image; slides are never reconstructed from partial XML content. If only a small saved thumbnail can be read, enlarging it cannot recover missing detail.
 
-Native PowerPoint export handles PPTX/POTX/PPSX packages when PowerPoint is installed and idle. It opens a temporary read-only copy without a visible window. Hidden OLE metadata (including think-cell data) is removed from that copy; visible OLE objects use their saved pictures. The source presentation is unchanged. Macros, ActiveX and linked external resources remain unsupported. If PowerPoint is already open, a saved/Windows preview is used without attaching to that session. Presentation previews fill the selected size even when only a thumbnail is available. The first export can take several seconds; the last successful slide set is cached until the file or requested size changes. Moving away closes the preview immediately while an already-started export can finish for reuse on the next hover.
+Native PowerPoint export handles PPTX/POTX/PPSX packages when PowerPoint is installed and idle. It opens a temporary read-only copy without a visible window. Hidden OLE metadata (including think-cell data) is removed from that copy; visible OLE objects use their saved pictures. The source presentation is unchanged. Macros, ActiveX and linked external resources remain unsupported. If PowerPoint is already open, a saved/Windows preview is used without attaching to that session. Presentation previews fill the selected size even when only a thumbnail is available. A saved thumbnail can appear first, followed by exported slides as they become ready, without waiting for the whole presentation. The footer shows loading progress or why export is unavailable. Moving away closes the hover preview immediately while an already-started export can finish for reuse on the next hover.
 
-PDF rendering runs in a separate helper with a time limit. Leaving the file cancels the preview and stops its helper, keeping the app responsive when a PDF cannot be rendered.
+Images and GIFs also decode in the background. A session cache retains up to eight still images (48 MiB decoded) and four slide sets (128 MiB of PNGs), invalidated when a file's size, modification time or requested preview size changes. Folder name lookups reuse an index, refreshed on folder changes, and support folders with more than 20,000 entries.
+
+PDF rendering runs in a separate helper with a time limit. Leaving the file cancels the hover preview and stops its helper, keeping the app responsive when a PDF cannot be rendered. Pin a PDF to browse its pages.
 
 ### Adobe image and video previews
 
@@ -185,17 +196,17 @@ Preview files support MP4/MOV/WebM/M4V/AVI/WMV video and PNG/JPG/JPEG/WebP/BMP i
 ### Current limits
 
 - Previews work with **locally available files**. Network shares, mapped network drives and online-only cloud files are skipped.
-- Text previews read up to **256 KiB**, **300 lines** and **500 characters per line**. Only the beginning that fits in the preview is visible; shortened previews are marked in the footer.
+- Text previews read up to **256 KiB**, **300 lines** and **500 characters per line**. Hover shows the beginning; the pinned window can scroll through the loaded lines. Shortened previews are marked in the footer.
 - Syntax coloring is a basic lexer, not a full language service. Code is displayed without being executed or edited.
 - Markdown, HTML and SVG are shown as source text, rather than rendered documents.
 - Document/project parsing is limited to **512 MiB** per file; Adobe preview files have the separate limits above. ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
-- PDFs show **the first page only**, fitted to the configured preview size. Page navigation, editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
+- PDFs show the first page on hover and support page navigation when pinned. Editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
 - Word and Excel content previews are excerpts, not exact print layouts. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) is considered. In supported PowerPoint presentations, slides advance at the selected 1–10 second interval; animations and transitions are not played. If a full slide export is unavailable, the saved/Windows preview is used. Native export is limited to 60 seconds, 200 slides and 64 MiB of rendered PNGs.
 - Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Adobe project recognition does not guarantee an embedded image exists. After Effects/Premiere timelines, Animate animations, 3D scenes and other proprietary projects need a saved preview or an exported preview file; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
 - Animated GIFs play automatically while hovering, using their frame delays and repeat settings. Moving within the same file's icon keeps the animation playing; leaving the file stops it. Other animated or multi-frame image formats show a still frame.
 - Images over **100 MiB** or **100 million pixels** are skipped. GIFs also have a limit of **2,000 frames** and **100 million pixels summed across frame rectangles**. Missing or very short GIF delays (0–10 ms) use 100 ms.
-- Previews are passive: they do not take keyboard focus or provide an editor or interactive playback controls.
+- Hover previews do not take keyboard focus. Pinned previews provide navigation and playback controls; neither mode edits the source file.
 
 ## Build from source
 
@@ -217,6 +228,14 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
 Stop a running copy before replacing its executable, or build to a separate location with `-OutputPath`.
+
+Run the regression checks in a Windows desktop session:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
+
+The suite checks background loading and cancellation, GIF playback, settings scaling and saving, folder indexing, PDF navigation, media pause and shortcuts. Fixtures and screenshots go to the ignored `.verification` folder. `-BuildOnly` compiles the test harness without running it.
 
 ### Repository layout
 
@@ -255,7 +274,7 @@ Start with `src/App/Program.cs` for the application lifecycle or `src/Preview/Pr
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Bounded text loading, encoding detection and syntax tokens. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Document routing, limits and bounded ZIP validation. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Local document content and embedded project-image readers. |
-| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | Render the first PDF page with Windows.Data.Pdf. |
+| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | Render PDF pages with Windows.Data.Pdf. |
 | [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Shared PDF/PowerPoint/thumbnail helper process with cancellation, timeout and output limits. |
 | [PowerPointPreviewReader.cs](src/Preview/Documents/PowerPointPreviewReader.cs) | Native slide export, style-preserving fallback and cache. |
 | [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows thumbnail fallback through the shared document worker. |

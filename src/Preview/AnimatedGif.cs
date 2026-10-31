@@ -24,6 +24,12 @@ namespace DesktopHover
         internal long FileBytes { get { return encoded.Length; } }
         internal int FrameDelay { get { return delays[frameIndex]; } }
         internal bool CanAdvance { get { return Image != null && delays.Length > 1 && !ended; } }
+        internal void Restart()
+        {
+            if (Image == null) return;
+            frameIndex = completedRepetitions = 0; ended = false;
+            Image.SelectActiveFrame(FrameDimension.Time, 0);
+        }
 
         private AnimatedGif(MemoryStream stream, int[] frameDelays, int repeatCount)
         {

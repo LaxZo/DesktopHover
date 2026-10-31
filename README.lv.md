@@ -20,7 +20,7 @@
 
 ---
 
-Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāla faila priekšskatījumu, kad uz tā uzved peli darbvirsmā vai File Explorer. Apskati attēlu, noklausies audio, noskaties video vai ieskaties koda failā. Aizvirzot peli, priekšskatījums aizveras un atskaņošana apstājas.
+Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāla faila priekšskatījumu, kad uz tā uzved peli darbvirsmā vai File Explorer. Apskati attēlu, noklausies audio, noskaties video vai ieskaties koda failā. Aizvirzot peli, priekšskatījums aizveras un atskaņošana apstājas. Ar **Ctrl+Alt+P** pēdējo priekšskatījumu var paturēt atvērtu interaktīvā logā.
 
 <p align="center">
   <img src="docs/assets/image-preview.png" width="720" alt="Attēla priekšskatījums ar faila nosaukumu, izmēriem un faila lielumu">
@@ -31,7 +31,8 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | Iespēja | Kā tā darbojas |
 | --- | --- |
 | **Ātri apskatīt attēlus** | Kompakts priekšskatījums ar faila nosaukumu, izmēriem un lielumu. Attēla proporcijas saglabājas. |
-| **Klausīties un skatīties** | Audio sāk skanēt pēc peles uzvešanas. Video atskaņojas priekšskatījuma logā ar skaņu. Abiem ir kopīgs skaļuma iestatījums. |
+| **Klausīties un skatīties** | Audio un video sāk atskaņoties pēc peles uzvešanas. Abiem ir kopīgs skaļuma iestatījums un iespēja izslēgt automātisko atskaņošanu. |
+| **Paturēt priekšskatījumu atvērtu** | Piespraud pēdējo priekšskatījumu, pāršķir PDF lapas vai slaidus, apturi atskaņošanu, palielini un pārvieto attēlu vai ritini tekstu. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
 | **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi, Photoshop apvienotie attēli un ar PDF saderīgs Illustrator saturs. Citiem Adobe projektiem izmanto iegultos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. |
 | **Pielāgot sev** | Tumšā vai gaišā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
@@ -70,7 +71,7 @@ Atslēgvārdi, virknes, komentāri, skaitļi un citi elementi ir iekrāsoti. Kod
 
 ### Viens iestatījumu logs. Divas tēmas.
 
-Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi saglabājas automātiski un stājas spēkā uzreiz.
+Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi atveras maināma izmēra lietotnes logā ar 1000 × 780 satura laukumu pie 100% mēroga, nepārsniedzot ekrāna robežas. Virsrakstjoslā logu var maksimizēt vai samazināt. Platā logā iestatījumi ir divās kolonnās, šaurā — vienā ritināmā kolonnā. Atkārtoti atverot esošo logu, saglabājas tā izmērs un maksimizētais stāvoklis. Slēdži stājas spēkā uzreiz, bet slīdņu izmaiņas saglabājas pēc 300 ms pauzes vai aizverot iestatījumus.
 
 Iestatījumu logs atveras ar īsu uzpeldēšanu, pogas un slēdži reaģē plūstoši, bet teknes un valodu izvēlnes pakāpeniski parādās. Arī priekšskatījumiem ir īsa parādīšanās kustība. Izslēdz **Animācijas** iestatījumos vai teknes izvēlnē, lai šos efektus noņemtu uzreiz; izvēle saglabājas. GIF, video un automātiskā slaidu maiņa turpina darboties kā iepriekš.
 
@@ -122,12 +123,17 @@ Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows
 | --- | --- |
 | Uzved peli uz atbalstīta faila | Pēc izvēlētās aiztures parādās priekšskatījums. |
 | Aizvirzi peli no faila | Priekšskatījums aizveras un atskaņošana apstājas. |
-| Kreisais klikšķis uz teknes ikonas | Iestatījumi atveras peles kursora monitora centrā. |
+| Kreisais klikšķis uz teknes ikonas | Atver vai atjauno esošo iestatījumu logu. Jauns logs atveras peles kursora monitorā. |
 | Labais klikšķis uz teknes ikonas | Atveras ātrie iestatījumi: priekšskatījumi, lielums, aizture, skaļums, tēma un palaišana. |
-| Poga **−** | Samazina iestatījumus uz Windows uzdevumjoslu. Nospied loga pogu uzdevumjoslā, lai to atjaunotu. |
+| **Lejupvērstā bultiņa** | Samazina iestatījumus uz Windows uzdevumjoslu. Nospied loga pogu uzdevumjoslā, lai to atjaunotu. |
+| **Augšupvērstā bultiņa** vai loga malas vilkšana | Maksimizē/atjauno logu vai pielāgo tā izmēru; iestatījumu kolonnas pielāgojas platumam. Loga pogas paliek redzamas arī ritinot. |
 | Poga **×** | Aizver iestatījumu logu; Desktop Hover turpina darboties sistēmas teknē. |
 | **Aizvērt lietotni** teknes izvēlnē | Pilnībā aizver Desktop Hover. |
 | Izslēgts priekšskatījumu pārslēgs | Priekšskatījumi tiek apturēti, neaizverot lietotni. |
+| **Ctrl+Alt+H** | Ieslēdz vai aptur priekšskatījumus pēc peles uzvešanas. |
+| **Ctrl+Alt+P** vai **Piespraust pēdējo priekšskatījumu** teknes izvēlnē | Atver pēdējo priekšskatījumu atsevišķā logā, kas paliek atvērts arī pēc peles aizvirzīšanas. |
+
+Piespraustajā logā ar rīkjoslu vai **kreisās/labās bultiņas** taustiņiem pāršķir PDF lapas un slaidus, ar **atstarpi** atskaņo vai aptur, ar **+ / −** vai **Ctrl+peles riteni** maini tālummaiņu, bet ar **0** ievieto visu attēlu logā. Palielinātu attēlu var pārvietot velkot. Peles ritenis ritina tekstu vai pāršķir lapas/slaidus. **Escape** aizver piesprausto logu. Ja globālo saīsni izmanto cita lietotne, izmanto teknes izvēlni.
 
 ### Iestatījumi
 
@@ -137,6 +143,9 @@ Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows
 | Parādīšanās aizture | 0, 0,25, 0,45, 0,75 vai 1,00 sekunde. Pie 0 nav papildu gaidīšanas; faila noteikšana un ielāde joprojām prasa laiku. |
 | Slaidu maiņas intervāls | 1–10 sekundes PowerPoint prezentācijām. |
 | Atskaņošanas skaļums | 0–100% audio un video failiem. 0% izslēdz skaņu. |
+| Automātiska mediju atskaņošana | Sākt audio/video pēc peles uzvešanas vai atvērt pauzē un atskaņot piespraustajā logā. |
+| Atkārtot video | Pēc beigām automātiski sākt video no jauna. Sākotnēji ieslēgts; pieejams iestatījumos un teknes izvēlnē. Pauze vai peles aizvirzīšana no parastā priekšskatījuma aptur atskaņošanu. Audio netiek atkārtots. |
+| Ieslēgtie failu tipi | Atsevišķi ieslēdz attēlus/GIF, dokumentus/dizaina projektus, tekstu/kodu, audio un video. |
 | Izskats | Tumšā vai gaišā tēma, arī izvēlnēs un koda priekšskatījumos. |
 | Animācijas | Ieslēgt vai izslēgt saskarnes kustību iestatījumos vai teknes izvēlnē. Sākotnēji ieslēgtas. |
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
@@ -156,7 +165,7 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
-| **PDF** | Pirmā lapa, atveidota ar Windows 10/11 iebūvēto PDF atbalstu. Nav vajadzīga Adobe lietotne vai Windows sīktēlu nodrošinātājs. |
+| **PDF** | Pirmā lapa pēc peles uzvešanas; lapu pāršķiršana piespraustajā logā. Izmanto Windows 10/11 iebūvēto PDF atbalstu bez Adobe lietotnes vai sīktēlu nodrošinātāja. |
 | **Photoshop** | PSD/PSB/PSDT apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE, pielāgots priekšskatījuma izmēram. Saglabātos sīktēlus izmanto kā rezerves variantu. |
 | **Word, Excel un PowerPoint** | DOCX, XLSX, PPTX un to makrosu/veidņu varianti; PPSX/PPSM prezentācijas. Word/Excel izmanto saglabāto priekšskatījumu vai vienkāršotu fragmentu/pirmo redzamo lapu. PowerPoint saglabā stilus, izmantojot pietiekami lielu saglabāto attēlu, paša PowerPoint eksportu vai labāko pieejamo saglabāto/Windows sīktēlu. |
 | **Illustrator** | AI/AIT ar PDF saderīgu saturu rāda pirmo lapu izvēlētajā izmērā. EPS/EPSF/EPSI var izmantot saglabātu TIFF vai XMP priekšskatījumu, atbilstošu priekšskatījuma failu vai Windows sīktēlu. PostScript netiek izpildīts. |
@@ -170,9 +179,11 @@ Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajie
 
 Atbalstītie Photoshop apvienotie attēli un ar pašu PowerPoint eksportētie slaidi izmanto iestatīto priekšskatījuma izmēru, saglabājot proporcijas, arī bez **mazu attēlu palielināšanas**. PowerPoint tēmas, fontus, fonus un formas saglabā īsts slaida attēls; slaidus nepārzīmē no daļēja XML satura. Ja iespējams nolasīt tikai mazu saglabāto sīktēlu, tā palielināšana neatjauno trūkstošās detaļas.
 
-Eksports ar pašu PowerPoint darbojas PPTX/POTX/PPSX failiem, ja PowerPoint ir instalēts un pašlaik nav atvērts. Tas atver pagaidu kopiju tikai lasīšanai bez redzama loga. No šīs kopijas izņem slēptos OLE metadatus, arī think-cell datus; redzamajiem OLE objektiem izmanto saglabātos attēlus. Oriģinālā prezentācija netiek mainīta. Makrosi, ActiveX un saistītie ārējie resursi joprojām netiek atbalstīti. Ja PowerPoint jau ir atvērts, izmanto saglabāto/Windows priekšskatījumu, nepieslēdzoties esošajai sesijai. Prezentācijas izmanto izvēlēto priekšskatījuma lielumu arī tad, ja pieejams tikai sīktēls. Pirmā sagatavošana var prasīt vairākas sekundes; pēdējo veiksmīgo slaidu kopumu glabā kešatmiņā līdz faila vai pieprasītā izmēra maiņai. Aizvirzot peli, logs aizveras uzreiz, bet iesāktā sagatavošana var pabeigties, lai rezultātu izmantotu nākamajā priekšskatījumā.
+Eksports ar pašu PowerPoint darbojas PPTX/POTX/PPSX failiem, ja PowerPoint ir instalēts un pašlaik nav atvērts. Tas atver pagaidu kopiju tikai lasīšanai bez redzama loga. No šīs kopijas izņem slēptos OLE metadatus, arī think-cell datus; redzamajiem OLE objektiem izmanto saglabātos attēlus. Oriģinālā prezentācija netiek mainīta. Makrosi, ActiveX un saistītie ārējie resursi joprojām netiek atbalstīti. Ja PowerPoint jau ir atvērts, izmanto saglabāto/Windows priekšskatījumu, nepieslēdzoties esošajai sesijai. Prezentācijas izmanto izvēlēto priekšskatījuma lielumu arī tad, ja pieejams tikai sīktēls. Sākumā var parādīties saglabātais sīktēls, pēc tam eksportētie slaidi tiek rādīti, tiklīdz tie ir gatavi, negaidot visu prezentāciju. Apakšējā josla rāda ielādes progresu vai eksporta nepieejamības iemeslu. Aizvirzot peli, parastais priekšskatījums aizveras uzreiz, bet iesāktā sagatavošana var pabeigties nākamajai atvēršanai.
 
-PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizvirzot peli no faila, priekšskatījuma ielāde tiek atcelta un palīgprocess apturēts, lai neatverams PDF nebloķētu lietotni.
+Arī attēli un GIF ielādējas fonā. Sesijas kešatmiņā glabā līdz astoņiem nekustīgiem attēliem (48 MiB atkodētiem attēliem) un četrām prezentācijām (128 MiB PNG datiem). Rezultātu sagatavo no jauna, ja mainās faila lielums, labošanas laiks vai pieprasītais priekšskatījuma izmērs. Failu nosaukumu meklēšanā atkārtoti izmanto mapes indeksu, kas atjaunojas pēc izmaiņām un atbalsta mapes ar vairāk nekā 20 000 ierakstiem.
+
+PDF atveidošana notiek atsevišķā palīgprocesā ar laika ierobežojumu. Aizvirzot peli no faila, parastā priekšskatījuma ielāde tiek atcelta un palīgprocess apturēts, lai neatverams PDF nebloķētu lietotni. Piespraud PDF, lai pāršķirtu tā lapas.
 
 ### Adobe attēlu un video priekšskatījumi
 
@@ -185,17 +196,17 @@ Priekšskatījuma faili atbalsta MP4/MOV/WebM/M4V/AVI/WMV video un PNG/JPG/JPEG/
 ### Pašreizējās robežas
 
 - Priekšskatījumi darbojas ar **lokāli pieejamiem failiem**. Tīkla mapes, piesaistīti tīkla diski un tikai mākonī pieejami faili tiek izlaisti.
-- Tekstam nolasa līdz **256 KiB**, **300 rindām** un **500 rakstzīmēm rindā**. Redzama tikai daļa, kas ietilpst logā; par saīsinājumu informē apakšējā josla.
+- Tekstam nolasa līdz **256 KiB**, **300 rindām** un **500 rakstzīmēm rindā**. Pēc peles uzvešanas redzams sākums; piespraustajā logā var ritināt ielādētās rindas. Par saīsinājumu informē apakšējā josla.
 - Sintakses krāsas nodrošina pamata leksiska analīze. Kods netiek izpildīts vai rediģēts.
 - Markdown, HTML un SVG tiek rādīti kā avota teksts.
 - Dokumentu/projektu satura nolasīšanai ir **512 MiB** faila robeža; Adobe priekšskatījuma failiem ir iepriekš norādītie atsevišķie ierobežojumi. ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
-- PDF rāda **tikai pirmo lapu**, pielāgotu izvēlētajam priekšskatījuma lielumam. Lapu pāršķiršana, rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
+- PDF rāda pirmo lapu pēc peles uzvešanas un ļauj pāršķirt lapas piespraustajā logā. Rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
 - Word un Excel priekšskatījumi ir fragmenti, ne precīzi drukas maketi. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Tiek ņemts tikai pirmās redzamās lapas sākums (līdz 8 kolonnām/30 rindām). Atbalstītās PowerPoint prezentācijās slaidi mainās iestatītajā 1–10 sekunžu intervālā; animācijas un pārejas netiek atskaņotas. Ja pilns slaidu eksports nav pieejams, tiek lietots saglabātais/Windows priekšskatījums. Eksportam ar pašu PowerPoint ir 60 sekunžu, 200 slaidu un 64 MiB atveidoto PNG attēlu robeža.
 - Photoshop apvienotā attēla nolasīšana ierobežota līdz **40 miljoniem pikseļu**, 8 bitu RGB/pelēktoņiem un nesaspiestam/RLE saturam. Citiem krāsu režīmiem, bitu dziļumiem un ZIP saspiešanai vajadzīgs saglabāts vai Windows sīktēls. Slāņi netiek rekonstruēti, krāsu profili netiek piemēroti. Adobe projekta atpazīšana negarantē iegulta attēla esamību. After Effects/Premiere montāžai, Animate animācijām, 3D ainām un citiem slēgto formātu projektiem vajadzīgs saglabāts priekšskatījums vai eksportēts priekšskatījuma fails; pilna projektu atveidošana nav paredzēta.
 - Saglabātais priekšskatījums vai Windows sīktēls var atspoguļot agrāku saglabāšanas brīdi. Tā izšķirtspēja ir atkarīga no avota; var palīdzēt projekta saglabāšana ar ieslēgtu priekšskatījumu.
 - Animēti GIF atskaņojas automātiski, kamēr pele ir uz faila, ievērojot kadru aiztures un atkārtošanās iestatījumus. Peles kustība vienas faila ikonas robežās animāciju nepārstartē; aizvirzot peli prom, atskaņošana apstājas. Citu animētu vai vairāku kadru attēlu formātiem tiek rādīts nekustīgs kadrs.
 - Attēli virs **100 MiB** vai **100 miljoniem pikseļu** tiek izlaisti. GIF papildus ir **2000 kadru** un **100 miljonu pikseļu summas visu kadru taisnstūros** robeža. Ja GIF kadra aizture nav norādīta vai ir ļoti īsa (0–10 ms), izmanto 100 ms.
-- Priekšskatījums ir pasīvs: tas nepārņem tastatūras fokusu un nepiedāvā redaktoru vai interaktīvas atskaņošanas pogas.
+- Priekšskatījums pēc peles uzvešanas nepārņem tastatūras fokusu. Piespraustajā logā ir navigācijas un atskaņošanas pogas; neviens režīms nerediģē avota failu.
 
 ## Būvēšana no pirmkoda
 
@@ -217,6 +228,14 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
 Pirms izpildfaila aizstāšanas aizver palaisto kopiju vai norādi citu izvades vietu ar `-OutputPath`.
+
+Regresijas pārbaudes palaid Windows darbvirsmas sesijā:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
+
+Pārbaudes aptver ielādi fonā un atcelšanu, GIF atskaņošanu, iestatījumu mērogošanu un saglabāšanu, mapju indeksu, PDF navigāciju, mediju pauzi un saīsnes. Parauga faili un ekrānattēli nonāk Git ignorētajā `.verification` mapē. `-BuildOnly` tikai kompilē pārbaudes, tās nepalaižot.
 
 ### Repozitorija struktūra
 
@@ -255,7 +274,7 @@ Programmas dzīves ciklam sāc ar `src/App/Program.cs`, priekšskatījumiem — 
 | [TextPreviewContent.cs](src/Preview/TextPreviewContent.cs) | Ierobežota teksta nolasīšana, kodējumi un sintakses marķieri. |
 | [DocumentPreviewContent.cs](src/Preview/Documents/DocumentPreviewContent.cs), [DocumentArchiveGuard.cs](src/Preview/Documents/DocumentArchiveGuard.cs) | Dokumentu veidi, robežas un ZIP struktūras pārbaude. |
 | [OfficePreviewReader.cs](src/Preview/Documents/OfficePreviewReader.cs), [AdobePreviewReader.cs](src/Preview/Documents/AdobePreviewReader.cs) | Dokumentu satura un projektu iegulto attēlu nolasīšana. |
-| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | PDF pirmās lapas atveidošana ar Windows.Data.Pdf. |
+| [PdfPreviewReader.cs](src/Preview/Documents/PdfPreviewReader.cs) | PDF lapu atveidošana ar Windows.Data.Pdf. |
 | [DocumentPreviewWorker.cs](src/Windows/DocumentPreviewWorker.cs) | Kopīgs PDF/PowerPoint/sīktēlu palīgprocess ar atcelšanu, laika un izvades robežām. |
 | [PowerPointPreviewReader.cs](src/Preview/Documents/PowerPointPreviewReader.cs) | Slaidu eksports ar pašu PowerPoint, stilu saglabāšana un kešatmiņa. |
 | [ShellThumbnailProvider.cs](src/Windows/ShellThumbnailProvider.cs) | Windows sīktēlu iegūšana kopīgajā dokumentu palīgprocesā. |

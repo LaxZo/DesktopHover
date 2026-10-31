@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -35,7 +36,16 @@ namespace DesktopHover
                 pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds);
         }
 
-        internal static byte[][] TryLoadPowerPointSlides(string path, Size maxSize, CancellationToken cancellation)
+        internal static Bitmap TryLoadPdfPage(string path, Size size, CancellationToken cancellation, int page, out int pageCount)
+        {
+            int count = 0;
+            Bitmap result = TryLoad(path, size, cancellation, PdfWorkerArgument, PdfTimeoutMilliseconds,
+                page, value => count = value);
+            pageCount = count; return result;
+        }
+
+        internal static byte[][] TryLoadPowerPointSlides(string path, Size maxSize, CancellationToken cancellation,
+            Action<byte[][], int> progress = null, Action<string> failure = null)
         {
             Process worker = null;
             string output = null;
@@ -59,29 +69,49 @@ namespace DesktopHover
                 Stopwatch elapsed = Stopwatch.StartNew();
                 worker = Process.Start(start);
                 if (worker == null) return null;
-                while (!worker.WaitForExit(40))
-                {
-                    if (cancellation.IsCancellationRequested || elapsed.ElapsedMilliseconds >= PowerPointTimeoutMilliseconds)
-                        return null;
-                }
-                if (cancellation.IsCancellationRequested || worker.ExitCode != 0 || !Directory.Exists(output)) return null;
-                string[] files = Directory.GetFiles(output, "slide-*.png");
-                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
-                if (files.Length < 1 || files.Length > MaximumPowerPointSlides) return null;
-                var slides = new byte[files.Length][];
+                var slides = new List<byte[]>();
                 long totalBytes = 0;
-                for (int i = 0; i < files.Length; i++)
+                int total = 0;
+                while (true)
                 {
-                    cancellation.ThrowIfCancellationRequested();
-                    string expected = Path.Combine(output, "slide-" + (i + 1).ToString("D4", CultureInfo.InvariantCulture) + ".png");
-                    if (!String.Equals(files[i], expected, StringComparison.OrdinalIgnoreCase)) return null;
-                    var info = new FileInfo(files[i]);
-                    if (!info.Exists || info.Length < 8 || info.Length > MaximumOutputBytes) return null;
-                    totalBytes += info.Length;
-                    if (totalBytes > MaximumPowerPointSlidesBytes) return null;
-                    slides[i] = File.ReadAllBytes(files[i]);
+                    bool exited = worker.WaitForExit(40);
+                    if (cancellation.IsCancellationRequested) return null;
+                    if (elapsed.ElapsedMilliseconds >= PowerPointTimeoutMilliseconds)
+                    {
+                        if (failure != null) failure("ppt_timeout");
+                        return null;
+                    }
+                    if (Directory.Exists(output))
+                    {
+                        string countFile = Path.Combine(output, "slides.count");
+                        if (total == 0 && File.Exists(countFile))
+                        {
+                            string text = File.ReadAllText(countFile);
+                            if (!Int32.TryParse(text, out total) || total < 1 || total > MaximumPowerPointSlides) return null;
+                        }
+                        int before = slides.Count;
+                        while (slides.Count < MaximumPowerPointSlides)
+                        {
+                            string next = Path.Combine(output, "slide-" + (slides.Count + 1).ToString("D4", CultureInfo.InvariantCulture) + ".png");
+                            var info = new FileInfo(next);
+                            if (!info.Exists) break;
+                            if (info.Length < 8 || info.Length > MaximumOutputBytes) return null;
+                            totalBytes += info.Length;
+                            if (totalBytes > MaximumPowerPointSlidesBytes) return null;
+                            slides.Add(File.ReadAllBytes(next));
+                        }
+                        if (slides.Count != before && progress != null) progress(slides.ToArray(), total);
+                    }
+                    if (!exited) continue;
+                    if (worker.ExitCode != 0)
+                    {
+                        string reasonFile = output + ".reason";
+                        string reason = File.Exists(reasonFile) ? File.ReadAllText(reasonFile) : "ppt_export_failed";
+                        if (failure != null) failure(reason);
+                        return null;
+                    }
+                    return total > 0 && slides.Count == total ? slides.ToArray() : null;
                 }
-                return slides;
             }
             catch { return null; }
             finally
@@ -101,7 +131,7 @@ namespace DesktopHover
             }
         }
 
-        private static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, string argument, int timeoutMilliseconds)
+        private static Bitmap TryLoad(string path, Size maxSize, CancellationToken cancellation, string argument, int timeoutMilliseconds, int page = 0, Action<int> pageCount = null)
         {
             Process worker = null;
             string output = null;
@@ -118,7 +148,8 @@ namespace DesktopHover
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     Arguments = argument + " " + QuoteArgument(path) + " " + QuoteArgument(output) + " " +
-                        maxSize.Width.ToString(CultureInfo.InvariantCulture) + " " + maxSize.Height.ToString(CultureInfo.InvariantCulture),
+                        maxSize.Width.ToString(CultureInfo.InvariantCulture) + " " + maxSize.Height.ToString(CultureInfo.InvariantCulture) +
+                        (argument == PdfWorkerArgument ? " " + page.ToString(CultureInfo.InvariantCulture) : ""),
                     WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
                 };
                 cancellation.ThrowIfCancellationRequested();
@@ -138,6 +169,10 @@ namespace DesktopHover
                 {
                     if (image.Width <= 0 || image.Height <= 0 || image.Width > MaximumEdge || image.Height > MaximumEdge)
                         return null;
+                    if (pageCount != null && File.Exists(output + ".pages"))
+                    {
+                        int count; if (Int32.TryParse(File.ReadAllText(output + ".pages"), out count) && count > 0) pageCount(count);
+                    }
                     return CopyImage(image, maxSize);
                 }
             }
@@ -158,6 +193,7 @@ namespace DesktopHover
             }
             if (output == null) return;
             try { File.Delete(output); } catch { }
+            try { File.Delete(output + ".pages"); } catch { }
             if (powerpoint) PowerPointPreviewReader.DeleteTemporaryFiles(output, path);
         }
 
@@ -170,11 +206,12 @@ namespace DesktopHover
             bool powerpoint = args[0] == PowerPointWorkerArgument;
             int timeoutMilliseconds = powerpoint ? PowerPointTimeoutMilliseconds : pdf ? PdfTimeoutMilliseconds : ShellTimeoutMilliseconds;
             Environment.ExitCode = 1;
-            int width, height;
-            if (args.Length != 5 || !Int32.TryParse(args[3], NumberStyles.None, CultureInfo.InvariantCulture, out width) ||
+            int width, height, page = 0;
+            if ((args.Length != 5 && !(pdf && args.Length == 6)) || !Int32.TryParse(args[3], NumberStyles.None, CultureInfo.InvariantCulture, out width) ||
                 !Int32.TryParse(args[4], NumberStyles.None, CultureInfo.InvariantCulture, out height) ||
                 width < 1 || width > MaximumEdge || height < 1 || height > MaximumEdge)
                 return true;
+            if (args.Length == 6 && (!Int32.TryParse(args[5], NumberStyles.None, CultureInfo.InvariantCulture, out page) || page < 0)) return true;
             // A parent may exit while a native handler is blocked. This watchdog remains
             // independent of the STA and prevents an abandoned worker running indefinitely.
             using (var watchdog = new System.Threading.Timer(delegate
@@ -189,20 +226,28 @@ namespace DesktopHover
                     if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA || !IsLocalFile(args[1])) return true;
                     if (powerpoint)
                     {
-                        if (!IsWorkerSlideDirectory(args[2]) ||
-                            !PowerPointPreviewReader.RenderSlides(Path.GetFullPath(args[1]), new Size(width, height), args[2])) return true;
+                        if (!IsWorkerSlideDirectory(args[2])) return true;
+                        if (!PowerPointPreviewReader.RenderSlides(Path.GetFullPath(args[1]), new Size(width, height), args[2]))
+                        {
+                            File.WriteAllText(args[2] + ".reason", PowerPointPreviewReader.NativeFailureReason);
+                            return true;
+                        }
                     }
                     else
                     {
                         if (!IsWorkerOutput(args[2])) return true;
+                        int count = 0;
                         using (Bitmap image = pdf
-                            ? PdfPreviewReader.Render(Path.GetFullPath(args[1]), new Size(width, height))
+                            ? PdfPreviewReader.RenderPage(Path.GetFullPath(args[1]), new Size(width, height), page, out count)
                             : ShellThumbnailProvider.Extract(Path.GetFullPath(args[1]), new Size(width, height)))
                         {
                             if (image == null) return true;
                             // Never overwrite a caller's existing file, even if the flag is used manually.
                             using (var stream = new FileStream(args[2], FileMode.CreateNew, FileAccess.Write, FileShare.None))
                                 image.Save(stream, ImageFormat.Png);
+                            if (pdf)
+                                using (var pages = new StreamWriter(new FileStream(args[2] + ".pages", FileMode.CreateNew, FileAccess.Write)))
+                                    pages.Write(count.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     Environment.ExitCode = 0;

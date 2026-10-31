@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.ComponentModel;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -9,9 +10,17 @@ using System.Windows.Forms;
 namespace DesktopHover
 {
     // Main settings window, opened from the tray icon or quick settings menu.
-    internal sealed class SettingsWindow : Form
+    internal sealed partial class SettingsWindow : Form
     {
         private AppSettings settings, lastApplied;
+        private readonly Dictionary<Control, Rectangle> designBounds = new Dictionary<Control, Rectangle>();
+        private float uiScale = 1;
+        private Font scaledSmallFont, scaledBodyFont;
+        private bool arranging, layoutReady, initiallySized, wideLayout;
+        private float canvasWidth = 1000, columnWidth = 460, footerY = 716;
+        private FormWindowState restoredState = FormWindowState.Normal;
+        private readonly Timer saveTimer = new Timer { Interval = 300 };
+        private bool pendingSave;
         private readonly Action<AppSettings> changed;
         private readonly Action<bool> pauseChanged;
         private readonly HoverButton[] presets = new HoverButton[4];
@@ -20,13 +29,14 @@ namespace DesktopHover
         private readonly Label autosavedLabel;
         private const string ProjectUrl = "https://github.com/LaxZo/DesktopHover";
         private readonly ContextMenuStrip languageMenu;
-        private readonly HoverButton minimize, close;
         private readonly ToolTip windowToolTip = new ToolTip();
         private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
-        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle;
+        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle, autoPlayToggle, loopVideoToggle;
+        private readonly HoverToggle[] typeToggles = new HoverToggle[5];
+        private static readonly string[] TypeKeys = { "type_images", "type_documents", "type_text", "type_audio", "type_video" };
         private bool paused, syncing;
         private readonly Font headingFont = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
-        private readonly Font titleFont = new Font("Segoe UI", 21, FontStyle.Bold, GraphicsUnit.Pixel);
+        private readonly Font titleFont = new Font("Segoe UI", 16, FontStyle.Bold, GraphicsUnit.Pixel);
         private readonly Font smallFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly Font bodyFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly Icon windowIcon;
@@ -40,17 +50,18 @@ namespace DesktopHover
         public SettingsWindow(AppSettings settings, bool paused,
             Action<AppSettings> changed, Action<bool> pauseChanged)
         {
+            saveTimer.Tick += delegate { FlushSettings(); };
             this.settings = settings.Clone();
             lastApplied = this.settings.Clone();
             this.paused = paused;
             this.changed = changed;
             this.pauseChanged = pauseChanged;
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(424, 840);
             FormBorderStyle = FormBorderStyle.None;
+            ClientSize = new Size(1000, 780);
             StartPosition = FormStartPosition.Manual;
             ShowInTaskbar = true;
-            MaximizeBox = false;
+            MaximizeBox = true;
             MinimizeBox = true;
             KeyPreview = true;
             DoubleBuffered = true;
@@ -60,16 +71,6 @@ namespace DesktopHover
             windowIcon = Brand.CreateIcon();
             Icon = windowIcon;
 
-            minimize = new HoverButton { Name = "minimize-settings", Text = "\u2212", Compact = true };
-            minimize.SetBounds(330, 20, 32, 32);
-            minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
-            Controls.Add(minimize);
-
-            close = new HoverButton { Name = "close-settings", Text = "\u00d7", Compact = true };
-            close.SetBounds(368, 20, 32, 32);
-            close.Click += delegate { Close(); };
-            Controls.Add(close);
-
             autosavedLabel = new Label
             {
                 Name = "autosaved-status",
@@ -77,16 +78,16 @@ namespace DesktopHover
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft
             };
-            autosavedLabel.SetBounds(24, 798, 162, 32);
+            autosavedLabel.SetBounds(24, 1158, 162, 32);
             Controls.Add(autosavedLabel);
 
             githubProject = new HoverButton { Name = "github-project", Compact = true, ProjectLink = true };
-            githubProject.SetBounds(194, 798, 40, 32);
+            githubProject.SetBounds(194, 1158, 40, 32);
             githubProject.Click += delegate { OpenProject(); };
             Controls.Add(githubProject);
 
             themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
-            themeToggle.SetBounds(242, 798, 40, 32);
+            themeToggle.SetBounds(242, 1158, 40, 32);
             themeToggle.Click += delegate
             {
                 this.settings.Theme = Brand.IsLight ? "dark" : "light";
@@ -101,7 +102,7 @@ namespace DesktopHover
                 LanguageSelector = true,
                 Font = smallFont
             };
-            languagePicker.SetBounds(290, 798, 110, 32);
+            languagePicker.SetBounds(290, 1158, 110, 32);
             languageMenu = new ContextMenuStrip
             {
                 Name = "language-menu",
@@ -175,7 +176,7 @@ namespace DesktopHover
                 if (syncing) return;
                 this.settings.MaxWidth = widthSlider.Value;
                 this.settings.MaxHeight = widthSlider.Value * 3 / 4;
-                Apply();
+                ScheduleApply();
             };
             Controls.Add(widthSlider);
 
@@ -207,7 +208,7 @@ namespace DesktopHover
             {
                 if (syncing) return;
                 this.settings.VolumePercent = volumeSlider.Value;
-                Apply();
+                ScheduleApply();
             };
             Controls.Add(volumeSlider);
 
@@ -224,7 +225,7 @@ namespace DesktopHover
             {
                 if (syncing) return;
                 this.settings.SlideIntervalSeconds = slideIntervalSlider.Value;
-                Apply();
+                ScheduleApply();
             };
             Controls.Add(slideIntervalSlider);
 
@@ -246,9 +247,39 @@ namespace DesktopHover
                 Apply();
             };
 
+            autoPlayToggle = AddToggle(786);
+            autoPlayToggle.Name = "autoplay-toggle";
+            autoPlayToggle.Click += delegate { this.settings.AutoPlayMedia = !this.settings.AutoPlayMedia; Apply(); };
+            loopVideoToggle = AddToggle(828);
+            loopVideoToggle.Name = "loop-video-toggle";
+            loopVideoToggle.Click += delegate { this.settings.LoopVideo = !this.settings.LoopVideo; Apply(); };
+            for (int i = 0; i < typeToggles.Length; i++)
+            {
+                int index = i;
+                var toggle = AddToggle(874 + i * 42);
+                toggle.Name = TypeKeys[i];
+                toggle.Click += delegate
+                {
+                    switch (index)
+                    {
+                        case 0: this.settings.PreviewImages = !this.settings.PreviewImages; break;
+                        case 1: this.settings.PreviewDocuments = !this.settings.PreviewDocuments; break;
+                        case 2: this.settings.PreviewText = !this.settings.PreviewText; break;
+                        case 3: this.settings.PreviewAudio = !this.settings.PreviewAudio; break;
+                        case 4: this.settings.PreviewVideo = !this.settings.PreviewVideo; break;
+                    }
+                    Apply();
+                };
+                typeToggles[i] = toggle;
+            }
+
             Controls.Add(languagePicker);
             SyncControls();
             windowMotion = new WindowMotion(this, true, true);
+            foreach (Control control in Controls) designBounds.Add(control, control.Bounds);
+            InitializeChrome();
+            layoutReady = true;
+            ArrangeSettings();
         }
 
         private void ShowLanguageMenu()
@@ -281,8 +312,28 @@ namespace DesktopHover
             return toggle;
         }
 
+        private void ScheduleApply()
+        {
+            pendingSave = true; saveTimer.Stop(); saveTimer.Start();
+            autosavedLabel.Text = T("saving");
+            for (int i = 0; i < presets.Length; i++)
+                presets[i].Selected = settings.MaxWidth == SizeWidths[i] && settings.MaxHeight == SizeHeights[i];
+            if (content != null) content.Invalidate();
+        }
+        private void FlushSettings()
+        {
+            saveTimer.Stop();
+            if (!pendingSave) return;
+            pendingSave = false; Apply();
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            FlushSettings(); base.OnFormClosing(e);
+        }
+
         private void Apply()
         {
+            saveTimer.Stop(); pendingSave = false;
             SyncControls();
             try
             {
@@ -301,6 +352,7 @@ namespace DesktopHover
         // Also permits the owner to restore values if persistence was unsuccessful.
         public void UpdateSettings(AppSettings value)
         {
+            saveTimer.Stop(); pendingSave = false;
             settings = value.Clone();
             lastApplied = settings.Clone();
             SyncControls();
@@ -320,7 +372,9 @@ namespace DesktopHover
             Brand.SetTheme(settings.Theme);
             BackColor = Brand.Background;
             ForeColor = Brand.Text;
-            foreach (Control control in Controls)
+            ApplyTitleBarTheme();
+            UpdateChrome();
+            foreach (Control control in content == null ? Controls : content.Controls)
             {
                 control.BackColor = Brand.Background;
                 control.ForeColor = Brand.Text;
@@ -340,10 +394,6 @@ namespace DesktopHover
             windowToolTip.SetToolTip(themeToggle, themeToggle.AccessibleName);
             Text = "Desktop Hover — " + T("settings");
             AccessibleName = Text;
-            minimize.AccessibleName = T("minimize_settings");
-            close.AccessibleName = T("close_settings");
-            windowToolTip.SetToolTip(minimize, minimize.AccessibleName);
-            windowToolTip.SetToolTip(close, close.AccessibleName);
             L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
             languagePicker.Text = language.ShortName;
             languagePicker.AccessibleName = T("language") + ": " + language.NativeName;
@@ -387,6 +437,16 @@ namespace DesktopHover
             LocalizeToggle(enabledToggle, paused ? "preview_paused" : "preview_on", "preview_detail");
             animationsToggle.Checked = settings.AnimationsEnabled;
             LocalizeToggle(animationsToggle, "animations", "animations_detail");
+            autoPlayToggle.Checked = settings.AutoPlayMedia;
+            LocalizeToggle(autoPlayToggle, "autoplay", "autoplay_detail");
+            loopVideoToggle.Checked = settings.LoopVideo;
+            LocalizeToggle(loopVideoToggle, "loop_video", "loop_video_detail");
+            bool[] enabledTypes = { settings.PreviewImages, settings.PreviewDocuments, settings.PreviewText, settings.PreviewAudio, settings.PreviewVideo };
+            for (int i = 0; i < typeToggles.Length; i++)
+            {
+                typeToggles[i].Checked = enabledTypes[i];
+                LocalizeToggle(typeToggles[i], TypeKeys[i], "preview_detail");
+            }
             syncing = false;
             Invalidate(true);
         }
@@ -405,29 +465,131 @@ namespace DesktopHover
 
         public void ShowCentered(Point screenPoint)
         {
-            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
-            Rectangle area = Screen.FromPoint(screenPoint).WorkingArea;
-            int x = area.Left + Math.Max(0, (area.Width - Width) / 2);
-            int y = area.Top + Math.Max(0, (area.Height - Height) / 2);
-            windowMotion.ShowAt(new Point(x, y));
+            if (WindowState == FormWindowState.Minimized) WindowState = restoredState;
+            if (!initiallySized)
+            {
+                Rectangle area = Screen.FromPoint(screenPoint).WorkingArea;
+                FitToArea(area, PreviewWindow.GetScale(screenPoint));
+                Location = new Point(area.Left + Math.Max(0, (area.Width - Width) / 2),
+                    area.Top + Math.Max(0, (area.Height - Height) / 2));
+            }
+            windowMotion.ShowAt(Location);
             Activate();
         }
 
+        internal void FitToArea(Rectangle area, float dpiScale)
+        {
+            initiallySized = true;
+            SetUiScale(dpiScale);
+            MinimumSize = new Size(Math.Min((int)Math.Round(520 * uiScale), area.Width - 32),
+                Math.Min((int)Math.Round(440 * uiScale), area.Height - 32));
+            Size desired = SizeFromClientSize(new Size((int)Math.Round(1000 * uiScale), (int)Math.Round(780 * uiScale)));
+            Size = new Size(Math.Min(desired.Width, area.Width - 32), Math.Min(desired.Height, area.Height - 32));
+            ArrangeSettings();
+        }
+
+        private void SetUiScale(float value)
+        {
+            value = Math.Max(.75f, value);
+            if (scaledSmallFont != null && Math.Abs(uiScale - value) < .01f) return;
+            uiScale = value;
+            Font oldSmall = scaledSmallFont, oldBody = scaledBodyFont;
+            scaledSmallFont = new Font(smallFont.FontFamily, smallFont.Size * uiScale, smallFont.Style, GraphicsUnit.Pixel);
+            scaledBodyFont = new Font(bodyFont.FontFamily, bodyFont.Size * uiScale, bodyFont.Style, GraphicsUnit.Pixel);
+            autosavedLabel.Font = scaledSmallFont; languageMenu.Font = scaledBodyFont;
+            if (oldSmall != null) oldSmall.Dispose(); if (oldBody != null) oldBody.Dispose();
+            PositionChrome();
+        }
+
+        // Keep the original single-column coordinates as the source for controls and text.
+        // The same mapping makes every resized hit target match its painted section.
+        private Rectangle MapContent(Rectangle rect)
+        {
+            bool right = wideLayout && rect.Y >= 616 && rect.Y < 1090;
+            float origin = right ? 56 + columnWidth : 24;
+            return Rectangle.Round(new RectangleF(origin + (rect.X - 24) * columnWidth / 376,
+                rect.Y + (rect.Y >= 840 ? 44 : 0) - (right ? 444 : 0), rect.Width * columnWidth / 376, rect.Height));
+        }
+
+        private Rectangle ControlBounds(Control control, Rectangle original)
+        {
+            if (control == autosavedLabel) return Rectangle.Round(new RectangleF(24, footerY, canvasWidth - 280, 32));
+            if (control == githubProject) return Rectangle.Round(new RectangleF(canvasWidth - 230, footerY, 40, 32));
+            if (control == themeToggle) return Rectangle.Round(new RectangleF(canvasWidth - 182, footerY, 40, 32));
+            if (control == languagePicker) return Rectangle.Round(new RectangleF(canvasWidth - 134, footerY, 110, 32));
+            return MapContent(original);
+        }
+
+        private void ArrangeSettings()
+        {
+            if (!layoutReady || arranging || WindowState == FormWindowState.Minimized) return;
+            arranging = true;
+            Point scroll = content.AutoScrollPosition;
+            content.SuspendLayout();
+            try
+            {
+                content.AutoScrollPosition = Point.Empty;
+                // Reserve a scrollbar gutter so adding a scrollbar never creates horizontal scrolling.
+                canvasWidth = Math.Max(424, (content.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / uiScale);
+                wideLayout = canvasWidth >= 860;
+                columnWidth = wideLayout ? (canvasWidth - 80) / 2 : canvasWidth - 48;
+                footerY = Math.Max(wideLayout ? 716 : 1202, content.ClientSize.Height / uiScale + 80 - 54);
+                foreach (var item in designBounds)
+                {
+                    Rectangle rect = ControlBounds(item.Key, item.Value);
+                    item.Key.Bounds = new Rectangle((int)Math.Round(rect.X * uiScale), (int)Math.Round((rect.Y - 80) * uiScale),
+                        (int)Math.Round(rect.Width * uiScale), (int)Math.Round(rect.Height * uiScale));
+                    var button = item.Key as HoverButton; if (button != null) button.UiScale = uiScale;
+                    var toggle = item.Key as HoverToggle; if (toggle != null) toggle.UiScale = uiScale;
+                    var slider = item.Key as HoverSlider; if (slider != null) slider.UiScale = uiScale;
+                }
+                content.AutoScrollMinSize = new Size(0, (int)Math.Ceiling((footerY + 42 - 80) * uiScale));
+                content.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+            }
+            finally { content.ResumeLayout(); arranging = false; }
+            Invalidate(true);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            if (WindowState != FormWindowState.Minimized) restoredState = WindowState;
+            PositionChrome();
+            ArrangeSettings();
+        }
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            using (GraphicsPath path = Brand.RoundRect(new RectangleF(0, 0, Width, Height), 16))
-                Region = new Region(path);
+            ApplyTitleBarTheme();
+            ApplyWindowShape();
         }
 
-        protected override void OnMouseDown(MouseEventArgs e)
+        private void ApplyTitleBarTheme()
         {
-            base.OnMouseDown(e);
-            if (e.Button == MouseButtons.Left && e.Y < 80)
+            if (!IsHandleCreated) return;
+            try
             {
-                ReleaseCapture();
-                SendMessage(Handle, 0x00A1, new IntPtr(2), IntPtr.Zero);
+                int dark = Brand.IsLight ? 0 : 1;
+                int caption = ColorTranslator.ToWin32(Brand.Background);
+                int text = ColorTranslator.ToWin32(Brand.Text);
+                int border = ColorTranslator.ToWin32(Brand.Border);
+                // Native chrome is drawn by DWM, independently of the form's BackColor.
+                // Explicit colors also follow the app when Windows uses a different theme.
+                DwmSetWindowAttribute(Handle, 20, ref dark, sizeof(int)); // USE_IMMERSIVE_DARK_MODE
+                DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int)); // CAPTION_COLOR
+                DwmSetWindowAttribute(Handle, 36, ref text, sizeof(int)); // TEXT_COLOR
+                DwmSetWindowAttribute(Handle, 34, ref border, sizeof(int)); // BORDER_COLOR
             }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+            // Older Windows versions ignore unsupported DWM attributes.
+        }
+        protected override void OnResizeBegin(EventArgs e) { windowMotion.Finish(); base.OnResizeBegin(e); }
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            SetUiScale(PreviewWindow.GetScale(Location));
+            ArrangeSettings();
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -446,30 +608,34 @@ namespace DesktopHover
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        protected override void OnPaint(PaintEventArgs e)
+        private void PaintSettings(object sender, PaintEventArgs e)
         {
-            base.OnPaint(e);
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (GraphicsPath border = Brand.RoundRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), 16))
-            using (var pen = new Pen(Brand.Border))
-                g.DrawPath(pen, border);
-            Brand.DrawLogo(g, new Rectangle(24, 23, 40, 40));
-            DrawText(g, "Desktop Hover", titleFont, Brand.Text, new Rectangle(76, 20, 246, 30));
+            g.TranslateTransform(content.AutoScrollPosition.X, content.AutoScrollPosition.Y - 80 * uiScale);
+            g.ScaleTransform(uiScale, uiScale);
 
-            FillRound(g, new RectangleF(24, 87, 376, 34), 9, Brand.Surface);
+            FillRound(g, new RectangleF(24, 87, canvasWidth - 48, 34), 9, Brand.Surface);
             using (var brush = new SolidBrush(paused ? Brand.Paused : Brand.Accent))
                 g.FillEllipse(brush, 37, 100, 8, 8);
             DrawText(g, T(paused ? "paused" : "active"), Font, Brand.Text, new Rectangle(53, 94, 100, 22));
             DrawText(g, T("surfaces"), smallFont, Brand.Muted,
-                new Rectangle(147, 94, 239, 22), TextFormatFlags.Right);
+                new Rectangle(170, 94, (int)canvasWidth - 208, 22), TextFormatFlags.Right);
+
+            if (wideLayout)
+            {
+                using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, columnWidth + 40, 139, columnWidth + 40, 692);
+                UiDrawing.Text(g, T("settings"), headingFont,
+                    Rectangle.Round(new RectangleF(columnWidth + 56, 139, columnWidth, 25)), Brand.Text,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            }
 
             DrawText(g, T("image_size"), headingFont, Brand.Text, new Rectangle(24, 139, 376, 25));
             string size = settings.MaxWidth + " \u00d7 " + settings.MaxHeight + " px";
             DrawText(g, T("maximum_size"), smallFont, Brand.Muted, new Rectangle(24, 319, 188, 20));
             DrawText(g, size, Font, Brand.Text, new Rectangle(209, 316, 191, 24), TextFormatFlags.Right);
             DrawText(g, T("aspect_ratio"), smallFont, Brand.Muted, new Rectangle(24, 340, 376, 20));
-            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 367, 400, 367);
+            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 367, 24 + columnWidth, 367);
             DrawText(g, T("delay"), headingFont, Brand.Text, new Rectangle(24, 373, 376, 23));
             DrawText(g, T("volume"), headingFont, Brand.Text, new Rectangle(24, 449, 300, 23));
             DrawText(g, settings.VolumePercent + "%", Font, Brand.Accent,
@@ -479,17 +645,23 @@ namespace DesktopHover
             DrawText(g, String.Format(L10n.Culture(settings.Language), T("slide_interval_value"), settings.SlideIntervalSeconds),
                 Font, Brand.Accent, new Rectangle(302, 530, 98, 24), TextFormatFlags.Right);
             DrawText(g, T("slide_interval_detail"), smallFont, Brand.Muted, new Rectangle(24, 590, 376, 20));
-            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, 786, 400, 786);
+            DrawText(g, T("file_types"), headingFont, Brand.Text, new Rectangle(24, 840, 376, 25));
+            DrawText(g, T("shortcut_toggle"), smallFont, Brand.Muted, new Rectangle(24, 1092, 376, 22));
+            DrawText(g, T("shortcut_pin"), smallFont, Brand.Muted, new Rectangle(24, 1116, 376, 22));
+            using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, footerY - 12, canvasWidth - 24, footerY - 12);
         }
 
-        private static void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle)
+        private void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle)
         {
             DrawText(g, text, font, color, rectangle, TextFormatFlags.Left);
         }
 
-        private static void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle, TextFormatFlags alignment)
+        private void DrawText(Graphics g, string text, Font font, Color color, Rectangle rectangle, TextFormatFlags alignment)
         {
-            TextRenderer.DrawText(g, text, font, rectangle, color,
+            if (rectangle.Y >= 139 && rectangle.Y < 1090) rectangle = MapContent(rectangle);
+            else if (rectangle.Y >= 1090)
+                rectangle = Rectangle.Round(new RectangleF(24, wideLayout ? rectangle.Y - 444 : rectangle.Y + 44, columnWidth, rectangle.Height));
+            UiDrawing.Text(g, text, font, rectangle, color,
                 alignment | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
 
@@ -503,6 +675,7 @@ namespace DesktopHover
         {
             if (disposing)
             {
+                FlushSettings(); saveTimer.Dispose();
                 if (windowMotion != null) windowMotion.Dispose();
                 languageMenu.Dispose();
                 windowToolTip.Dispose();
@@ -511,11 +684,14 @@ namespace DesktopHover
                 smallFont.Dispose();
                 bodyFont.Dispose();
                 windowIcon.Dispose();
+                if (scaledSmallFont != null) scaledSmallFont.Dispose();
+                if (scaledBodyFont != null) scaledBodyFont.Dispose();
             }
             base.Dispose(disposing);
         }
 
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     }
 
@@ -591,6 +767,10 @@ namespace DesktopHover
 
     internal sealed class HoverButton : Button
     {
+        internal float UiScale = 1;
+        private int LogicalWidth { get { return (int)Math.Round(Width / UiScale); } }
+        private int LogicalHeight { get { return (int)Math.Round(Height / UiScale); } }
+
         private bool selected;
         private readonly UiTween hoverMotion, selectionMotion, pressMotion;
         public string Detail { get; set; }
@@ -617,7 +797,7 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
-            Cursor = Cursors.Hand;
+            Cursor = Cursors.Default;
             TabStop = true;
             AccessibleRole = AccessibleRole.PushButton;
         }
@@ -661,12 +841,13 @@ namespace DesktopHover
         {
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
+            g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Color fill = UiMotion.Blend(Brand.Surface, Brand.SelectedSurface, selectionMotion.Value);
             fill = UiMotion.Blend(fill, Brand.HoverSurface, hoverMotion.Value * (1 - .5 * selectionMotion.Value));
             fill = UiMotion.Blend(fill, Brand.SelectedSurface, pressMotion.Value * .5);
             float inset = (float)pressMotion.Value * 1.5f;
-            var bounds = new RectangleF(.5f + inset, .5f + inset, Width - 1 - inset * 2, Height - 1 - inset * 2);
+            var bounds = new RectangleF(.5f + inset, .5f + inset, LogicalWidth - 1 - inset * 2, LogicalHeight - 1 - inset * 2);
             SettingsWindow.FillRound(g, bounds, 9, fill);
             using (var path = Brand.RoundRect(bounds, 9))
             using (var pen = new Pen(UiMotion.Blend(Brand.Border, Brand.Accent, Focused ? 1 : selectionMotion.Value)))
@@ -674,18 +855,18 @@ namespace DesktopHover
             Color textColor = UiMotion.Blend(Brand.Text, Brand.Accent, selectionMotion.Value);
             if (LanguageSelector)
             {
-                Brand.DrawLanguageIcon(g, new Rectangle(10, (Height - 21) / 2, 21, 21), Brand.Accent);
-                TextRenderer.DrawText(g, Text, Font, new Rectangle(40, 0, Width - 69, Height),
+                Brand.DrawLanguageIcon(g, new Rectangle(10, (LogicalHeight - 21) / 2, 21, 21), Brand.Accent);
+                UiDrawing.Text(g, Text, Font, new Rectangle(40, 0, LogicalWidth - 69, LogicalHeight),
                     textColor,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
                     TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                int mid = Height / 2;
+                int mid = LogicalHeight / 2;
                 using (var pen = new Pen(selected ? Brand.Accent : Brand.Muted, 1.5f))
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
                     g.DrawLines(pen, selected
-                        ? new[] { new Point(Width - 20, mid - 2), new Point(Width - 16, mid + 2), new Point(Width - 12, mid - 2) }
-                        : new[] { new Point(Width - 20, mid + 2), new Point(Width - 16, mid - 2), new Point(Width - 12, mid + 2) });
+                        ? new[] { new Point(LogicalWidth - 20, mid - 2), new Point(LogicalWidth - 16, mid + 2), new Point(LogicalWidth - 12, mid - 2) }
+                        : new[] { new Point(LogicalWidth - 20, mid + 2), new Point(LogicalWidth - 16, mid - 2), new Point(LogicalWidth - 12, mid + 2) });
                 }
             }
             else if (ThemeSelector)
@@ -698,20 +879,20 @@ namespace DesktopHover
             }
             else if (Compact)
             {
-                TextRenderer.DrawText(g, Text, Font, ClientRectangle, textColor,
+                UiDrawing.Text(g, Text, Font, new Rectangle(0, 0, LogicalWidth, LogicalHeight), textColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
             else
             {
-                TextRenderer.DrawText(g, Text, Font, new Rectangle(13, 5, Width - 34, 21),
+                UiDrawing.Text(g, Text, Font, new Rectangle(13, 5, LogicalWidth - 34, 21),
                     textColor, TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
                 using (var detailFont = new Font("Segoe UI", 11, FontStyle.Regular, GraphicsUnit.Pixel))
-                    TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(13, 25, Width - 26, 16),
+                    UiDrawing.Text(g, Detail, detailFont, new Rectangle(13, 25, LogicalWidth - 26, 16),
                         Brand.Muted, TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
                 if (selected)
                 {
                     using (var pen = new Pen(Brand.Accent, 1.7f))
-                        g.DrawLines(pen, new[] { new Point(Width - 24, 18), new Point(Width - 20, 22), new Point(Width - 13, 14) });
+                        g.DrawLines(pen, new[] { new Point(LogicalWidth - 24, 18), new Point(LogicalWidth - 20, 22), new Point(LogicalWidth - 13, 14) });
                 }
             }
         }
@@ -733,7 +914,7 @@ namespace DesktopHover
             GraphicsState state = graphics.Save();
             try
             {
-                graphics.TranslateTransform((Width - 20) / 2f, (Height - 20) / 2f);
+                graphics.TranslateTransform((LogicalWidth - 20) / 2f, (LogicalHeight - 20) / 2f);
                 graphics.ScaleTransform(20f / 16f, 20f / 16f);
                 using (var path = new GraphicsPath())
                 using (var brush = new SolidBrush(Brand.Text))
@@ -778,7 +959,7 @@ namespace DesktopHover
             GraphicsState state = graphics.Save();
             try
             {
-                graphics.TranslateTransform((Width - 20) / 2f, (Height - 20) / 2f);
+                graphics.TranslateTransform((LogicalWidth - 20) / 2f, (LogicalHeight - 20) / 2f);
                 using (var pen = new Pen(selected ? Brand.Accent : Brand.Text, 1.6f))
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
@@ -814,6 +995,10 @@ namespace DesktopHover
 
     internal sealed class HoverToggle : Button
     {
+        internal float UiScale = 1;
+        private int LogicalWidth { get { return (int)Math.Round(Width / UiScale); } }
+        private int LogicalHeight { get { return (int)Math.Round(Height / UiScale); } }
+
         private bool isChecked;
         private readonly UiTween checkMotion, hoverMotion;
         public string Detail { get; set; }
@@ -837,7 +1022,7 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
-            Cursor = Cursors.Hand;
+            Cursor = Cursors.Default;
             TabStop = true;
             AccessibleRole = AccessibleRole.CheckButton;
         }
@@ -863,23 +1048,24 @@ namespace DesktopHover
         {
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
+            g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            SettingsWindow.FillRound(g, new RectangleF(0, 0, Width, Height), 8,
+            SettingsWindow.FillRound(g, new RectangleF(0, 0, LogicalWidth, LogicalHeight), 8,
                 UiMotion.Blend(Brand.Background, Brand.Surface, hoverMotion.Value));
             if (Focused)
-                using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), 8))
+                using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, LogicalWidth - 1, LogicalHeight - 1), 8))
                 using (var pen = new Pen(Brand.Accent)) g.DrawPath(pen, path);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width - 58, 22), Brand.Text,
+            UiDrawing.Text(g, Text, Font, new Rectangle(0, 0, LogicalWidth - 58, 22), Brand.Text,
                 TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             using (var detailFont = new Font("Segoe UI", 11, FontStyle.Regular, GraphicsUnit.Pixel))
-                TextRenderer.DrawText(g, Detail, detailFont, new Rectangle(0, 22, Width - 58, 16), Brand.Muted,
+                UiDrawing.Text(g, Detail, detailFont, new Rectangle(0, 22, LogicalWidth - 58, 16), Brand.Muted,
                     TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-            float trackTop = (Height - 24) / 2f;
-            SettingsWindow.FillRound(g, new RectangleF(Width - 43, trackTop, 42, 24), 12,
+            float trackTop = (LogicalHeight - 24) / 2f;
+            SettingsWindow.FillRound(g, new RectangleF(LogicalWidth - 43, trackTop, 42, 24), 12,
                 UiMotion.Blend(Brand.ToggleOff, Brand.Accent, checkMotion.Value));
             using (var brush = new SolidBrush(UiMotion.Blend(Brand.ToggleThumb,
                 Brand.IsLight ? Brand.ToggleThumb : Brand.Background, checkMotion.Value)))
-                g.FillEllipse(brush, Width - 40 + 18 * (float)checkMotion.Value, trackTop + 3, 18, 18);
+                g.FillEllipse(brush, LogicalWidth - 40 + 18 * (float)checkMotion.Value, trackTop + 3, 18, 18);
         }
 
         protected override void Dispose(bool disposing)
@@ -901,6 +1087,10 @@ namespace DesktopHover
 
     internal sealed class HoverSlider : Control
     {
+        internal float UiScale = 1;
+        private int LogicalWidth { get { return (int)Math.Round(Width / UiScale); } }
+        private int LogicalHeight { get { return (int)Math.Round(Height / UiScale); } }
+
         private int value;
         private bool dragging, hovering;
         private readonly UiTween valueMotion, hoverMotion;
@@ -934,7 +1124,7 @@ namespace DesktopHover
             value = 720;
             valueMotion.Snap(value);
             TabStop = true;
-            Cursor = Cursors.Hand;
+            Cursor = Cursors.Default;
             AccessibleRole = AccessibleRole.Slider;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable, true);
@@ -966,7 +1156,7 @@ namespace DesktopHover
 
         private void SetFromX(int x)
         {
-            double ratio = Math.Max(0, Math.Min(1, (x - 10.0) / Math.Max(1, Width - 20)));
+            double ratio = Math.Max(0, Math.Min(1, (x - 10.0 * UiScale) / Math.Max(1, Width - 20 * UiScale)));
             int newValue = Minimum + (int)Math.Round((Maximum - Minimum) * ratio / Step) * Step;
             Value = newValue;
         }
@@ -1010,10 +1200,11 @@ namespace DesktopHover
         {
             Graphics g = e.Graphics;
             g.Clear(Brand.Background);
+            g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             double shownValue = Math.Max(Minimum, Math.Min(Maximum, valueMotion.Value));
-            float x = 10 + (Width - 20) * (float)(shownValue - Minimum) / Math.Max(1, Maximum - Minimum);
-            SettingsWindow.FillRound(g, new RectangleF(10, 12, Width - 20, 5), 2.5f, Brand.Border);
+            float x = 10 + (LogicalWidth - 20) * (float)(shownValue - Minimum) / Math.Max(1, Maximum - Minimum);
+            SettingsWindow.FillRound(g, new RectangleF(10, 12, LogicalWidth - 20, 5), 2.5f, Brand.Border);
             if (x > 10) SettingsWindow.FillRound(g, new RectangleF(10, 12, x - 10, 5), 2.5f, Brand.Accent);
             float radius = 7 + (float)hoverMotion.Value * 1.5f;
             using (var halo = new SolidBrush(UiMotion.Blend(Brand.Background, Brand.SelectedSurface, hoverMotion.Value)))
