@@ -210,12 +210,15 @@ namespace DesktopHover
         private static readonly ConditionalWeakTable<ToolStrip, MenuMotion> owners = new ConditionalWeakTable<ToolStrip, MenuMotion>();
         private readonly ToolStripDropDown menu;
         private readonly UiTween opacity;
+        private readonly bool fromCorner;
         private readonly Dictionary<ToolStripItem, UiTween> highlights = new Dictionary<ToolStripItem, UiTween>();
-        private bool disposed;
+        private bool disposed, cornerActive, anchorRight, anchorBottom;
+        private Point openingPoint, destination, entranceOffset;
+        private Region settledRegion;
 
-        internal static void Attach(ToolStripDropDown menu)
+        internal static void Attach(ToolStripDropDown menu, bool fromCorner = false)
         {
-            owners.GetValue(menu, delegate(ToolStrip owner) { return new MenuMotion((ToolStripDropDown)owner); });
+            owners.GetValue(menu, delegate(ToolStrip owner) { return new MenuMotion((ToolStripDropDown)owner, fromCorner); });
         }
 
         internal static double HoverAmount(ToolStripItem item)
@@ -236,21 +239,77 @@ namespace DesktopHover
             return highlight.Value;
         }
 
-        private MenuMotion(ToolStripDropDown menu)
+        private MenuMotion(ToolStripDropDown menu, bool fromCorner)
         {
             this.menu = menu;
-            opacity = new UiTween(delegate(double value) { if (!menu.IsDisposed) menu.Opacity = Math.Max(.01, value); });
+            this.fromCorner = fromCorner;
+            opacity = new UiTween(UpdateFrame);
             menu.Opening += Opening;
             menu.Opened += Opened;
             menu.Closed += Closed;
+            menu.KeyDown += KeyDown;
+            menu.ItemClicked += ItemClicked;
             menu.Disposed += MenuDisposed;
         }
 
         private void Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            openingPoint = Cursor.Position;
             opacity.Snap(UiMotion.Enabled ? 0 : 1);
         }
-        private void Opened(object sender, EventArgs e) { opacity.AnimateTo(1, 150); }
+        private void Opened(object sender, EventArgs e)
+        {
+            destination = menu.Location;
+            cornerActive = fromCorner && UiMotion.Enabled;
+            if (cornerActive)
+            {
+                Rectangle bounds = menu.Bounds, work = Screen.FromRectangle(bounds).WorkingArea;
+                anchorRight = openingPoint.X >= bounds.Left + bounds.Width / 2;
+                anchorBottom = openingPoint.Y >= bounds.Top + bounds.Height / 2;
+                entranceOffset = new Point(
+                    anchorRight ? Math.Min(12, Math.Max(0, work.Right - bounds.Right)) : -Math.Min(12, Math.Max(0, bounds.Left - work.Left)),
+                    anchorBottom ? Math.Min(16, Math.Max(0, work.Bottom - bounds.Bottom)) : -Math.Min(16, Math.Max(0, bounds.Top - work.Top)));
+                settledRegion = menu.Region == null ? null : menu.Region.Clone();
+                opacity.Snap(0);
+            }
+            opacity.AnimateTo(1, fromCorner ? 220 : 150);
+        }
+
+        private void UpdateFrame(double value)
+        {
+            if (disposed || menu.IsDisposed) return;
+            menu.Opacity = Math.Max(.01, value);
+            if (!cornerActive) return;
+            menu.Location = new Point(destination.X + (int)Math.Round(entranceOffset.X * (1 - value)),
+                destination.Y + (int)Math.Round(entranceOffset.Y * (1 - value)));
+            if (value >= 1)
+            {
+                cornerActive = false;
+                ReplaceRegion(settledRegion); settledRegion = null;
+                return;
+            }
+            // Reveal the real menu from the corner nearest the tray icon, without
+            // resizing its controls or changing the final placement chosen by Windows.
+            float width = (float)(menu.Width * (.8 + .2 * value));
+            float height = (float)(menu.Height * (.75 + .25 * value));
+            var visible = new RectangleF(anchorRight ? menu.Width - width : 0, anchorBottom ? menu.Height - height : 0, width, height);
+            using (var path = Brand.RoundRect(visible, 9))
+            {
+                var region = new Region(path);
+                if (settledRegion != null) region.Intersect(settledRegion);
+                ReplaceRegion(region);
+            }
+        }
+
+        private void ReplaceRegion(Region region)
+        {
+            Region previous = menu.Region;
+            menu.Region = region;
+            if (previous != null) previous.Dispose();
+        }
+
+        private void KeyDown(object sender, KeyEventArgs e) { opacity.Snap(1); }
+        private void ItemClicked(object sender, ToolStripItemClickedEventArgs e) { opacity.Snap(1); }
         private void Closed(object sender, ToolStripDropDownClosedEventArgs e)
         {
             opacity.Snap(1);
@@ -263,11 +322,14 @@ namespace DesktopHover
             if (disposed) return;
             disposed = true;
             opacity.Dispose();
+            if (settledRegion != null) { settledRegion.Dispose(); settledRegion = null; }
             foreach (UiTween highlight in highlights.Values) highlight.Dispose();
             highlights.Clear();
             menu.Opening -= Opening;
             menu.Opened -= Opened;
             menu.Closed -= Closed;
+            menu.KeyDown -= KeyDown;
+            menu.ItemClicked -= ItemClicked;
             menu.Disposed -= MenuDisposed;
             owners.Remove(menu);
         }

@@ -31,6 +31,7 @@ namespace DesktopHover
             toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, Dock = DockStyle.None,
                 AutoSize = false, BackColor = Brand.Surface, ForeColor = Brand.Text, Font = toolbarFont,
                 Renderer = new HoverMenuRenderer(), ShowItemToolTips = true };
+            SystemCursors.UseHand(toolbar);
             previousButton = AddAction("‹", "previous", () => Navigate(-1));
             playbackButton = AddAction("Ⅱ", "play_pause", TogglePlayback);
             nextButton = AddAction("›", "next", () => Navigate(1));

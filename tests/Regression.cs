@@ -33,10 +33,16 @@ namespace DesktopHover
                     VideoLoop(args.Length > 2 ? args[2] : null);
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "tray")
+                {
+                    TrayLayoutAndMotion();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 Images();
                 AnimatedImages();
                 SettingsLayout();
                 SettingsSaving();
+                TrayLayoutAndMotion();
                 FolderLookup();
                 Preferences();
                 PinnedViewer();
@@ -218,6 +224,66 @@ namespace DesktopHover
                 Check(window.IsDisposed, "custom close button closes settings");
             }
         }
+        private static void TrayLayoutAndMotion()
+        {
+            var settings = new AppSettings { Language = "lv", AnimationsEnabled = false };
+            using (var menu = new TrayMenu(() => settings, () => false,
+                value => { settings = value; UiMotion.Enabled = value.AnimationsEnabled; }, value => { }, () => { }, () => { }))
+            {
+                menu.SetHotkeyState(true, true);
+                Rectangle work = Screen.PrimaryScreen.WorkingArea;
+                Point origin = new Point(work.Right - 20, work.Bottom - 20);
+                menu.Show(origin); Pump(30);
+                Rectangle settled = menu.Bounds;
+                Console.WriteLine("Compact Latvian tray menu: " + menu.Width + " x " + menu.Height);
+                Check(menu.Height <= 410 && menu.Width <= 335, "Latvian tray menu stays compact with both shortcuts");
+                Check(menu.Visible && menu.Opacity == 1 && Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds), "disabled tray motion opens immediately inside the screen");
+                using (var bitmap = new Bitmap(menu.Width, menu.Height))
+                { menu.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(Path.Combine(output, "tray-compact-lv.png")); }
+                menu.Close();
+                foreach (var language in L10n.Languages)
+                {
+                    settings.Language = language.Code; menu.RefreshState(); menu.Show(origin); Pump(10);
+                    bool fits = Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds);
+                    foreach (ToolStripItem item in menu.Items)
+                        if (item.Available) fits &= item.Bounds.Top >= 0 && item.Bounds.Bottom <= menu.Height;
+                    Check(fits, "tray menu keeps all rows visible: " + language.Code);
+                    menu.Close();
+                }
+                settings.Language = "lv"; settings.AnimationsEnabled = true; menu.RefreshState();
+                menu.Show(origin);
+                Check(menu.Opacity < 1 && VisibleMenuArea(menu) < menu.Width * menu.Height * .85,
+                    "tray entrance starts faded and reveals from a corner");
+                Pump(50);
+                Check(menu.Visible && Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds), "moving tray entrance stays inside the work area");
+                Pump(300);
+                Check(menu.Visible && menu.Opacity == 1 && menu.Bounds == settled,
+                    "tray entrance finishes at the normal Windows menu position");
+                Check(VisibleMenuArea(menu) > menu.Width * menu.Height * .98, "completed entrance restores the full rounded menu");
+                menu.Close(); menu.Show(origin); menu.Close(); Pump(300);
+                Check(!menu.Visible && menu.Opacity == 1, "closing during entrance cancels motion without reopening the menu");
+                menu.Show(origin); UiMotion.Enabled = false;
+                Check(menu.Visible && menu.Opacity == 1 && menu.Bounds == settled && VisibleMenuArea(menu) > menu.Width * menu.Height * .98,
+                    "disabling motion mid-entrance restores full menu immediately");
+                menu.Close(); UiMotion.Enabled = true; menu.Show(origin);
+                typeof(Control).GetMethod("OnKeyDown", Private).Invoke(menu, new object[] { new KeyEventArgs(Keys.Down) });
+                Check(menu.Opacity == 1 && menu.Bounds == settled, "keyboard navigation finishes the entrance before selecting items");
+                var sizes = (ToolStripMenuItem)menu.Items["image-size"];
+                sizes.ShowDropDown(); Pump(250);
+                Check(sizes.DropDown.Visible && sizes.DropDown.Opacity == 1, "compact submenu remains usable after entrance");
+                menu.Close(); Pump(30);
+                Check(!sizes.DropDown.Visible, "closing the main menu closes its submenu");
+            }
+            UiMotion.Enabled = true;
+        }
+
+        private static float VisibleMenuArea(ToolStripDropDown menu)
+        {
+            if (menu.Region == null) return menu.Width * menu.Height;
+            using (Graphics graphics = menu.CreateGraphics())
+            { RectangleF bounds = menu.Region.GetBounds(graphics); return bounds.Width * bounds.Height; }
+        }
+
         private static void FolderLookup()
         {
             var index = new FolderNameIndex();

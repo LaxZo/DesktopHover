@@ -52,7 +52,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
   <tr><th>Excel</th><th>PowerPoint</th></tr>
   <tr>
     <td><img src="docs/assets/excel-preview.png" width="360" alt="XLSX pirmā lapa ar saglabātām vērtībām"></td>
-    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slaids Desktop Hover tumšajā noformējumā ar piparmētru krāsas akcentiem"></td>
+    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slaids Desktop Hover melnajā un bordo noformējumā ar rozā akcentiem"></td>
   </tr>
 </table>
 
@@ -73,15 +73,22 @@ Atslēgvārdi, virknes, komentāri, skaitļi un citi elementi ir iekrāsoti. Kod
 
 Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi atveras maināma izmēra lietotnes logā ar 1000 × 780 satura laukumu pie 100% mēroga, nepārsniedzot ekrāna robežas. Virsrakstjoslā logu var maksimizēt vai samazināt. Platā logā iestatījumi ir divās kolonnās, šaurā — vienā ritināmā kolonnā. Atkārtoti atverot esošo logu, saglabājas tā izmērs un maksimizētais stāvoklis. Slēdži stājas spēkā uzreiz, bet slīdņu izmaiņas saglabājas pēc 300 ms pauzes vai aizverot iestatījumus.
 
-Iestatījumu logs atveras ar īsu uzpeldēšanu, pogas un slēdži reaģē plūstoši, bet teknes un valodu izvēlnes pakāpeniski parādās. Arī priekšskatījumiem ir īsa parādīšanās kustība. Izslēdz **Animācijas** iestatījumos vai teknes izvēlnē, lai šos efektus noņemtu uzreiz; izvēle saglabājas. GIF, video un automātiskā slaidu maiņa turpina darboties kā iepriekš.
+Iestatījumu logs atveras ar īsu uzpeldēšanu, pogas un slēdži reaģē plūstoši, bet kompaktā teknes izvēlne uzpeld no ikonai tuvākā stūra. Valodu izvēlnes pakāpeniski parādās, un arī priekšskatījumiem ir īsa parādīšanās kustība. Izslēdz **Animācijas** iestatījumos vai teknes izvēlnē, lai šos efektus noņemtu uzreiz; izvēle saglabājas. GIF, video un automātiskā slaidu maiņa turpina darboties kā iepriekš.
 
-<table>
-  <tr><th>Tumšā tēma</th><th>Gaišā tēma</th></tr>
-  <tr>
-    <td><img src="docs/assets/settings-dark.png" width="360" alt="Tumšās tēmas iestatījumi: priekšskatījuma lielums, aizture, skaļums un pārslēgi"></td>
-    <td><img src="docs/assets/settings-light.png" width="360" alt="Tas pats iestatījumu logs gaišajā tēmā"></td>
-  </tr>
-</table>
+Tumšajā tēmā melnās un bordo virsmas papildina rozā akcenti. Uzvedot peli, mainās pogu teksta un ikonu krāsa, un tiek izmantota tava Windows kursora shēma.
+
+<p align="center">
+  <img src="docs/assets/settings-dark.png" width="900" alt="Tumšās tēmas iestatījumi ar kompaktu galveni, divām kolonnām, slaidu intervālu, video atkārtošanu un failu tipu pārslēgiem">
+</p>
+
+<details>
+<summary>Iestatījumi gaišajā tēmā</summary>
+
+<p align="center">
+  <img src="docs/assets/settings-light.png" width="900" alt="Tas pats iestatījumu logs ar gaišām virsmām un rozā akcentiem">
+</p>
+
+</details>
 
 <details>
 <summary><strong>Audio priekšskatījums un ātrā izvēlne</strong></summary>

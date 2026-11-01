@@ -13,7 +13,7 @@ namespace DesktopHover
         private readonly ToolStripMenuItem pin, autoPlay, loopVideo, fileTypes;
         private readonly ToolStripMenuItem[] fileTypeItems = new ToolStripMenuItem[5];
         private readonly Action<AppSettings> applySettings;
-        private readonly Font menuFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
+        private readonly Font menuFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, upscale, startup, animations, quit;
         private readonly ToolStripMenuItem[] sizes = new ToolStripMenuItem[4];
         private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[5];
@@ -120,7 +120,7 @@ namespace DesktopHover
 
         private static ToolStripMenuItem AddItem(ToolStripItemCollection items, string name, Action action)
         {
-            var item = new ToolStripMenuItem { Name = name, Padding = new Padding(2, 6, 2, 6) };
+            var item = new ToolStripMenuItem { Name = name, Padding = new Padding(2, 3, 2, 3) };
             if (action != null) item.Click += delegate { action(); };
             items.Add(item);
             return item;
@@ -134,9 +134,9 @@ namespace DesktopHover
             menu.ShowImageMargin = false;
             menu.ShowCheckMargin = true;
             menu.DropShadowEnabled = false;
-            menu.Padding = new Padding(5);
+            menu.Padding = new Padding(4);
             menu.Renderer = new HoverMenuRenderer();
-            MenuMotion.Attach(menu);
+            SystemCursors.UseHand(menu);
             menu.Opened += delegate
             {
                 using (GraphicsPath path = Brand.RoundRect(new RectangleF(0, 0, menu.Width, menu.Height), 9))
@@ -146,6 +146,7 @@ namespace DesktopHover
                     if (previous != null) previous.Dispose();
                 }
             };
+            MenuMotion.Attach(menu, menu == this);
         }
 
         private void Change(Action<AppSettings> edit)

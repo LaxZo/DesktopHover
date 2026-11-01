@@ -184,7 +184,7 @@ namespace DesktopHover
             hover = new UiTween(delegate { Invalidate(); });
             FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Cursor = Cursors.Default; TabStop = true;
+            SystemCursors.UseHand(this); TabStop = true;
         }
         protected override void OnMouseEnter(EventArgs e) { hover.AnimateTo(1, 120); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover.AnimateTo(0, 160); base.OnMouseLeave(e); }
@@ -193,16 +193,9 @@ namespace DesktopHover
             Graphics g = e.Graphics; g.Clear(Brand.Background);
             g.ScaleTransform(UiScale, UiScale); g.SmoothingMode = SmoothingMode.AntiAlias;
             float width = Width / UiScale, height = Height / UiScale;
-            float amount = (float)hover.Value;
-            if (amount > 0)
-            {
-                using (var glow = new LinearGradientBrush(new RectangleF(0, 0, width, height),
-                    Color.FromArgb((int)(65 * amount), 115, 138, 225), Color.FromArgb((int)(18 * amount), 115, 138, 225), 90))
-                using (var path = Brand.RoundRect(new RectangleF(2, 2, width - 4, height - 4), 6))
-                    g.FillPath(glow, path);
-            }
+            double amount = Focused && ShowFocusCues ? 1 : hover.Value;
             float x = width / 2, y = height / 2;
-            using (var pen = new Pen(Brand.Text, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+            using (var pen = new Pen(UiMotion.Blend(Brand.Text, Brand.Accent, amount), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
             {
                 if (glyph == 2)
                 { g.DrawLine(pen, x - 6, y - 6, x + 6, y + 6); g.DrawLine(pen, x + 6, y - 6, x - 6, y + 6); }
@@ -212,9 +205,6 @@ namespace DesktopHover
                     g.DrawLines(pen, new[] { new PointF(x - 6, y - 3 * direction), new PointF(x, y + 3 * direction), new PointF(x + 6, y - 3 * direction) });
                 }
             }
-            if (Focused)
-                using (var pen = new Pen(Brand.Accent))
-                using (var path = Brand.RoundRect(new RectangleF(3, 3, width - 6, height - 6), 5)) g.DrawPath(pen, path);
         }
         protected override void Dispose(bool disposing) { if (disposing) hover.Dispose(); base.Dispose(disposing); }
     }

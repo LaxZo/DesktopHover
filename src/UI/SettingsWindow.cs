@@ -116,6 +116,7 @@ namespace DesktopHover
                 Renderer = new HoverMenuRenderer()
             };
             MenuMotion.Attach(languageMenu);
+            SystemCursors.UseHand(languageMenu);
             foreach (L10n.LanguageOption language in L10n.Languages)
             {
                 string code = language.Code;
@@ -707,7 +708,7 @@ namespace DesktopHover
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
-            e.ArrowColor = Brand.Muted;
+            e.ArrowColor = UiMotion.Blend(Brand.Muted, Brand.Accent, MenuMotion.HoverAmount(e.Item));
             Rectangle bounds = e.ArrowRectangle;
             bounds.Y = (e.Item.Height - bounds.Height) / 2;
             e.ArrowRectangle = bounds;
@@ -721,6 +722,13 @@ namespace DesktopHover
 
         protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { }
 
+        protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
+        {
+            var button = e.Item as ToolStripButton;
+            if (button != null && button.Checked)
+                SettingsWindow.FillRound(e.Graphics, new RectangleF(0, 0, e.Item.Width, e.Item.Height), 6, Brand.SelectedSurface);
+        }
+
         protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -732,19 +740,19 @@ namespace DesktopHover
         {
             var item = e.Item as ToolStripMenuItem;
             bool isChecked = item != null && item.Checked;
-            double hover = MenuMotion.HoverAmount(e.Item);
-            if (hover > 0 || isChecked)
+            if (isChecked)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 SettingsWindow.FillRound(e.Graphics, new RectangleF(0, 0, e.Item.Width, e.Item.Height), 6,
-                    UiMotion.Blend(isChecked ? Brand.SelectedSurface : Brand.Surface, Brand.HoverSurface, hover));
+                    Brand.SelectedSurface);
             }
         }
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
             var item = e.Item as ToolStripMenuItem;
-            e.TextColor = item != null && item.Checked ? Brand.Accent : Brand.Text;
+            e.TextColor = !e.Item.Enabled ? Brand.Muted : item != null && item.Checked ? Brand.Accent :
+                UiMotion.Blend(Brand.Text, Brand.Accent, MenuMotion.HoverAmount(e.Item));
             // Native text bounds omit the extra row padding; center against the whole row.
             e.TextRectangle = new Rectangle(e.TextRectangle.X, 0, e.TextRectangle.Width, e.Item.Height);
             e.TextFormat = (e.TextFormat & ~TextFormatFlags.Bottom) |
@@ -797,7 +805,7 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
-            Cursor = Cursors.Default;
+            SystemCursors.UseHand(this);
             TabStop = true;
             AccessibleRole = AccessibleRole.PushButton;
         }
@@ -844,24 +852,23 @@ namespace DesktopHover
             g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Color fill = UiMotion.Blend(Brand.Surface, Brand.SelectedSurface, selectionMotion.Value);
-            fill = UiMotion.Blend(fill, Brand.HoverSurface, hoverMotion.Value * (1 - .5 * selectionMotion.Value));
-            fill = UiMotion.Blend(fill, Brand.SelectedSurface, pressMotion.Value * .5);
             float inset = (float)pressMotion.Value * 1.5f;
             var bounds = new RectangleF(.5f + inset, .5f + inset, LogicalWidth - 1 - inset * 2, LogicalHeight - 1 - inset * 2);
             SettingsWindow.FillRound(g, bounds, 9, fill);
             using (var path = Brand.RoundRect(bounds, 9))
-            using (var pen = new Pen(UiMotion.Blend(Brand.Border, Brand.Accent, Focused ? 1 : selectionMotion.Value)))
+            using (var pen = new Pen(UiMotion.Blend(Brand.Border, Brand.Accent, selectionMotion.Value)))
                 g.DrawPath(pen, path);
-            Color textColor = UiMotion.Blend(Brand.Text, Brand.Accent, selectionMotion.Value);
+            double emphasis = Focused && ShowFocusCues ? 1 : Math.Max(selectionMotion.Value, hoverMotion.Value);
+            Color textColor = UiMotion.Blend(Brand.Text, Brand.Accent, emphasis);
             if (LanguageSelector)
             {
-                Brand.DrawLanguageIcon(g, new Rectangle(10, (LogicalHeight - 21) / 2, 21, 21), Brand.Accent);
+                Brand.DrawLanguageIcon(g, new Rectangle(10, (LogicalHeight - 21) / 2, 21, 21), textColor);
                 UiDrawing.Text(g, Text, Font, new Rectangle(40, 0, LogicalWidth - 69, LogicalHeight),
                     textColor,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
                     TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
                 int mid = LogicalHeight / 2;
-                using (var pen = new Pen(selected ? Brand.Accent : Brand.Muted, 1.5f))
+                using (var pen = new Pen(UiMotion.Blend(Brand.Muted, Brand.Accent, emphasis), 1.5f))
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
                     g.DrawLines(pen, selected
@@ -871,11 +878,11 @@ namespace DesktopHover
             }
             else if (ThemeSelector)
             {
-                DrawThemeIcon(g);
+                DrawThemeIcon(g, textColor);
             }
             else if (ProjectLink)
             {
-                DrawGitHubIcon(g);
+                DrawGitHubIcon(g, textColor);
             }
             else if (Compact)
             {
@@ -909,7 +916,7 @@ namespace DesktopHover
         }
 
         // GitHub Octicons mark-github-16, converted to GDI+ curves. See THIRD-PARTY-NOTICES.md.
-        private void DrawGitHubIcon(Graphics graphics)
+        private void DrawGitHubIcon(Graphics graphics, Color color)
         {
             GraphicsState state = graphics.Save();
             try
@@ -917,7 +924,7 @@ namespace DesktopHover
                 graphics.TranslateTransform((LogicalWidth - 20) / 2f, (LogicalHeight - 20) / 2f);
                 graphics.ScaleTransform(20f / 16f, 20f / 16f);
                 using (var path = new GraphicsPath())
-                using (var brush = new SolidBrush(Brand.Text))
+                using (var brush = new SolidBrush(color))
                 {
                     path.AddBezier(7.984f, 0f, 12.406f, 0f, 16.0f, 3.61f, 16.0f, 8.03f);
                     path.AddBezier(16.0f, 8.03f, 16.0f, 11.53f, 13.781f, 14.359f, 10.953f, 15.438f);
@@ -954,13 +961,13 @@ namespace DesktopHover
             finally { graphics.Restore(state); }
         }
 
-        private void DrawThemeIcon(Graphics graphics)
+        private void DrawThemeIcon(Graphics graphics, Color color)
         {
             GraphicsState state = graphics.Save();
             try
             {
                 graphics.TranslateTransform((LogicalWidth - 20) / 2f, (LogicalHeight - 20) / 2f);
-                using (var pen = new Pen(selected ? Brand.Accent : Brand.Text, 1.6f))
+                using (var pen = new Pen(color, 1.6f))
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
                     pen.LineJoin = LineJoin.Round;
@@ -1022,7 +1029,7 @@ namespace DesktopHover
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
-            Cursor = Cursors.Default;
+            SystemCursors.UseHand(this);
             TabStop = true;
             AccessibleRole = AccessibleRole.CheckButton;
         }
@@ -1050,12 +1057,8 @@ namespace DesktopHover
             g.Clear(Brand.Background);
             g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            SettingsWindow.FillRound(g, new RectangleF(0, 0, LogicalWidth, LogicalHeight), 8,
-                UiMotion.Blend(Brand.Background, Brand.Surface, hoverMotion.Value));
-            if (Focused)
-                using (var path = Brand.RoundRect(new RectangleF(.5f, .5f, LogicalWidth - 1, LogicalHeight - 1), 8))
-                using (var pen = new Pen(Brand.Accent)) g.DrawPath(pen, path);
-            UiDrawing.Text(g, Text, Font, new Rectangle(0, 0, LogicalWidth - 58, 22), Brand.Text,
+            double emphasis = Focused && ShowFocusCues ? 1 : hoverMotion.Value;
+            UiDrawing.Text(g, Text, Font, new Rectangle(0, 0, LogicalWidth - 58, 22), UiMotion.Blend(Brand.Text, Brand.Accent, emphasis),
                 TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             using (var detailFont = new Font("Segoe UI", 11, FontStyle.Regular, GraphicsUnit.Pixel))
                 UiDrawing.Text(g, Detail, detailFont, new Rectangle(0, 22, LogicalWidth - 58, 16), Brand.Muted,
@@ -1124,7 +1127,7 @@ namespace DesktopHover
             value = 720;
             valueMotion.Snap(value);
             TabStop = true;
-            Cursor = Cursors.Default;
+            SystemCursors.UseHand(this);
             AccessibleRole = AccessibleRole.Slider;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable, true);
@@ -1207,11 +1210,8 @@ namespace DesktopHover
             SettingsWindow.FillRound(g, new RectangleF(10, 12, LogicalWidth - 20, 5), 2.5f, Brand.Border);
             if (x > 10) SettingsWindow.FillRound(g, new RectangleF(10, 12, x - 10, 5), 2.5f, Brand.Accent);
             float radius = 7 + (float)hoverMotion.Value * 1.5f;
-            using (var halo = new SolidBrush(UiMotion.Blend(Brand.Background, Brand.SelectedSurface, hoverMotion.Value)))
-                g.FillEllipse(halo, x - 11, 3.5f, 22, 22);
-            if (Focused)
-                using (var pen = new Pen(Brand.Accent)) g.DrawEllipse(pen, x - 11, 3.5f, 22, 22);
-            using (var brush = new SolidBrush(Brand.Accent)) g.FillEllipse(brush, x - radius, 14.5f - radius, radius * 2, radius * 2);
+            using (var brush = new SolidBrush(UiMotion.Blend(Brand.Accent, Brand.AccentHover, hoverMotion.Value)))
+                g.FillEllipse(brush, x - radius, 14.5f - radius, radius * 2, radius * 2);
         }
 
         protected override void Dispose(bool disposing)

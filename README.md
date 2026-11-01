@@ -52,7 +52,7 @@ These are real hover previews of demonstration files. Word and Excel content is 
   <tr><th>Excel</th><th>PowerPoint</th></tr>
   <tr>
     <td><img src="docs/assets/excel-preview.png" width="360" alt="XLSX first worksheet with cached values"></td>
-    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slide in Desktop Hover's charcoal and mint visual style"></td>
+    <td><img src="docs/assets/powerpoint-preview.png" width="360" alt="PowerPoint slide in Desktop Hover's black, burgundy and rose visual style"></td>
   </tr>
 </table>
 
@@ -73,15 +73,22 @@ The preview highlights keywords, strings, comments, numbers and other tokens. It
 
 Change the appearance with the sun/moon button beside the language selector. Settings open in a resizable application window with a 1000 × 780 content area at 100% scaling, bounded by your screen. Use the title bar to maximize or minimize it. Wide windows show two columns; narrow windows switch to a scrolling single column. Reopening an existing window preserves its size and maximized state. Switches apply immediately; slider changes are saved after a 300 ms pause or when you close Settings.
 
-Settings open with a short fade and rise, buttons and switches respond smoothly, and tray/language menus fade in. Preview cards have a brief entrance motion. Turn **Animations** off in Settings or the tray menu to disable these effects immediately; this preference is saved. GIFs, videos and automatic slide changes keep playing normally.
+Settings open with a short fade and rise, buttons and switches respond smoothly, and the compact tray menu rises from the corner nearest its icon. Language menus fade in, and preview cards have a brief entrance motion. Turn **Animations** off in Settings or the tray menu to disable these effects immediately; this preference is saved. GIFs, videos and automatic slide changes keep playing normally.
 
-<table>
-  <tr><th>Dark theme</th><th>Light theme</th></tr>
-  <tr>
-    <td><img src="docs/assets/settings-dark.png" width="360" alt="Dark settings window showing preview size, delay, volume and startup controls"></td>
-    <td><img src="docs/assets/settings-light.png" width="360" alt="The same settings window in the light theme"></td>
-  </tr>
-</table>
+The dark theme pairs black and burgundy surfaces with rose accents. Buttons change their text and icon colors on hover and use your Windows cursor scheme.
+
+<p align="center">
+  <img src="docs/assets/settings-dark.png" width="900" alt="Dark settings window with a compact header, two columns, slideshow timing, video looping and file-type switches">
+</p>
+
+<details>
+<summary>View Settings in the light theme</summary>
+
+<p align="center">
+  <img src="docs/assets/settings-light.png" width="900" alt="The same settings window with pale surfaces and rose accents">
+</p>
+
+</details>
 
 <details>
 <summary><strong>See the audio preview and tray menu</strong></summary>

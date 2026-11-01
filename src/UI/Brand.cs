@@ -14,22 +14,23 @@ namespace DesktopHover
             IsLight = String.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static Color Background { get { return IsLight ? Color.FromArgb(245, 247, 250) : Color.FromArgb(16, 20, 24); } }
-        public static Color Surface { get { return IsLight ? Color.White : Color.FromArgb(27, 33, 40); } }
-        public static Color Border { get { return IsLight ? Color.FromArgb(205, 214, 222) : Color.FromArgb(48, 57, 67); } }
-        public static Color Text { get { return IsLight ? Color.FromArgb(35, 47, 57) : Color.FromArgb(238, 243, 247); } }
-        public static Color Muted { get { return IsLight ? Color.FromArgb(88, 105, 119) : Color.FromArgb(145, 160, 174); } }
-        public static Color Accent { get { return IsLight ? Color.FromArgb(0, 116, 99) : Color.FromArgb(99, 219, 194); } }
-        public static Color HoverSurface { get { return IsLight ? Color.FromArgb(232, 238, 244) : Color.FromArgb(43, 47, 57); } }
-        public static Color SelectedSurface { get { return IsLight ? Color.FromArgb(218, 242, 236) : Color.FromArgb(35, 57, 62); } }
-        public static Color ToggleOff { get { return IsLight ? Color.FromArgb(156, 168, 181) : Color.FromArgb(65, 70, 83); } }
-        public static Color ToggleThumb { get { return Color.FromArgb(238, 243, 247); } }
+        public static Color Background { get { return IsLight ? Color.FromArgb(250, 246, 248) : Color.FromArgb(12, 10, 12); } }
+        public static Color Surface { get { return IsLight ? Color.White : Color.FromArgb(21, 15, 19); } }
+        public static Color Border { get { return IsLight ? Color.FromArgb(226, 208, 216) : Color.FromArgb(48, 29, 38); } }
+        public static Color Text { get { return IsLight ? Color.FromArgb(43, 28, 36) : Color.FromArgb(233, 229, 231); } }
+        public static Color Muted { get { return IsLight ? Color.FromArgb(118, 96, 106) : Color.FromArgb(166, 155, 161); } }
+        public static Color Accent { get { return IsLight ? Color.FromArgb(182, 22, 75) : Color.FromArgb(225, 31, 94); } }
+        public static Color AccentHover { get { return IsLight ? Color.FromArgb(149, 15, 60) : Color.FromArgb(244, 72, 126); } }
+        public static Color HoverSurface { get { return IsLight ? Color.FromArgb(250, 232, 239) : Color.FromArgb(36, 18, 27); } }
+        public static Color SelectedSurface { get { return IsLight ? Color.FromArgb(248, 219, 230) : Color.FromArgb(49, 19, 31); } }
+        public static Color ToggleOff { get { return IsLight ? Color.FromArgb(207, 183, 194) : Color.FromArgb(44, 26, 35); } }
+        public static Color ToggleThumb { get { return IsLight ? Color.White : Color.FromArgb(12, 10, 12); } }
         public static Color Paused { get { return IsLight ? Color.FromArgb(157, 105, 32) : Color.FromArgb(224, 176, 99); } }
-        public static Color EditorBackground { get { return IsLight ? Color.White : Color.FromArgb(30, 30, 30); } }
-        public static Color EditorGutter { get { return IsLight ? Color.FromArgb(243, 245, 247) : Color.FromArgb(37, 37, 38); } }
-        public static Color EditorLineNumber { get { return IsLight ? Color.FromArgb(100, 110, 119) : Color.FromArgb(133, 133, 133); } }
-        public static Color CheckerFirst { get { return IsLight ? Color.FromArgb(235, 239, 243) : Color.FromArgb(43, 46, 51); } }
-        public static Color CheckerSecond { get { return IsLight ? Color.FromArgb(216, 223, 230) : Color.FromArgb(53, 56, 61); } }
+        public static Color EditorBackground { get { return IsLight ? Color.White : Color.FromArgb(16, 13, 16); } }
+        public static Color EditorGutter { get { return IsLight ? Background : Color.FromArgb(25, 19, 24); } }
+        public static Color EditorLineNumber { get { return Muted; } }
+        public static Color CheckerFirst { get { return IsLight ? Color.FromArgb(241, 235, 238) : Color.FromArgb(38, 32, 36); } }
+        public static Color CheckerSecond { get { return IsLight ? Color.FromArgb(225, 216, 221) : Color.FromArgb(49, 42, 47); } }
 
         public static Color SyntaxColor(TextTokenKind kind)
         {
@@ -100,8 +101,8 @@ namespace DesktopHover
                 graphics.ScaleTransform(side / 64f, side / 64f);
                 using (var tile = RoundRect(new RectangleF(1, 1, 62, 62), 15))
                 using (var fill = new LinearGradientBrush(new PointF(0, 0), new PointF(64, 64),
-                    IsLight ? Color.FromArgb(227, 241, 237) : Color.FromArgb(33, 46, 52), Background))
-                using (var edge = new Pen(IsLight ? Border : Color.FromArgb(54, 70, 77), 1.2f))
+                    SelectedSurface, Background))
+                using (var edge = new Pen(Border, 1.2f))
                 {
                     graphics.FillPath(fill, tile);
                     graphics.DrawPath(edge, tile);
