@@ -7,6 +7,10 @@ namespace DesktopHover
     {
         private static readonly Dictionary<string, string[]> strings = new Dictionary<string, string[]>
         {
+            { "pinned_preview", new[] { "Pinned preview", "Piespraustais priekšskatījums" } },
+            { "maximize_preview", new[] { "Maximize preview", "Maksimizēt priekšskatījumu" } },
+            { "close_preview", new[] { "Close preview", "Aizvērt priekšskatījumu" } },
+            { "zoom_level", new[] { "Image scale · double-click the image to fit", "Attēla mērogs · dubultklikšķis ievieto attēlu logā" } },
             { "pin", new[] { "Pin last preview", "Piespraust pēdējo priekšskatījumu" } },
             { "previous", new[] { "Previous page / slide", "Iepriekšējā lapa / slaids" } },
             { "next", new[] { "Next page / slide", "Nākamā lapa / slaids" } },
@@ -46,6 +50,10 @@ namespace DesktopHover
         // Other languages follow ru, zh-CN, de, es, fr, pt-BR, it, ja, ko, uk.
         private static readonly Dictionary<string, string[]> translated = new Dictionary<string, string[]>
         {
+            { "pinned_preview", new[] { "Закреплённый просмотр", "固定预览", "Angeheftete Vorschau", "Vista previa fijada", "Aperçu épinglé", "Prévia fixada", "Anteprima fissata", "固定プレビュー", "고정 미리보기", "Закріплений перегляд" } },
+            { "maximize_preview", new[] { "Развернуть просмотр", "最大化预览", "Vorschau maximieren", "Maximizar vista previa", "Agrandir l’aperçu", "Maximizar prévia", "Ingrandisci anteprima", "プレビューを最大化", "미리보기 최대화", "Розгорнути перегляд" } },
+            { "close_preview", new[] { "Закрыть просмотр", "关闭预览", "Vorschau schließen", "Cerrar vista previa", "Fermer l’aperçu", "Fechar prévia", "Chiudi anteprima", "プレビューを閉じる", "미리보기 닫기", "Закрити перегляд" } },
+            { "zoom_level", new[] { "Масштаб · двойной щелчок вписывает изображение", "图像缩放 · 双击以适应窗口", "Bildmaßstab · Doppelklick passt das Bild ein", "Escala · doble clic para ajustar", "Échelle · double-clic pour ajuster", "Escala · clique duplo para ajustar", "Scala · doppio clic per adattare", "画像倍率 · ダブルクリックで全体表示", "이미지 배율 · 두 번 클릭하여 창에 맞춤", "Масштаб · подвійний клік вписує зображення" } },
             { "maximize_settings", new[] { "Развернуть настройки", "最大化设置", "Einstellungen maximieren", "Maximizar ajustes", "Agrandir les paramètres", "Maximizar configurações", "Ingrandisci impostazioni", "設定を最大化", "설정 최대화", "Розгорнути налаштування" } },
             { "restore_settings", new[] { "Восстановить размер окна", "还原窗口大小", "Fenstergröße wiederherstellen", "Restaurar tamaño de ventana", "Restaurer la taille de la fenêtre", "Restaurar tamanho da janela", "Ripristina dimensioni finestra", "ウィンドウサイズを元に戻す", "창 크기 복원", "Відновити розмір вікна" } },
             { "loop_video", new[] { "Повторять видео", "循环播放视频", "Videos wiederholen", "Repetir vídeos", "Lire les vidéos en boucle", "Repetir vídeos", "Ripeti video", "動画をループ再生", "동영상 반복", "Повторювати відео" } },

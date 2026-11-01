@@ -142,6 +142,8 @@ While previews are enabled, DesktopHover temporarily deactivates Windows file in
 
 In the pinned window, use the toolbar or **Left/Right** to browse PDF pages and slides, **Space** to play/pause, **+ / −** or **Ctrl+wheel** to zoom, and **0** to fit the image. Drag a zoomed image to pan. The mouse wheel scrolls text and browses pages/slides. **Escape** closes the pinned window. If another app already owns a global shortcut, use the tray menu instead.
 
+The pinned viewer uses the app’s theme and rounded window controls. Resize or maximize it freely; loading and switching files keep your window size and position. Wheel zoom follows the pointer, the toolbar shows the image’s actual scale, and double-clicking the image fits it to the window. Pinning the same file again brings its existing view forward without resetting zoom, page or playback.
+
 ### Available settings
 
 | Setting | Options |
@@ -185,6 +187,8 @@ File extensions identify preview candidates; **actual image decoding and media p
 Document previews load in the background and are canceled when you move away. The built-in readers work without Office or Adobe applications; higher-resolution native PowerPoint export requires the installed desktop PowerPoint application. Windows thumbnail support depends on the handlers installed on your computer; if no usable preview exists, the app shows an explanation.
 
 Supported Photoshop composites and native PowerPoint exports fill the configured preview bounds while keeping their proportions, without enabling **Enlarge small images**. PowerPoint themes, fonts, backgrounds and shapes come from an actual slide image; slides are never reconstructed from partial XML content. If only a small saved thumbnail can be read, enlarging it cannot recover missing detail.
+
+Word and Excel OOXML excerpts (`.docx`, `.xlsx` and their macro/template variants) follow the app’s dark or light theme, including page backgrounds, text, table lines and headers. Changing the theme also refreshes an open pinned preview without resetting its zoom. Embedded Word pictures keep their original colors. Legacy Office files and saved-thumbnail fallbacks retain the colors provided by Windows or the document.
 
 Native PowerPoint export handles PPTX/POTX/PPSX packages when PowerPoint is installed and idle. It opens a temporary read-only copy without a visible window. Hidden OLE metadata (including think-cell data) is removed from that copy; visible OLE objects use their saved pictures. The source presentation is unchanged. Macros, ActiveX and linked external resources remain unsupported. If PowerPoint is already open, a saved/Windows preview is used without attaching to that session. Presentation previews fill the selected size even when only a thumbnail is available. A saved thumbnail can appear first, followed by exported slides as they become ready, without waiting for the whole presentation. The footer shows loading progress or why export is unavailable. Moving away closes the hover preview immediately while an already-started export can finish for reuse on the next hover.
 

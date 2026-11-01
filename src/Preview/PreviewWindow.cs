@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -85,7 +85,7 @@ namespace DesktopHover
             int targetHeight = interactive ? Math.Max(480, settings.MaxHeight) : settings.MaxHeight;
             bool resize = maximumPreviewWidth != targetWidth || maximumPreviewHeight != targetHeight || upscale != settings.Upscale;
             bool resumeLoop = settings.LoopVideo && !previewSettings.LoopVideo && mediaState == "media_ended";
-            string reopen = interactive && resize ? CurrentPath : null;
+            bool themeChanged = !String.Equals(previewSettings.Theme, settings.Theme, StringComparison.OrdinalIgnoreCase);
             previewSettings = settings.Clone();
             autoPlayMedia = settings.AutoPlayMedia;
             UiMotion.Enabled = settings.AnimationsEnabled;
@@ -101,9 +101,15 @@ namespace DesktopHover
             UpdateLanguage();
             if (media != null) media.SetVolume(volumePercent);
             if (slideshowTimer != null) slideshowTimer.Interval = slideIntervalSeconds * 1000;
-            if (resize || !settings.Allows(mediaKind)) ClearPreview();
+            if ((!interactive && resize) || !settings.Allows(mediaKind)) ClearPreview();
             else Invalidate();
-            if (reopen != null) ShowFile(reopen, mediaCursor, mediaItemBounds);
+            if (themeChanged && mediaKind == MediaKind.Document && OfficePreviewReader.SupportsTheming(CurrentPath))
+            {
+                CancelDocumentLoad();
+                StartDocumentLoad(CurrentPath, false);
+                LayoutDocument();
+            }
+            if (interactive) LayoutInteractive();
             if (resumeLoop && media != null && media.IsOpen && media.HasVideo) TogglePlayback();
             UpdateToolbar();
         }
@@ -169,6 +175,7 @@ namespace DesktopHover
                 CreateParams parameters = base.CreateParams;
                 // The WPF video surface owns its pixels; parent paints must not cover it.
                 parameters.Style |= WsClipChildren;
+                if (interactive) { parameters.Style |= 0x000F0000; parameters.Style &= ~0x00C00000; }
                 if (!interactive) parameters.ExStyle |= WsExTransparent | WsExToolWindow | WsExNoActivate;
                 parameters.ClassStyle |= 0x00020000; // CS_DROPSHADOW
                 return parameters;
@@ -180,7 +187,7 @@ namespace DesktopHover
             if (IsDisposed || String.IsNullOrEmpty(path)) return false;
             if (String.Equals(CurrentPath, path, StringComparison.OrdinalIgnoreCase) &&
                 mediaKind == MediaKind.Image && (imageTask != null || preview != null)) return true;
-            ClearPreview();
+            ClearPreview(false);
             try
             {
                 CurrentPath = Path.GetFullPath(path);
@@ -188,9 +195,9 @@ namespace DesktopHover
                 mediaKind = MediaKind.Image;
                 mediaState = "preview_loading";
                 mediaCursor = cursor; mediaItemBounds = itemBounds;
-                scale = GetScale(cursor); SetFonts(); UpdateLanguage();
+                scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor); SetFonts(); UpdateLanguage();
                 LayoutImage();
-                entranceMotion.ShowAt(Location);
+                ShowPreview();
                 imageCancellation = new System.Threading.CancellationTokenSource();
                 var token = imageCancellation.Token;
                 var size = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
@@ -222,7 +229,7 @@ namespace DesktopHover
                     sourceWidth = result.Width; sourceHeight = result.Height; sourceBytes = result.Bytes;
                 }
             }
-            LayoutImage(); entranceMotion.ShowAt(Location); Invalidate();
+            LayoutImage(); ShowPreview(); Invalidate();
             if (animatedGif != null && animatedGif.CanAdvance && !playbackPaused)
             {
                 animationTimer.Interval = animatedGif.FrameDelay; animationTimer.Start();
@@ -246,6 +253,9 @@ namespace DesktopHover
 
         private void LayoutImage()
         {
+            description = preview == null ? L10n.Text(language, mediaState ?? "image_unavailable") :
+                String.Format(L10n.Culture(language), "{0} × {1} px  ·  {2}", sourceWidth, sourceHeight, FormatBytes(sourceBytes));
+            if (interactive) { LayoutInteractive(); return; }
             Rectangle area = Screen.FromPoint(mediaCursor).WorkingArea;
             int padding = Px(3), footer = Px(12), footerHeight = Px(48);
             int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, area.Width - padding * 2 - Px(32)));
@@ -263,8 +273,6 @@ namespace DesktopHover
             imageArea = new Rectangle(padding + (contentWidth - width) / 2, padding, width, height);
             titleArea = new Rectangle(footer + Px(22), imageArea.Bottom + Px(11), Math.Max(1, ClientSize.Width - footer * 2 - Px(22)), Px(19));
             descriptionArea = new Rectangle(footer, titleArea.Bottom + Px(1), Math.Max(1, ClientSize.Width - footer * 2), Px(17));
-            description = preview == null ? L10n.Text(language, mediaState ?? "image_unavailable") :
-                String.Format(L10n.Culture(language), "{0} × {1} px  ·  {2}", sourceWidth, sourceHeight, FormatBytes(sourceBytes));
             PositionContent(mediaCursor, mediaItemBounds, area);
         }
 
@@ -272,6 +280,8 @@ namespace DesktopHover
         {
             MediaKind kind = MediaFiles.Kind(path);
             if (!previewSettings.Allows(kind)) { ClearPreview(); return false; }
+            if (interactive && File.Exists(path) && String.Equals(CurrentPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+            { ActivatePinned(); return true; }
             if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
             if (kind == MediaKind.Text) return ShowText(path, cursor, itemBounds);
             if (kind == MediaKind.Document) return ShowDocument(path, cursor, itemBounds);
@@ -288,7 +298,7 @@ namespace DesktopHover
         private bool LoadDocument(string path, DrawingPoint cursor, Rectangle itemBounds, bool allowVideo)
         {
             if (IsDisposed) return false;
-            ClearPreview();
+            ClearPreview(false);
             try
             {
                 path = Path.GetFullPath(path);
@@ -299,28 +309,33 @@ namespace DesktopHover
                 mediaState = "document_loading";
                 mediaCursor = cursor;
                 mediaItemBounds = itemBounds;
-                scale = GetScale(cursor);
+                scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor);
                 SetFonts();
                 AccessibleName = L10n.Text(language, "document_preview");
                 Text = AccessibleName + " — Desktop Hover";
                 LayoutDocument();
-                entranceMotion.ShowAt(Location);
-                SetWindowPos(Handle, interactive ? IntPtr.Zero : new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow | (interactive ? 4U : 0U));
-                documentCancellation = new System.Threading.CancellationTokenSource();
-                var token = documentCancellation.Token;
-                var bounds = interactive && String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase)
-                    ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
-                documentProgress = new DocumentProgress();
-                DocumentProgress progress = documentProgress;
-                documentLoading = true;
-                documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish)
-                    : DocumentPreviewContent.LoadStill(path, bounds, token),
-                    System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
-                mediaTimer.Interval = 40; mediaTimer.Start();
+                ShowPreview();
+                if (!interactive) SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+                StartDocumentLoad(path, allowVideo);
                 Invalidate();
                 return true;
             }
             catch { ClearPreview(); return false; }
+        }
+
+        private void StartDocumentLoad(string path, bool allowVideo)
+        {
+            documentCancellation = new System.Threading.CancellationTokenSource();
+            var token = documentCancellation.Token;
+            var bounds = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
+            var palette = OfficePreviewPalette.Capture();
+            documentProgress = new DocumentProgress();
+            DocumentProgress progress = documentProgress;
+            documentLoading = true;
+            documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish, palette)
+                : DocumentPreviewContent.LoadStill(path, bounds, token, palette),
+                System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+            mediaTimer.Interval = 40; mediaTimer.Start();
         }
 
         private void CompleteDocumentLoad()
@@ -351,7 +366,7 @@ namespace DesktopHover
                 }
                 else if (result != null) ApplyDocumentResult(result, true);
             }
-            LayoutDocument(); entranceMotion.ShowAt(Location); Invalidate();
+            LayoutDocument(); ShowPreview(); Invalidate();
         }
 
         private void ApplyDocumentResult(DocumentPreviewResult result, bool complete)
@@ -372,7 +387,7 @@ namespace DesktopHover
                 documentSlideTotal = complete ? documentSlides.Length : Math.Max(result.SlideCount, documentSlides.Length);
             }
             if (complete && hadSlides && result.Slides == null) documentSlideTotal = documentSlides.Length;
-            LayoutDocument(); entranceMotion.ShowAt(Location); Invalidate();
+            LayoutDocument(); ShowPreview(); Invalidate();
             if (documentSlides != null && documentSlides.Length > 1 && !slideshowTimer.Enabled && !playbackPaused)
             {
                 slideshowTimer.Interval = slideIntervalSeconds * 1000;
@@ -399,14 +414,14 @@ namespace DesktopHover
                 Bitmap replacement;
                 using (var stream = new MemoryStream(documentSlides[next], false))
                 using (Image image = Image.FromStream(stream, false, true))
-                    replacement = DocumentPreviewWorker.CopyImage(image, new DrawingSize(maximumPreviewWidth, maximumPreviewHeight));
+                    replacement = DocumentPreviewWorker.CopyImage(image, interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight));
                 Bitmap previous = preview;
                 preview = replacement;
                 if (previous != null) previous.Dispose();
                 documentSlideIndex = next;
                 UpdateToolbar();
                 LayoutDocument();
-                SetWindowPos(Handle, interactive ? IntPtr.Zero : new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow | (interactive ? 4U : 0U));
+                if (!interactive) SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 Invalidate();
             }
             catch { slideshowTimer.Stop(); }
@@ -437,6 +452,8 @@ namespace DesktopHover
 
         private void LayoutDocument()
         {
+            UpdateDocumentDescription();
+            if (interactive) { LayoutInteractive(); return; }
             Rectangle workingArea = Screen.FromPoint(mediaCursor).WorkingArea;
             int padding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
             int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
@@ -459,6 +476,11 @@ namespace DesktopHover
             titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
+            PositionContent(mediaCursor, mediaItemBounds, workingArea);
+        }
+
+        private void UpdateDocumentDescription()
+        {
             string type = Path.GetExtension(CurrentPath).TrimStart('.').ToUpperInvariant();
             string note = L10n.Text(language, mediaState == "document_unavailable" || mediaState == "document_adobe_unavailable" ||
                 mediaState == "document_limit" || mediaState == "document_pdf_unavailable"
@@ -466,10 +488,11 @@ namespace DesktopHover
             string slidePosition = documentSlides != null && documentSlides.Length > 0
                 ? " · " + (documentSlideIndex + 1) + "/" + Math.Max(documentSlideTotal, documentSlides.Length) : "";
             if (pdfPageCount > 0) slidePosition = " · " + (pdfPageIndex + 1) + "/" + pdfPageCount;
-            description = type + " · " + note + slidePosition + " · " + FormatBytes(sourceBytes);
+            // The hover-only PDF note says "first page"; pinned previews can show any page.
+            if (interactive && mediaState == "document_pdf") note = null;
+            description = type + (String.IsNullOrEmpty(note) ? "" : " · " + note) + slidePosition + " · " + FormatBytes(sourceBytes);
             if (documentLoading) description += " · " + L10n.Text(language, "preview_loading");
             if (!String.IsNullOrEmpty(documentDetail)) description = L10n.Text(language, documentDetail);
-            PositionContent(mediaCursor, mediaItemBounds, workingArea);
         }
 
         private void PaintDocumentCard(Graphics graphics)
@@ -494,7 +517,7 @@ namespace DesktopHover
         private bool ShowText(string path, DrawingPoint cursor, Rectangle itemBounds)
         {
             if (IsDisposed) return false;
-            ClearPreview();
+            ClearPreview(false);
             try
             {
                 path = Path.GetFullPath(path);
@@ -503,11 +526,20 @@ namespace DesktopHover
                 CurrentPath = path;
                 fileName = Path.GetFileName(path);
                 sourceBytes = textPreview.FileBytes;
-                scale = GetScale(cursor);
+                mediaCursor = cursor; mediaItemBounds = itemBounds;
+                scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor);
                 SetFonts();
                 UpdateLanguage();
                 AccessibleName = L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
                 Text = AccessibleName + " — Desktop Hover";
+
+                if (interactive)
+                {
+                    description = (textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview")) +
+                        " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+                    if (textPreview.Truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
+                    LayoutInteractive(); ShowPreview(); Invalidate(); return true;
+                }
 
                 Rectangle workingArea = Screen.FromPoint(cursor).WorkingArea;
                 int padding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
@@ -539,8 +571,8 @@ namespace DesktopHover
                 description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
                 if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
                 PositionContent(cursor, itemBounds, workingArea);
-                entranceMotion.ShowAt(Location);
-                SetWindowPos(Handle, interactive ? IntPtr.Zero : new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow | (interactive ? 4U : 0U));
+                ShowPreview();
+                SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 Invalidate();
                 return true;
             }
@@ -613,7 +645,7 @@ namespace DesktopHover
         private bool ShowMedia(string path, MediaKind kind, DrawingPoint cursor, Rectangle itemBounds)
         {
             if (IsDisposed) return false;
-            ClearPreview();
+            ClearPreview(false);
             try
             {
                 // Playback is local only, including when called independently of the shell resolver.
@@ -629,7 +661,7 @@ namespace DesktopHover
                 mediaState = "media_loading";
                 mediaCursor = cursor;
                 mediaItemBounds = itemBounds;
-                scale = GetScale(cursor);
+                scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor);
                 SetFonts();
                 UpdateLanguage();
                 AccessibleName = L10n.Text(language, kind == MediaKind.Video ? "video_preview" : "audio_preview");
@@ -751,6 +783,7 @@ namespace DesktopHover
 
         private void LayoutMedia()
         {
+            if (interactive) { LayoutInteractive(); ShowPreview(); Invalidate(); return; }
             Rectangle workingArea = Screen.FromPoint(mediaCursor).WorkingArea;
             int imagePadding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
             int maxWidth = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - imagePadding * 2 - Px(32)));
@@ -778,9 +811,9 @@ namespace DesktopHover
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
             PositionContent(mediaCursor, mediaItemBounds, workingArea);
-            entranceMotion.ShowAt(Location);
+            ShowPreview();
             if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
-            SetWindowPos(Handle, interactive ? IntPtr.Zero : new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow | (interactive ? 4U : 0U));
+            SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
             Invalidate();
         }
 
@@ -812,6 +845,9 @@ namespace DesktopHover
         }
 
         public void ClearPreview()
+        { ClearPreview(true); }
+
+        private void ClearPreview(bool hide)
         {
             if (entranceMotion != null) entranceMotion.Finish();
             CancelImageLoad();
@@ -825,8 +861,9 @@ namespace DesktopHover
             mediaState = null;
             documentMediaNoteKey = null;
             textPreview = null;
-            pdfPageIndex = pdfPageCount = textOffset = 0; playbackPaused = false; zoom = 1; pan = DrawingPoint.Empty;
-            if (!IsDisposed)
+            pdfPageIndex = pdfPageCount = textOffset = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
+            if (interactive) StopPanning();
+            if (!IsDisposed && (hide || !interactive))
                 Hide();
             CurrentPath = null;
             fileName = null;
@@ -857,7 +894,7 @@ namespace DesktopHover
             {
                 if (!animatedGif.Advance()) { animationTimer.Stop(); return; }
                 animationTimer.Interval = animatedGif.FrameDelay;
-                Invalidate(imageArea);
+                Invalidate(interactive ? viewport : imageArea);
             }
             catch { ClearPreview(); }
         }
@@ -888,19 +925,20 @@ namespace DesktopHover
                 return;
             }
             int checker = Px(10);
+            Rectangle checkerArea = interactive ? Rectangle.Intersect(ZoomedImageArea(), viewport) : imageArea;
             using (SolidBrush first = new SolidBrush(Brand.CheckerFirst))
             using (SolidBrush second = new SolidBrush(Brand.CheckerSecond))
             {
-                graphics.FillRectangle(first, imageArea);
-                for (int y = 0; y < imageArea.Height; y += checker)
+                graphics.FillRectangle(first, checkerArea);
+                for (int y = 0; y < checkerArea.Height; y += checker)
                 {
-                    for (int x = 0; x < imageArea.Width; x += checker)
+                    for (int x = 0; x < checkerArea.Width; x += checker)
                     {
                         if (((x / checker) + (y / checker)) % 2 != 0)
                         {
-                            graphics.FillRectangle(second, imageArea.Left + x, imageArea.Top + y,
-                                Math.Min(checker, imageArea.Width - x),
-                                Math.Min(checker, imageArea.Height - y));
+                            graphics.FillRectangle(second, checkerArea.Left + x, checkerArea.Top + y,
+                                Math.Min(checker, checkerArea.Width - x),
+                                Math.Min(checker, checkerArea.Height - y));
                         }
                     }
                 }
@@ -911,7 +949,7 @@ namespace DesktopHover
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             GraphicsState imageState = graphics.Save();
-            graphics.SetClip(imageArea, CombineMode.Intersect);
+            graphics.SetClip(interactive ? viewport : imageArea, CombineMode.Intersect);
             graphics.DrawImage(preview, ZoomedImageArea());
             graphics.Restore(imageState);
 
@@ -955,6 +993,13 @@ namespace DesktopHover
         {
             TextFormatFlags textFlags = TextFormatFlags.Left | TextFormatFlags.SingleLine |
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter;
+            if (interactive)
+            {
+                using (var border = new System.Drawing.Pen(Brand.Border))
+                    graphics.DrawLine(border, Px(12), descriptionArea.Top - Px(6), ClientSize.Width - Px(12), descriptionArea.Top - Px(6));
+                TextRenderer.DrawText(graphics, description, descriptionFont, descriptionArea, Brand.Muted, textFlags);
+                return;
+            }
             Brand.DrawLogo(graphics,new Rectangle(Px(12),imageArea.Bottom+Px(12),Px(16),Px(16)));
             TextRenderer.DrawText(graphics, fileName, titleFont, titleArea, ForeColor, textFlags);
             TextRenderer.DrawText(graphics, description, descriptionFont, descriptionArea,
@@ -965,6 +1010,7 @@ namespace DesktopHover
 
         protected override void WndProc(ref Message message)
         {
+            if (HandlePinnedChrome(ref message)) return;
             if (!interactive && message.Msg == 0x0084) // WM_NCHITTEST: pass through to Explorer.
             {
                 message.Result = new IntPtr(-1);

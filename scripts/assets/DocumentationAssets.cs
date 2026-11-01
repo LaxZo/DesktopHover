@@ -28,6 +28,7 @@ namespace DesktopHover
                 UiMotion.Enabled = false; Brand.SetTheme("dark");
                 if (args[1] == "artwork") { IconAssets(); SampleArtwork(); }
                 else if (args[1] == "tray") TrayScreenshot();
+                else if (args[1] == "office") OfficeScreenshots();
                 else Screenshots();
                 return 0;
             }
@@ -167,11 +168,15 @@ namespace DesktopHover
             }
             Preview("Rose landscape.png", "image-preview.png", "dark");
             Preview("Brand board.psd", "photoshop-preview.png", "dark");
-            Preview("Project brief.docx", "word-preview.png", "dark");
-            Preview("Launch budget.xlsx", "excel-preview.png", "dark");
+            OfficeScreenshots();
             Preview("Desktop Hover.pptx", "powerpoint-preview.png", "dark");
             Preview("Ambient loop.wav", "audio-preview.png", "dark");
             TrayScreenshot();
+        }
+        private static void OfficeScreenshots()
+        {
+            Preview("Project brief.docx", "word-preview.png", "dark");
+            Preview("Launch budget.xlsx", "excel-preview.png", "dark");
         }
         private static void TrayScreenshot()
         {

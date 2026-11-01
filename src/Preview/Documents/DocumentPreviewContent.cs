@@ -57,17 +57,17 @@ namespace DesktopHover
             }
         }
 
-        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null)
+        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null, OfficePreviewPalette palette = null)
         {
-            return LoadCore(path, maxSize, cancellation, true, progress);
+            return LoadCore(path, maxSize, cancellation, true, progress, palette);
         }
 
-        internal static DocumentPreviewResult LoadStill(string path, Size maxSize, CancellationToken cancellation)
+        internal static DocumentPreviewResult LoadStill(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null)
         {
-            return LoadCore(path, maxSize, cancellation, false);
+            return LoadCore(path, maxSize, cancellation, false, null, palette);
         }
 
-        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo, Action<DocumentPreviewResult> progress = null)
+        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo, Action<DocumentPreviewResult> progress, OfficePreviewPalette palette)
         {
             string unavailableKey = "document_unavailable";
             try
@@ -120,7 +120,7 @@ namespace DesktopHover
                     if (cancellation.IsCancellationRequested) { if (artwork != null) artwork.Dispose(); return null; }
                     if (artwork != null) return new DocumentPreviewResult(artwork, "document_pdf");
                 }
-                DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true);
+                DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true, palette);
                 if (result == null) result = TryReader(path, maxSize, cancellation, false);
                 if (result != null)
                 {
@@ -140,12 +140,12 @@ namespace DesktopHover
             catch { return new DocumentPreviewResult(null, unavailableKey); }
         }
 
-        private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office)
+        private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office, OfficePreviewPalette palette = null)
         {
             cancellation.ThrowIfCancellationRequested();
             try
             {
-                return office ? OfficePreviewReader.TryLoad(path, maxSize, cancellation)
+                return office ? OfficePreviewReader.TryLoad(path, maxSize, cancellation, palette)
                     : AdobePreviewReader.TryLoad(path, maxSize, cancellation);
             }
             catch (OperationCanceledException) { throw; }

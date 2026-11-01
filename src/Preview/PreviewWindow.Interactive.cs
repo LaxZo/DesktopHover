@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -10,101 +11,194 @@ namespace DesktopHover
         private readonly bool interactive;
         private ToolStrip toolbar;
         private ToolStripButton previousButton, nextButton, playbackButton, zoomOutButton, zoomInButton, fitButton;
-        private ToolStripLabel pageLabel, zoomLabel;
+        private ToolStripLabel pageLabel, zoomLabel, loadingLabel;
+        private ToolStripSeparator zoomSeparator;
         private readonly ToolTip contentTip = new ToolTip { ShowAlways = true };
         private Font toolbarFont;
-        private int pdfPageIndex, pdfPageCount, textOffset;
-        private bool playbackPaused, panning;
+        private int pdfPageIndex, pdfPageCount, textOffset, wheelRemainder;
+        private bool playbackPaused, panning, interactiveSized, arrangingInteractive, fitMode = true;
         private float zoom = 1;
         private Point pan, panStart, mouseStart;
+        private Rectangle viewport;
         private bool autoPlayMedia = true;
+        private FormWindowState pinnedRestoreState = FormWindowState.Normal;
+        private FormWindowState lastPinnedWindowState = FormWindowState.Normal;
+        private Rectangle pinnedNormalBounds;
+        private bool restoringPinnedBounds;
 
         internal bool IsInteractive { get { return interactive; } }
+
+        internal void ActivatePinned()
+        {
+            if (!interactive || IsDisposed) return;
+            if (WindowState == FormWindowState.Minimized) WindowState = pinnedRestoreState;
+            if (!Visible) ShowPreview();
+            Activate();
+        }
+
+        private void ShowPreview()
+        {
+            // An asynchronous result must not move, restore or reactivate a pinned window.
+            if (!interactive || !Visible) entranceMotion.ShowAt(Location);
+        }
 
         private void InitializeInteractive()
         {
             if (!interactive) return;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            ShowInTaskbar = true; TopMost = false; MaximizeBox = false; MinimizeBox = true;
-            KeyPreview = true;
-            toolbarFont = new Font("Segoe UI", 14, FontStyle.Regular, GraphicsUnit.Pixel);
+            ShowInTaskbar = true; TopMost = false; MaximizeBox = MinimizeBox = true;
+            AccessibleRole = AccessibleRole.Window; KeyPreview = true;
+            toolbarFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
             toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, Dock = DockStyle.None,
-                AutoSize = false, BackColor = Brand.Surface, ForeColor = Brand.Text, Font = toolbarFont,
-                Renderer = new HoverMenuRenderer(), ShowItemToolTips = true };
+                AutoSize = false, BackColor = Brand.Background, ForeColor = Brand.Text, Font = toolbarFont,
+                Renderer = new PinnedToolbarRenderer(), ShowItemToolTips = true, CanOverflow = false };
             SystemCursors.UseHand(toolbar);
             previousButton = AddAction("‹", "previous", () => Navigate(-1));
-            playbackButton = AddAction("Ⅱ", "play_pause", TogglePlayback);
+            pageLabel = new ToolStripLabel { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
+            toolbar.Items.Add(pageLabel);
             nextButton = AddAction("›", "next", () => Navigate(1));
-            pageLabel = new ToolStripLabel { AutoSize = false, Width = 85, TextAlign = ContentAlignment.MiddleCenter };
-            toolbar.Items.Add(pageLabel); toolbar.Items.Add(new ToolStripSeparator());
+            playbackButton = AddAction("Ⅱ", "play_pause", TogglePlayback);
+            zoomSeparator = new ToolStripSeparator(); toolbar.Items.Add(zoomSeparator);
             zoomOutButton = AddAction("−", "zoom_out", () => ChangeZoom(1 / 1.25f));
-            zoomLabel = new ToolStripLabel { AutoSize = false, Width = 65, TextAlign = ContentAlignment.MiddleCenter };
+            zoomLabel = new ToolStripLabel { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
             toolbar.Items.Add(zoomLabel);
             zoomInButton = AddAction("+", "zoom_in", () => ChangeZoom(1.25f));
-            fitButton = AddAction("", "fit", () => { zoom = 1; pan = Point.Empty; UpdateToolbar(); Invalidate(); });
+            fitButton = AddAction("", "fit", FitImage);
+            loadingLabel = new ToolStripLabel(); toolbar.Items.Add(loadingLabel);
             Controls.Add(toolbar);
+            InitializePinnedChrome();
         }
+
         private ToolStripButton AddAction(string text, string key, Action action)
         {
-            var button = new ToolStripButton(text) { Name = key, Tag = key, AutoSize = false, Width = 44,
-                DisplayStyle = ToolStripItemDisplayStyle.Text };
+            var button = new ToolStripButton(text) { Name = key, Tag = key, AutoSize = false,
+                DisplayStyle = ToolStripItemDisplayStyle.Text, Margin = new Padding(2, 0, 2, 0) };
             button.Click += delegate { action(); };
             toolbar.Items.Add(button); return button;
         }
 
         private void PositionContent(Point cursor, Rectangle item, Rectangle area)
         {
-            if (!interactive) { Location = ChooseLocation(cursor, item, area, Size, Px(18)); return; }
-            int top = Px(40);
-            imageArea.Offset(0, top); titleArea.Offset(0, top); descriptionArea.Offset(0, top);
-            ClientSize = new Size(ClientSize.Width, ClientSize.Height + top);
-            toolbar.SetBounds(0, 0, ClientSize.Width, top);
-            if (!Visible)
-                Location = new Point(area.Left + Math.Max(0, (area.Width - Width) / 2),
-                    area.Top + Math.Max(0, (area.Height - Height) / 2));
-            else
-                Location = new Point(Math.Max(area.Left, Math.Min(Left, area.Right - Width)),
-                    Math.Max(area.Top, Math.Min(Top, area.Bottom - Height)));
-            Text = fileName + " — Desktop Hover";
-            UpdateToolbar();
-            contentTip.SetToolTip(this, fileName + "\n" + description);
+            if (!interactive) Location = ChooseLocation(cursor, item, area, Size, Px(18));
+            else LayoutInteractive();
         }
+
+        private void LayoutInteractive()
+        {
+            if (!interactive || toolbar == null || arrangingInteractive || IsDisposed || WindowState == FormWindowState.Minimized) return;
+            arrangingInteractive = true;
+            try
+            {
+                if (!interactiveSized && CurrentPath != null)
+                {
+                    Rectangle work = Screen.FromPoint(mediaCursor).WorkingArea;
+                    MinimumSize = new Size(Math.Min(Px(520), work.Width), Math.Min(Px(360), work.Height));
+                    ClientSize = new Size(Math.Min(Px(900), Math.Max(1, work.Width - Px(32))),
+                        Math.Min(Px(680), Math.Max(1, work.Height - Px(32))));
+                    Location = new Point(work.Left + (work.Width - Width) / 2, work.Top + (work.Height - Height) / 2);
+                    interactiveSized = true;
+                }
+                float displayedWidth = imageArea.Width * zoom;
+                Rectangle previousViewport = viewport;
+                if (Math.Abs(toolbarFont.Size - 12 * scale) > .01f)
+                {
+                    Font previous = toolbarFont;
+                    toolbarFont = new Font("Segoe UI", 12 * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+                    toolbar.Font = toolbarFont; previous.Dispose();
+                }
+                bool showTools = preview != null || HasPlayback || IsPreviewLoading;
+                int header = Px(44), tools = showTools ? Px(44) : 0, padding = Px(12), footer = Px(40);
+                toolbar.Visible = showTools;
+                toolbar.SetBounds(1, header, Math.Max(1, ClientSize.Width - 2), tools);
+                toolbar.Padding = new Padding(Px(10), Px(6), Px(10), Px(6));
+                foreach (ToolStripItem item in toolbar.Items)
+                    if (item is ToolStripButton) item.Size = new Size(Px(34), Px(30));
+                pageLabel.Size = new Size(Px(80), Px(30)); zoomLabel.Size = new Size(Px(62), Px(30));
+                viewport = new Rectangle(padding, header + tools + padding,
+                    Math.Max(1, ClientSize.Width - padding * 2),
+                    Math.Max(1, ClientSize.Height - header - tools - footer - padding * 2));
+                Size source = preview == null ? Size.Empty : preview.Size;
+                if (media != null && media.IsOpen && media.HasVideo) source = new Size(media.NaturalWidth, media.NaturalHeight);
+                imageArea = viewport;
+                if (!source.IsEmpty)
+                {
+                    double fit = Math.Min((double)viewport.Width / source.Width, (double)viewport.Height / source.Height);
+                    Size fitted = new Size(Math.Max(1, (int)Math.Round(source.Width * fit)), Math.Max(1, (int)Math.Round(source.Height * fit)));
+                    imageArea = new Rectangle(viewport.X + (viewport.Width - fitted.Width) / 2,
+                        viewport.Y + (viewport.Height - fitted.Height) / 2, fitted.Width, fitted.Height);
+                    if (!fitMode && previousViewport != viewport && previousViewport.Width > 0 && preview != null)
+                        zoom = Math.Max(.1f, Math.Min(16, displayedWidth / Math.Max(1, imageArea.Width)));
+                }
+                if (fitMode) { zoom = 1; pan = Point.Empty; }
+                ClampPan();
+                titleArea = new Rectangle(padding, ClientSize.Height - footer, ClientSize.Width - padding * 2, Px(18));
+                descriptionArea = new Rectangle(padding, ClientSize.Height - Px(32), ClientSize.Width - padding * 2, Px(22));
+                if (textPreview != null)
+                {
+                    textLineHeight = Px(21);
+                    textVisibleLines = Math.Max(1, (viewport.Height - Px(16)) / textLineHeight);
+                    textOffset = Math.Max(0, Math.Min(textOffset, Math.Max(0, textPreview.Lines.Length - textVisibleLines)));
+                    using (Graphics g = CreateGraphics())
+                        textGutterWidth = Math.Max(Px(38), TextRenderer.MeasureText(g, Math.Max(1, textPreview.Lines.Length).ToString(), codeFont).Width + Px(20));
+                }
+                if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
+                Text = String.IsNullOrEmpty(fileName) ? L10n.Text(language, "pinned_preview") : fileName + " — Desktop Hover";
+                UpdatePinnedChrome(); UpdateToolbar(); Invalidate();
+            }
+            finally { arrangingInteractive = false; }
+        }
+
+        private bool HasPlayback { get { return (documentSlides != null && documentSlides.Length > 1) || animatedGif != null || (media != null && media.IsOpen); } }
+        private bool IsPreviewLoading { get { return imageTask != null || documentLoading || mediaState == "media_loading" ||
+            mediaState == "preview_loading" || mediaState == "document_loading"; } }
 
         private void UpdateToolbar()
         {
             if (toolbar == null) return;
-            toolbar.BackColor = Brand.Surface; toolbar.ForeColor = Brand.Text;
+            toolbar.BackColor = Brand.Background; toolbar.ForeColor = Brand.Text;
             foreach (ToolStripItem item in toolbar.Items)
-            {
                 if (item.Tag is string)
                 {
                     item.ToolTipText = L10n.Text(language, (string)item.Tag);
                     item.AccessibleName = item.ToolTipText;
                 }
-            }
             bool slides = documentSlides != null && documentSlides.Length > 0;
             int count = slides ? documentSlides.Length : pdfPageCount;
             int index = slides ? documentSlideIndex : pdfPageIndex;
-            previousButton.Enabled = count > 1 && index > 0;
-            nextButton.Enabled = count > 1 && index + 1 < count;
-            pageLabel.Text = count > 0 ? (index + 1) + " / " + (slides ? Math.Max(documentSlideTotal, count) : count) : "";
-            playbackButton.Enabled = slides || animatedGif != null || media != null;
+            bool pages = count > 1;
+            previousButton.Visible = nextButton.Visible = pageLabel.Visible = pages;
+            previousButton.Enabled = pages && index > 0 && !documentLoading;
+            nextButton.Enabled = pages && index + 1 < count && !documentLoading;
+            pageLabel.Text = (index + 1) + " / " + (slides ? Math.Max(documentSlideTotal, count) : count);
+            playbackButton.Visible = HasPlayback;
+            playbackButton.Enabled = HasPlayback;
             playbackButton.Text = playbackPaused ? "▶" : "Ⅱ";
-            playbackButton.AccessibleName = L10n.Text(language, playbackPaused ? "play" : "pause");
-            zoomOutButton.Enabled = zoomInButton.Enabled = fitButton.Enabled = preview != null;
-            zoomLabel.Text = (int)Math.Round(zoom * 100) + "%";
+            playbackButton.ToolTipText = L10n.Text(language, playbackPaused ? "play" : "pause") + " (Space)";
+            playbackButton.AccessibleName = playbackButton.ToolTipText;
+            bool canZoom = preview != null;
+            zoomOutButton.Visible = zoomInButton.Visible = fitButton.Visible = zoomLabel.Visible = canZoom;
+            zoomSeparator.Visible = canZoom && (pages || HasPlayback);
+            zoomOutButton.Enabled = canZoom && zoom > .1001f;
+            zoomInButton.Enabled = canZoom && zoom < 15.999f;
+            fitButton.Enabled = canZoom;
+            int sourcePixels = mediaKind == MediaKind.Image && sourceWidth > 0 ? sourceWidth : preview == null ? 1 : preview.Width;
+            zoomLabel.Text = Math.Round(imageArea.Width * zoom * 100 / Math.Max(1, sourcePixels)) + "%";
+            zoomLabel.ToolTipText = L10n.Text(language, "zoom_level");
             fitButton.Text = L10n.Text(language, "fit");
+            fitButton.Checked = fitMode;
+            loadingLabel.Visible = IsPreviewLoading;
+            loadingLabel.Text = L10n.Text(language, "preview_loading");
             toolbar.Invalidate();
         }
 
         private void Navigate(int delta)
         {
+            if (documentLoading) return;
             if (documentSlides != null && documentSlides.Length > 0)
             {
                 int target = Math.Max(0, Math.Min(documentSlides.Length - 1, documentSlideIndex + delta));
                 if (target == documentSlideIndex) return;
                 playbackPaused = true; slideshowTimer.Stop();
-                ShowDocumentSlide(target); UpdateToolbar();
+                ShowDocumentSlide(target); ClampPan(); UpdateToolbar();
             }
             else if (pdfPageCount > 1)
             {
@@ -127,18 +221,18 @@ namespace DesktopHover
                 Bitmap image = DocumentPreviewWorker.TryLoadPdfPage(path, size, token, index, out count);
                 return new DocumentPreviewResult(image, image == null ? "document_pdf_unavailable" : "document_pdf") { PageCount = count };
             }, System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
-            LayoutDocument(); entranceMotion.ShowAt(Location); UpdateToolbar();
+            LayoutDocument(); UpdateToolbar();
             mediaTimer.Interval = 40; mediaTimer.Start(); Invalidate();
         }
 
         private void TogglePlayback()
         {
+            if (!HasPlayback) return;
             playbackPaused = !playbackPaused;
             if (media != null && media.IsOpen)
             {
                 MediaPlayback session = media;
-                if (playbackPaused) session.Pause();
-                else session.Play();
+                if (playbackPaused) session.Pause(); else session.Play();
                 if (media != session) return;
                 mediaState = playbackPaused ? "media_paused" : "media_playing";
                 mediaTimer.Start(); UpdateMediaDescription();
@@ -156,24 +250,86 @@ namespace DesktopHover
             UpdateToolbar(); Invalidate();
         }
 
-        private void ChangeZoom(float factor)
+        private void FitImage()
         {
             if (preview == null) return;
-            zoom = Math.Max(1, Math.Min(4, zoom * factor));
-            ClampPan(); UpdateToolbar(); Invalidate(imageArea);
+            fitMode = true; zoom = 1; pan = Point.Empty;
+            UpdateToolbar(); Invalidate(viewport);
         }
+
+        private void ChangeZoom(float factor)
+        { ZoomAt(factor, new Point(viewport.Left + viewport.Width / 2, viewport.Top + viewport.Height / 2)); }
+
+        private void ZoomAt(float factor, Point anchor)
+        {
+            if (preview == null || imageArea.Width <= 0) return;
+            Rectangle before = ZoomedImageArea();
+            float next = Math.Max(.1f, Math.Min(16, zoom * factor));
+            if (Math.Abs(next - zoom) < .0001f) return;
+            anchor = new Point(Math.Max(viewport.Left, Math.Min(viewport.Right, anchor.X)), Math.Max(viewport.Top, Math.Min(viewport.Bottom, anchor.Y)));
+            double imageX = (anchor.X - before.Left) / (double)before.Width;
+            double imageY = (anchor.Y - before.Top) / (double)before.Height;
+            zoom = next; fitMode = false;
+            int width = (int)Math.Round(imageArea.Width * zoom), height = (int)Math.Round(imageArea.Height * zoom);
+            pan = new Point((int)Math.Round(anchor.X - imageX * width - imageArea.X - (imageArea.Width - width) / 2.0),
+                (int)Math.Round(anchor.Y - imageY * height - imageArea.Y - (imageArea.Height - height) / 2.0));
+            ClampPan(); UpdateToolbar(); Invalidate(viewport);
+        }
+
         private Rectangle ZoomedImageArea()
         {
-            if (!interactive || zoom <= 1) return imageArea;
-            int width = (int)Math.Round(imageArea.Width * zoom), height = (int)Math.Round(imageArea.Height * zoom);
+            if (!interactive) return imageArea;
+            int width = Math.Max(1, (int)Math.Round(imageArea.Width * zoom)), height = Math.Max(1, (int)Math.Round(imageArea.Height * zoom));
             return new Rectangle(imageArea.X + (imageArea.Width - width) / 2 + pan.X,
                 imageArea.Y + (imageArea.Height - height) / 2 + pan.Y, width, height);
         }
+
         private void ClampPan()
         {
-            int x = (int)(imageArea.Width * (zoom - 1) / 2), y = (int)(imageArea.Height * (zoom - 1) / 2);
+            int x = Math.Max(0, (int)Math.Ceiling((imageArea.Width * zoom - viewport.Width) / 2));
+            int y = Math.Max(0, (int)Math.Ceiling((imageArea.Height * zoom - viewport.Height) / 2));
             pan = new Point(Math.Max(-x, Math.Min(x, pan.X)), Math.Max(-y, Math.Min(y, pan.Y)));
         }
+
+        protected override void OnResize(EventArgs e)
+        {
+            if (interactive && WindowState == FormWindowState.Normal && lastPinnedWindowState != FormWindowState.Normal &&
+                !pinnedNormalBounds.IsEmpty && !restoringPinnedBounds)
+            {
+                Rectangle bounds = pinnedNormalBounds;
+                restoringPinnedBounds = true;
+                // WinForms reapplies native frame padding after WM_SIZE. Restore
+                // our borderless bounds once that native transition has completed.
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    restoringPinnedBounds = false;
+                    if (!IsDisposed && WindowState == FormWindowState.Normal) Bounds = bounds;
+                });
+            }
+            lastPinnedWindowState = WindowState;
+            base.OnResize(e);
+            if (interactive)
+            {
+                if (WindowState != FormWindowState.Minimized) pinnedRestoreState = WindowState;
+                LayoutInteractive();
+                if (WindowState == FormWindowState.Normal && !restoringPinnedBounds) pinnedNormalBounds = Bounds;
+            }
+        }
+        protected override void OnLocationChanged(EventArgs e)
+        {
+            base.OnLocationChanged(e);
+            if (interactive && WindowState == FormWindowState.Normal && lastPinnedWindowState == FormWindowState.Normal && !restoringPinnedBounds)
+                pinnedNormalBounds = Bounds;
+        }
+        protected override void OnResizeBegin(EventArgs e) { if (entranceMotion != null) entranceMotion.Finish(); base.OnResizeBegin(e); }
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            if (!interactive) return;
+            scale = GetScale(Location); SetFonts();
+            LayoutInteractive();
+        }
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (interactive)
@@ -181,41 +337,109 @@ namespace DesktopHover
                 switch (keyData)
                 {
                     case Keys.Escape: Close(); return true;
-                    case Keys.Space: TogglePlayback(); return true;
+                    case Keys.Space: if (HasPlayback) { TogglePlayback(); return true; } break;
                     case Keys.Left: case Keys.PageUp: Navigate(-1); return true;
                     case Keys.Right: case Keys.PageDown: Navigate(1); return true;
-                    case Keys.Add: case Keys.Oemplus: ChangeZoom(1.25f); return true;
+                    case Keys.Add: case Keys.Oemplus: case Keys.Shift | Keys.Oemplus: ChangeZoom(1.25f); return true;
                     case Keys.Subtract: case Keys.OemMinus: ChangeZoom(1 / 1.25f); return true;
-                    case Keys.D0: zoom = 1; pan = Point.Empty; UpdateToolbar(); Invalidate(); return true;
+                    case Keys.D0: case Keys.NumPad0: FitImage(); return true;
                 }
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
+
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
-            if (!interactive) return;
+            if (!interactive || e.Delta == 0) return;
+            wheelRemainder += e.Delta;
+            int steps = wheelRemainder / 120; wheelRemainder %= 120;
+            if (steps == 0) return;
             if (mediaKind == MediaKind.Text && textPreview != null)
             {
-                textOffset = Math.Max(0, Math.Min(Math.Max(0, textPreview.Lines.Length - textVisibleLines), textOffset + (e.Delta < 0 ? 3 : -3)));
-                Invalidate(); return;
+                int lines = SystemInformation.MouseWheelScrollLines;
+                if (lines < 0) lines = textVisibleLines;
+                textOffset = Math.Max(0, Math.Min(Math.Max(0, textPreview.Lines.Length - textVisibleLines), textOffset - steps * lines));
+                Invalidate(viewport); return;
             }
-            if ((ModifierKeys & Keys.Control) == 0 && (pdfPageCount > 1 || documentSlides != null)) Navigate(e.Delta < 0 ? 1 : -1);
-            else ChangeZoom(e.Delta > 0 ? 1.25f : 1 / 1.25f);
+            if ((ModifierKeys & Keys.Control) == 0 && (pdfPageCount > 1 || documentSlides != null)) Navigate(-steps);
+            else ZoomAt((float)Math.Pow(1.25, steps), e.Location);
         }
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (interactive && e.Button == MouseButtons.Left && zoom > 1 && imageArea.Contains(e.Location))
-            { panning = true; mouseStart = e.Location; panStart = pan; Capture = true; }
+            Rectangle displayed = ZoomedImageArea();
+            if (interactive && preview != null && e.Button == MouseButtons.Left && viewport.Contains(e.Location) &&
+                (displayed.Width > viewport.Width || displayed.Height > viewport.Height))
+            { panning = true; mouseStart = e.Location; panStart = pan; Capture = true; Cursor = Cursors.SizeAll; }
         }
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
             if (!panning) return;
             pan = new Point(panStart.X + e.X - mouseStart.X, panStart.Y + e.Y - mouseStart.Y);
-            ClampPan(); Invalidate(imageArea);
+            ClampPan(); Invalidate(viewport);
         }
-        protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); panning = false; Capture = false; }
+        private void StopPanning() { panning = false; Capture = false; Cursor = Cursors.Default; }
+        protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); if (interactive) StopPanning(); }
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        { base.OnMouseCaptureChanged(e); if (!Capture) { panning = false; Cursor = Cursors.Default; } }
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        { base.OnMouseDoubleClick(e); if (interactive && e.Button == MouseButtons.Left && viewport.Contains(e.Location)) FitImage(); }
+    }
+
+    internal sealed class PinnedToolbarRenderer : ToolStripProfessionalRenderer
+    {
+        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { e.Graphics.Clear(Brand.Background); }
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+        { using (var pen = new Pen(Brand.Border)) e.Graphics.DrawLine(pen, 10, e.ToolStrip.Height - 1, e.ToolStrip.Width - 10, e.ToolStrip.Height - 1); }
+        protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e) { }
+        protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+        { using (var pen = new Pen(Brand.Border)) e.Graphics.DrawLine(pen, e.Item.Width / 2, 7, e.Item.Width / 2, e.Item.Height - 7); }
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            var button = e.Item as ToolStripButton;
+            if (button == null)
+            {
+                e.TextColor = Brand.Muted; base.OnRenderItemText(e); return;
+            }
+            Graphics g = e.Graphics; GraphicsState state = g.Save();
+            try
+            {
+                float s = e.Item.Height / 30f;
+                g.TranslateTransform(e.Item.Width / 2f, e.Item.Height / 2f); g.ScaleTransform(s, s);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                Color color = !button.Enabled ? Brand.Muted : button.Selected || button.Checked ? Brand.Accent : Brand.Text;
+                using (var pen = new Pen(color, 1.7f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                using (var brush = new SolidBrush(color))
+                {
+                    string key = button.Tag as string;
+                    if (key == "previous" || key == "next")
+                    {
+                        int direction = key == "next" ? 1 : -1;
+                        g.DrawLines(pen, new[] { new PointF(-3 * direction, -6), new PointF(3 * direction, 0), new PointF(-3 * direction, 6) });
+                    }
+                    else if (key == "play_pause")
+                    {
+                        if (button.Text == "▶") g.FillPolygon(brush, new[] { new PointF(-4, -7), new PointF(7, 0), new PointF(-4, 7) });
+                        else { g.DrawLine(pen, -3, -6, -3, 6); g.DrawLine(pen, 3, -6, 3, 6); }
+                    }
+                    else if (key == "fit")
+                    {
+                        g.DrawLines(pen, new[] { new PointF(-2, -6), new PointF(-7, -6), new PointF(-7, -1) });
+                        g.DrawLines(pen, new[] { new PointF(2, -6), new PointF(7, -6), new PointF(7, -1) });
+                        g.DrawLines(pen, new[] { new PointF(-7, 1), new PointF(-7, 6), new PointF(-2, 6) });
+                        g.DrawLines(pen, new[] { new PointF(7, 1), new PointF(7, 6), new PointF(2, 6) });
+                    }
+                    else
+                    {
+                        g.DrawEllipse(pen, -7, -7, 11, 11); g.DrawLine(pen, 3, 3, 7, 7);
+                        g.DrawLine(pen, -4.5f, -1.5f, 1.5f, -1.5f);
+                        if (key == "zoom_in") g.DrawLine(pen, -1.5f, -4.5f, -1.5f, 1.5f);
+                    }
+                }
+            }
+            finally { g.Restore(state); }
+        }
     }
 }

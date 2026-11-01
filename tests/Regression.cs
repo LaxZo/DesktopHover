@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using System.Threading;
 using System.Text;
@@ -38,6 +39,15 @@ namespace DesktopHover
                     TrayLayoutAndMotion();
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "pinned")
+                {
+                    Images(); PinnedViewer(); AnimatedImages(); Playback(); VideoLoop(null);
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "office")
+                {
+                    OfficeThemes(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 Images();
                 AnimatedImages();
                 SettingsLayout();
@@ -46,6 +56,7 @@ namespace DesktopHover
                 FolderLookup();
                 Preferences();
                 PinnedViewer();
+                OfficeThemes();
                 Playback();
                 VideoLoop(null);
                 Hotkeys();
@@ -335,15 +346,88 @@ namespace DesktopHover
         {
             using (var window = new PreviewWindow(true))
             {
-                window.Configure(new AppSettings { Language = "lv", AnimationsEnabled = false });
-                window.ShowFile(Path.Combine(output, "image.png"), new Point(300, 300), Rectangle.Empty);
+                window.Configure(new AppSettings { Language = "lv", Theme = "dark", AnimationsEnabled = false });
+                string image = Path.Combine(output, "image.png");
+                window.ShowFile(image, new Point(300, 300), Rectangle.Empty);
+                Rectangle loadingBounds = window.Bounds;
                 Until(() => Field<Bitmap>(window, "preview") != null, 5000);
                 Check(window.IsInteractive && window.ShowInTaskbar, "pinned preview is an interactive taskbar window");
+                Check(window.Bounds == loadingBounds, "image completion preserves pinned window bounds");
+                Check(window.FormBorderStyle == FormBorderStyle.None && window.Region != null, "pinned window has custom rounded chrome");
+                Check(!Field<ToolStripButton>(window, "previousButton").Available && !Field<ToolStripButton>(window, "playbackButton").Available,
+                    "static image hides irrelevant page and playback controls");
                 Field<ToolStripButton>(window, "zoomInButton").PerformClick();
                 Check(Field<float>(window, "zoom") > 1, "pinned preview supports zoom");
+                Rectangle view = Field<Rectangle>(window, "viewport");
+                Point anchor = new Point(view.Left + view.Width / 2 + 30, view.Top + view.Height / 2 + 20);
+                Rectangle beforeZoom = (Rectangle)Call(window, "ZoomedImageArea");
+                Call(window, "ZoomAt", 1.25f, anchor);
+                Rectangle afterZoom = (Rectangle)Call(window, "ZoomedImageArea");
+                double relativeX = (anchor.X - beforeZoom.X) / (double)beforeZoom.Width;
+                double relativeY = (anchor.Y - beforeZoom.Y) / (double)beforeZoom.Height;
+                Check(Math.Abs(afterZoom.X + relativeX * afterZoom.Width - anchor.X) < 2 &&
+                    Math.Abs(afterZoom.Y + relativeY * afterZoom.Height - anchor.Y) < 2, "zoom keeps the image point beneath the cursor");
+                Bitmap loaded = Field<Bitmap>(window, "preview");
+                float savedZoom = Field<float>(window, "zoom");
+                window.ShowFile(image, new Point(50, 50), Rectangle.Empty);
+                Check(ReferenceEquals(loaded, Field<Bitmap>(window, "preview")) && Field<float>(window, "zoom") == savedZoom,
+                    "pinning the same file again preserves image and zoom");
+                window.Configure(new AppSettings { Language = "lv", Theme = "dark", AnimationsEnabled = false, MaxWidth = 920, MaxHeight = 690 });
+                Check(ReferenceEquals(loaded, Field<Bitmap>(window, "preview")) && Field<float>(window, "zoom") == savedZoom,
+                    "hover size settings do not reload the pinned file");
+                int renderedWidth = afterZoom.Width;
+                window.ClientSize = new Size(760, 560); window.Location = new Point(120, 80); Pump(30);
+                Check(Math.Abs(((Rectangle)Call(window, "ZoomedImageArea")).Width - renderedWidth) <= 1,
+                    "resizing retains manual image scale");
                 Field<ToolStripButton>(window, "fitButton").PerformClick();
                 Check(Field<float>(window, "zoom") == 1, "fit restores image scale");
+                Check(Field<ToolStripLabel>(window, "zoomLabel").Text == Math.Round(window.DisplayedImageSize.Width * 100.0 / 640) + "%",
+                    "zoom percentage uses original image pixels");
+                Field<ToolStripButton>(window, "zoomOutButton").PerformClick();
+                Check(Field<float>(window, "zoom") < 1, "zoom out can go below fit size");
+                Call(window, "OnMouseDoubleClick", new MouseEventArgs(MouseButtons.Left, 2, anchor.X, anchor.Y, 0));
+                Check(Field<bool>(window, "fitMode") && Field<Point>(window, "pan") == Point.Empty, "double click fits and centers the image");
                 Snapshot(window, "pinned-image.png");
+                Rectangle retainedBounds = window.Bounds;
+                string portrait = Path.Combine(output, "portrait.png");
+                using (var bitmap = new Bitmap(350, 900))
+                using (var g = Graphics.FromImage(bitmap))
+                {
+                    g.Clear(Color.Coral);
+                    using (var pen = new Pen(Color.White, 4))
+                        for (int y = 50; y < 900; y += 100) g.DrawRectangle(pen, 30, y, 290, 60);
+                    bitmap.Save(portrait);
+                }
+                window.ShowFile(portrait, new Point(800, 600), Rectangle.Empty);
+                Until(() => window.HasImage, 5000);
+                Check(window.Bounds == retainedBounds, "switching aspect ratios retains window size and position");
+                Call(window, "ChangeZoom", 2f);
+                view = Field<Rectangle>(window, "viewport");
+                Rectangle fitted = Field<Rectangle>(window, "imageArea");
+                using (var capture = new Bitmap(window.Width, window.Height))
+                {
+                    window.DrawToBitmap(capture, new Rectangle(Point.Empty, capture.Size));
+                    Color pixel = capture.GetPixel(fitted.Left - 20, view.Top + view.Height / 2);
+                    Check(pixel.R > 240 && pixel.G > 70, "zoomed portrait paints beyond its original fitted rectangle");
+                }
+                Snapshot(window, "pinned-portrait-zoom.png");
+                Call(window, "ChangeZoom", 4f);
+                Point center = new Point(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                Call(window, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, center.X, center.Y, 0));
+                Call(window, "OnMouseMove", new MouseEventArgs(MouseButtons.Left, 0, center.X + 5000, center.Y + 5000, 0));
+                Rectangle dragged = (Rectangle)Call(window, "ZoomedImageArea");
+                Check(dragged.Left <= view.Left + 1 && dragged.Top <= view.Top + 1 && dragged.Right >= view.Right - 1 && dragged.Bottom >= view.Bottom - 1,
+                    "dragging clamps against the viewport without exposing empty edges");
+                window.Capture = false;
+                Check(!Field<bool>(window, "panning") && window.Cursor == Cursors.Default, "lost mouse capture ends image dragging");
+                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(60);
+                Check(window.WindowState == FormWindowState.Maximized && window.Region == null &&
+                    Screen.FromControl(window).WorkingArea.Contains(window.RectangleToScreen(window.ClientRectangle)), "maximize fills the work area and leaves the taskbar available");
+                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(30);
+                window.ActivatePinned(); Pump(30);
+                Check(window.WindowState == FormWindowState.Maximized, "reopening a minimized preview restores its maximized state");
+                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(30);
+                Check(window.Bounds == retainedBounds && window.Region != null, "restore returns to the user chosen rounded window bounds: " + window.Bounds + " expected " + retainedBounds);
                 string pdf = Path.Combine(output, "two-pages.pdf"); WritePdf(pdf);
                 window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
                 Until(() => !Field<bool>(window, "documentLoading"), 12000);
@@ -353,12 +437,116 @@ namespace DesktopHover
                 Until(() => !Field<bool>(window, "documentLoading"), 12000);
                 Check(Field<int>(window, "pdfPageIndex") == 1, "PDF navigation selects second page");
                 Check(Field<Bitmap>(window, "preview").GetPixel(100, 100).B > 200, "PDF second page is blue");
+                Check(window.Bounds == retainedBounds, "PDF loading and page changes preserve window bounds");
                 Snapshot(window, "pinned-pdf.png");
                 Field<ToolStripButton>(window, "previousButton").PerformClick();
                 window.ClearPreview(); Pump(150);
                 Check(!window.Visible && window.CurrentPath == null, "cancelled PDF page cannot reopen window");
+                string text = Path.Combine(output, "scroll.txt");
+                var lines = new StringBuilder();
+                for (int i = 1; i <= 200; i++) lines.AppendLine("Line " + i);
+                File.WriteAllText(text, lines.ToString());
+                window.ShowFile(text, new Point(800, 600), Rectangle.Empty);
+                Check(window.Bounds == retainedBounds && !Field<ToolStripButton>(window, "zoomInButton").Available,
+                    "text uses the same window bounds and hides image zoom controls");
+                Call(window, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, center.X, center.Y, -60));
+                Check(Field<int>(window, "textOffset") == 0, "partial wheel input does not jump a full text step");
+                Call(window, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, center.X, center.Y, -60));
+                Check(Field<int>(window, "textOffset") > 0, "accumulated wheel input scrolls text");
+                Snapshot(window, "pinned-text.png");
+                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(30);
+                window.ActivatePinned(); Pump(30);
+                Check(window.Bounds == retainedBounds, "minimize and restore preserves normal window size");
             }
         }
+        private static void OfficeThemes()
+        {
+            foreach (bool sheet in new[] { false, true })
+            {
+                string path = Path.Combine(output, sheet ? "Theme workbook.xlsx" : "Theme document.docx");
+                WriteOfficeFixture(path, sheet);
+                byte[] original = File.ReadAllBytes(path);
+                using (var window = new PreviewWindow(true))
+                {
+                    var settings = new AppSettings { Theme = "dark", AnimationsEnabled = false };
+                    window.Configure(settings); window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                    Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                    Bitmap image = Field<Bitmap>(window, "preview");
+                    Check(window.MediaState == (sheet ? "document_sheet" : "document_word"), "Office content renders instead of the saved white thumbnail");
+                    Check(image.GetPixel(image.Width - 10, image.Height - 10).GetBrightness() < .15f, "Office page follows the dark palette");
+                    Check(CountColor(image, Brand.Text) > 100, "dark Office preview contains readable light text");
+                    if (!sheet) Check(CountColor(image, Color.FromArgb(255, 96, 0)) > 500, "Word picture retains its original color in dark mode");
+                    Snapshot(window, sheet ? "excel-pinned-dark.png" : "word-pinned-dark.png");
+                    Call(window, "ChangeZoom", 1.25f);
+                    float zoom = Field<float>(window, "zoom"); Rectangle bounds = window.Bounds;
+                    settings.Theme = "light"; window.Configure(settings);
+                    Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                    image = Field<Bitmap>(window, "preview");
+                    Check(image.GetPixel(image.Width - 10, image.Height - 10).GetBrightness() > .95f, "open Office preview updates when switching to light theme");
+                    Check(window.Bounds == bounds && Field<float>(window, "zoom") == zoom, "Office theme switch retains window bounds and zoom");
+                    if (!sheet) Check(CountColor(image, Color.FromArgb(255, 96, 0)) > 500, "Word picture retains its original color in light mode");
+                    Call(window, "FitImage"); Snapshot(window, sheet ? "excel-pinned-light.png" : "word-pinned-light.png");
+                    settings.Theme = "dark"; window.Configure(settings);
+                    settings.Theme = "light"; window.Configure(settings);
+                    settings.Theme = "dark"; window.Configure(settings);
+                    Until(() => !Field<bool>(window, "documentLoading"), 5000); Pump(150);
+                    image = Field<Bitmap>(window, "preview");
+                    Check(image.GetPixel(image.Width - 10, image.Height - 10).GetBrightness() < .15f, "rapid theme changes cannot apply a stale Office render");
+                    settings.Theme = "light"; window.Configure(settings); window.ClearPreview(); Pump(150);
+                    Check(!window.Visible && window.CurrentPath == null, "closing during Office theme rendering cancels the preview");
+                }
+                using (var hover = new PreviewWindow())
+                {
+                    hover.Configure(new AppSettings { Theme = "dark", AnimationsEnabled = false });
+                    hover.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                    Until(() => !Field<bool>(hover, "documentLoading"), 5000);
+                    Bitmap image = Field<Bitmap>(hover, "preview");
+                    Check(image.GetPixel(image.Width - 10, image.Height - 10).GetBrightness() < .15f, "hover Office preview also uses the dark palette");
+                    Snapshot(hover, sheet ? "excel-hover-dark.png" : "word-hover-dark.png");
+                }
+                Check(Convert.ToBase64String(original) == Convert.ToBase64String(File.ReadAllBytes(path)), "Office theme rendering leaves the source file unchanged");
+            }
+        }
+        private static int CountColor(Bitmap image, Color target)
+        {
+            int count = 0;
+            for (int y = 0; y < image.Height; y += 2)
+                for (int x = 0; x < image.Width; x += 2)
+                    if (image.GetPixel(x, y).ToArgb() == target.ToArgb()) count++;
+            return count;
+        }
+        private static void WriteOfficeFixture(string path, bool sheet)
+        {
+            const string relationships = "http://schemas.openxmlformats.org/package/2006/relationships";
+            const string office = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            string main = sheet ? "xl/workbook.xml" : "word/document.xml";
+            using (var file = File.Create(path))
+            using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
+            {
+                OfficeEntry(zip, "_rels/.rels", "<Relationships xmlns='" + relationships + "'><Relationship Id='doc' Type='" + office + "/officeDocument' Target='" + main + "'/><Relationship Id='thumb' Type='" + office + "/thumbnail' Target='docProps/thumbnail.png'/></Relationships>");
+                using (var bitmap = new Bitmap(120, 60))
+                {
+                    using (Graphics g = Graphics.FromImage(bitmap)) { g.Clear(Color.White); g.FillRectangle(Brushes.Black, 5, 5, 30, 12); }
+                    using (Stream stream = zip.CreateEntry("docProps/thumbnail.png").Open()) bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                    using (Graphics g = Graphics.FromImage(bitmap)) g.Clear(Color.FromArgb(255, 96, 0));
+                    using (Stream stream = zip.CreateEntry("word/media/picture.png").Open()) bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                if (sheet)
+                {
+                    OfficeEntry(zip, main, "<workbook xmlns='http://schemas.openxmlformats.org/spreadsheetml/2006/main' xmlns:r='" + office + "'><sheets><sheet name='Launch budget' sheetId='1' r:id='sheet'/></sheets></workbook>");
+                    OfficeEntry(zip, "xl/_rels/workbook.xml.rels", "<Relationships xmlns='" + relationships + "'><Relationship Id='sheet' Type='" + office + "/worksheet' Target='worksheets/sheet1.xml'/></Relationships>");
+                    OfficeEntry(zip, "xl/worksheets/sheet1.xml", "<worksheet xmlns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'><sheetData><row r='1'><c r='A1' t='inlineStr'><is><t>Workstream</t></is></c><c r='B1' t='inlineStr'><is><t>Budget</t></is></c></row><row r='2'><c r='A2' t='inlineStr'><is><t>Interface design</t></is></c><c r='B2'><v>640</v></c></row></sheetData></worksheet>");
+                }
+                else
+                {
+                    OfficeEntry(zip, main, "<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main' xmlns:r='" + office + "' xmlns:a='http://schemas.openxmlformats.org/drawingml/2006/main'><w:body><w:p><w:pPr><w:pStyle w:val='Title'/></w:pPr><w:r><w:t>Desktop Hover / Project brief</w:t></w:r></w:p><w:p><w:r><w:t>Readable documents in dark and light themes. Original pictures keep their colors.</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Interface design</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Ready</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:drawing><a:blip r:embed='photo'/></w:drawing></w:r></w:p></w:body></w:document>");
+                    OfficeEntry(zip, "word/_rels/document.xml.rels", "<Relationships xmlns='" + relationships + "'><Relationship Id='photo' Type='" + office + "/image' Target='media/picture.png'/></Relationships>");
+                }
+            }
+        }
+        private static void OfficeEntry(ZipArchive zip, string name, string xml)
+        { using (var writer = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(false))) writer.Write(xml); }
+
         private static void WritePdf(string path)
         {
             string[] objects = {
@@ -412,6 +600,10 @@ namespace DesktopHover
                 Until(() => window.MediaState != "media_loading", 16000);
                 MediaPlayback session = Field<MediaPlayback>(window, "media");
                 Check(session != null && session.HasVideo && session.Duration > TimeSpan.Zero, "short clip opens as actual video");
+                window.ClientSize = new Size(760, 560);
+                Check(ReferenceEquals(session, Field<MediaPlayback>(window, "media")) &&
+                    Field<Rectangle>(window, "viewport").Contains(Field<Rectangle>(session, "videoBounds")),
+                    "resizing fits video inside the viewer without replacing the playback session");
                 Console.WriteLine("VIDEO duration " + session.Duration.TotalMilliseconds + " ms");
                 int ended = 0; session.Ended += delegate { ended++; };
                 // Real user clips may be longer than the generated 600 ms fixture.
@@ -528,6 +720,7 @@ namespace DesktopHover
             }
         }
         private static T Field<T>(object target, string name) { return (T)target.GetType().GetField(name, Private).GetValue(target); }
+        private static object Call(object target, string name, params object[] args) { return target.GetType().GetMethod(name, Private).Invoke(target, args); }
         private static void Until(Func<bool> ready, int timeout)
         {
             var elapsed = Stopwatch.StartNew();

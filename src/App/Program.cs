@@ -165,8 +165,7 @@ namespace DesktopHover
             }
             pinnedWindow.Configure(settings);
             pinnedWindow.ShowFile(path, Cursor.Position, Rectangle.Empty);
-            if (pinnedWindow.WindowState == FormWindowState.Minimized) pinnedWindow.WindowState = FormWindowState.Normal;
-            pinnedWindow.Activate();
+            pinnedWindow.ActivatePinned();
         }
 
         private void SetPaused(bool value)

@@ -20,11 +20,17 @@ namespace DesktopHover
         private const int MaximumXmlBytes = 4 * 1024 * 1024;
         private const int MaximumImageBytes = 12 * 1024 * 1024;
         private const long MaximumImagePixels = 24000000;
-        private static readonly Color Ink = Color.FromArgb(39, 47, 60);
-        private static readonly Color Accent = Color.FromArgb(39, 103, 168);
-        private static readonly Color Line = Color.FromArgb(220, 225, 232);
+        internal static bool SupportsTheming(string path)
+        {
+            switch (Path.GetExtension(path ?? "").ToLowerInvariant())
+            {
+                case ".docx": case ".docm": case ".dotx": case ".dotm":
+                case ".xlsx": case ".xlsm": case ".xltx": case ".xltm": return true;
+                default: return false;
+            }
+        }
 
-        internal static DocumentPreviewResult TryLoad(string path, Size maxSize, CancellationToken cancellation)
+        internal static DocumentPreviewResult TryLoad(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
             int kind;
@@ -57,6 +63,20 @@ namespace DesktopHover
                     Bitmap fallback = null;
                     try
                     {
+                        // Re-render document content with the selected palette. Saved Office
+                        // thumbnails are flattened white pages and cannot preserve photo colors
+                        // if inverted. They remain a fallback when content cannot be read.
+                        if (kind != 3 && palette != null)
+                        {
+                            if (main == null) main = kind == 1 ? "word/document.xml" : "xl/workbook.xml";
+                            XmlDocument document = package.Xml(main);
+                            if (document != null)
+                            {
+                                DocumentPreviewResult themed = kind == 1 ? RenderWord(package, main, document, maxSize, palette)
+                                    : RenderSheet(package, main, document, maxSize, palette);
+                                if (themed != null) return themed;
+                            }
+                        }
                         foreach (string name in thumbnails)
                         {
                             // PowerPoint styles, masters and graphics must come from a real
@@ -71,14 +91,14 @@ namespace DesktopHover
                             }
                             else embedded.Dispose();
                         }
-                        if (kind != 3)
+                        if (kind != 3 && palette == null)
                         {
                             if (main == null) main = kind == 1 ? "word/document.xml" : "xl/workbook.xml";
                             XmlDocument document = package.Xml(main);
                             if (document != null)
                             {
-                                if (kind == 1) return RenderWord(package, main, document, maxSize);
-                                return RenderSheet(package, main, document, maxSize);
+                                if (kind == 1) return RenderWord(package, main, document, maxSize, OfficePreviewPalette.Default);
+                                return RenderSheet(package, main, document, maxSize, OfficePreviewPalette.Default);
                             }
                         }
                         // Never replace a styled slide with a partial reconstruction.
@@ -268,7 +288,7 @@ namespace DesktopHover
                 || (bytes[0] == 'M' && bytes[1] == 'M' && bytes[2] == 0 && bytes[3] == 42);
         }
 
-        private static DocumentPreviewResult RenderWord(Package package, string part, XmlDocument document, Size maximum)
+        private static DocumentPreviewResult RenderWord(Package package, string part, XmlDocument document, Size maximum, OfficePreviewPalette palette)
         {
             XmlNode body = document.SelectSingleNode("/*[local-name()='document']/*[local-name()='body']");
             if (body == null) return null;
@@ -278,14 +298,14 @@ namespace DesktopHover
             try
             {
                 using (Graphics g = Graphics.FromImage(image))
-                using (var regular = new Font("Segoe UI", Math.Max(10, Math.Min(17, size.Width / 48F)), FontStyle.Regular, GraphicsUnit.Pixel))
+                using (var regular = new Font("Segoe UI", Math.Max(10, size.Width / 48F), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var heading = new Font("Segoe UI", regular.Size * 1.55F, FontStyle.Bold, GraphicsUnit.Pixel))
-                using (var ink = new SolidBrush(Ink))
-                using (var accent = new SolidBrush(Accent))
-                using (var border = new Pen(Line))
+                using (var ink = new SolidBrush(palette.Ink))
+                using (var accent = new SolidBrush(palette.Accent))
+                using (var border = new Pen(palette.Line))
                 using (var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter })
                 {
-                    Prepare(g);
+                    Prepare(g, palette);
                     float margin = Math.Max(12, size.Width / 24F), y = margin;
                     float width = Math.Max(1, size.Width - margin * 2);
                     int count = 0;
@@ -351,7 +371,7 @@ namespace DesktopHover
             catch { image.Dispose(); throw; }
         }
 
-        private static DocumentPreviewResult RenderSheet(Package package, string part, XmlDocument workbook, Size maximum)
+        private static DocumentPreviewResult RenderSheet(Package package, string part, XmlDocument workbook, Size maximum, OfficePreviewPalette palette)
         {
             Dictionary<string, Relation> relations = package.Relations(part);
             XmlNode selected = null;
@@ -434,22 +454,23 @@ namespace DesktopHover
             try
             {
                 using (Graphics g = Graphics.FromImage(image))
-                using (var font = new Font("Segoe UI", Math.Max(10, Math.Min(15, maximum.Width / 56F)), GraphicsUnit.Pixel))
+                using (var font = new Font("Segoe UI", Math.Max(10, maximum.Width / 56F), GraphicsUnit.Pixel))
                 using (var bold = new Font(font, FontStyle.Bold))
-                using (var ink = new SolidBrush(Ink))
-                using (var muted = new SolidBrush(Color.FromArgb(105, 118, 132)))
-                using (var header = new SolidBrush(Color.FromArgb(239, 243, 248)))
-                using (var green = new SolidBrush(Color.FromArgb(28, 119, 80)))
-                using (var pen = new Pen(Line))
+                using (var ink = new SolidBrush(palette.Ink))
+                using (var muted = new SolidBrush(palette.Muted))
+                using (var header = new SolidBrush(palette.Header))
+                using (var tab = new SolidBrush(palette.Tab))
+                using (var pen = new Pen(palette.Line))
                 using (var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
                 {
-                    Prepare(g);
-                    float rowHeight = Math.Max(24, font.Height + 10), gutter = 36, top = rowHeight;
+                    Prepare(g, palette);
+                    float unit = Math.Max(1, maximum.Width / 720F);
+                    float rowHeight = Math.Max(24 * unit, font.Height + 10 * unit), gutter = 36 * unit, top = rowHeight;
                     int columns = Math.Max(3, Math.Min(8, highestColumn));
                     float cellWidth = Math.Max(1, (maximum.Width - gutter) / columns);
-                    g.FillRectangle(green, 0, 0, image.Width, top);
-                    using (var white = new SolidBrush(Color.White))
-                        g.DrawString(Limit(Attr(selected, "name"), 100), bold, white, new RectangleF(12, 0, image.Width - 24, top), format);
+                    g.FillRectangle(tab, 0, 0, image.Width, top);
+                    using (var title = new SolidBrush(palette.TabText))
+                        g.DrawString(Limit(Attr(selected, "name"), 100), bold, title, new RectangleF(12, 0, image.Width - 24, top), format);
                     g.FillRectangle(header, 0, top, image.Width, rowHeight);
                     int rows = Math.Max(0, Math.Min(30, (int)((image.Height - top - rowHeight) / rowHeight)));
                     g.FillRectangle(header, 0, top, gutter, image.Height - top);
@@ -547,9 +568,9 @@ namespace DesktopHover
             if (!upscale) scale = Math.Min(1, scale);
             return new Size(Math.Max(1, (int)Math.Round(width * scale)), Math.Max(1, (int)Math.Round(height * scale)));
         }
-        private static void Prepare(Graphics graphics)
+        private static void Prepare(Graphics graphics, OfficePreviewPalette palette)
         {
-            graphics.Clear(Color.White);
+            graphics.Clear(palette.Paper);
             graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;

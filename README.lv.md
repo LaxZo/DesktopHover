@@ -142,6 +142,8 @@ Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows
 
 Piespraustajā logā ar rīkjoslu vai **kreisās/labās bultiņas** taustiņiem pāršķir PDF lapas un slaidus, ar **atstarpi** atskaņo vai aptur, ar **+ / −** vai **Ctrl+peles riteni** maini tālummaiņu, bet ar **0** ievieto visu attēlu logā. Palielinātu attēlu var pārvietot velkot. Peles ritenis ritina tekstu vai pāršķir lapas/slaidus. **Escape** aizver piesprausto logu. Ja globālo saīsni izmanto cita lietotne, izmanto teknes izvēlni.
 
+Piespraustais skatītājs izmanto lietotnes tēmu un noapaļotu logu. Tā izmēru var mainīt vai maksimizēt; failu ielāde un pārslēgšana saglabā loga izmēru un novietojumu. Tālummaiņa ar peles riteni seko kursoram, rīkjoslā redzams faktiskais attēla mērogs, bet dubultklikšķis ievieto visu attēlu logā. Atkārtoti piespraužot to pašu failu, esošais logs tiek izvirzīts priekšplānā, saglabājot tālummaiņu, lapu un atskaņošanu.
+
 ### Iestatījumi
 
 | Iestatījums | Izvēles |
@@ -185,6 +187,8 @@ Paplašinājums nosaka priekšskatījuma veidu, bet **faktiskā attēlu atvērš
 Dokumenti ielādējas fonā; aizvirzot peli, ielāde tiek atcelta. Iebūvētajiem lasītājiem nav vajadzīga Office vai Adobe lietotne; lielas izšķirtspējas eksportam ar pašu PowerPoint vajadzīga instalēta PowerPoint darbvirsmas lietotne. Windows sīktēlu pieejamība ir atkarīga no datorā uzstādītā atbalsta; ja derīga priekšskatījuma nav, lietotne parāda paskaidrojumu.
 
 Atbalstītie Photoshop apvienotie attēli un ar pašu PowerPoint eksportētie slaidi izmanto iestatīto priekšskatījuma izmēru, saglabājot proporcijas, arī bez **mazu attēlu palielināšanas**. PowerPoint tēmas, fontus, fonus un formas saglabā īsts slaida attēls; slaidus nepārzīmē no daļēja XML satura. Ja iespējams nolasīt tikai mazu saglabāto sīktēlu, tā palielināšana neatjauno trūkstošās detaļas.
+
+Word un Excel OOXML fragmenti (`.docx`, `.xlsx` un to makro/veidņu varianti) pielāgo lapas fonu, tekstu, tabulu līnijas un galvenes lietotnes tumšajai vai gaišajai tēmai. Tēmas maiņa atjauno arī atvērtu piesprausto priekšskatījumu, saglabājot tālummaiņu. Word dokumentā ievietotie attēli saglabā sākotnējās krāsas. Vecāko Office formātu un rezerves sīktēlu krāsas nosaka Windows vai pats dokuments.
 
 Eksports ar pašu PowerPoint darbojas PPTX/POTX/PPSX failiem, ja PowerPoint ir instalēts un pašlaik nav atvērts. Tas atver pagaidu kopiju tikai lasīšanai bez redzama loga. No šīs kopijas izņem slēptos OLE metadatus, arī think-cell datus; redzamajiem OLE objektiem izmanto saglabātos attēlus. Oriģinālā prezentācija netiek mainīta. Makrosi, ActiveX un saistītie ārējie resursi joprojām netiek atbalstīti. Ja PowerPoint jau ir atvērts, izmanto saglabāto/Windows priekšskatījumu, nepieslēdzoties esošajai sesijai. Prezentācijas izmanto izvēlēto priekšskatījuma lielumu arī tad, ja pieejams tikai sīktēls. Sākumā var parādīties saglabātais sīktēls, pēc tam eksportētie slaidi tiek rādīti, tiklīdz tie ir gatavi, negaidot visu prezentāciju. Apakšējā josla rāda ielādes progresu vai eksporta nepieejamības iemeslu. Aizvirzot peli, parastais priekšskatījums aizveras uzreiz, bet iesāktā sagatavošana var pabeigties nākamajai atvēršanai.
 
