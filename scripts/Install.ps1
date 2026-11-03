@@ -5,11 +5,28 @@ $sourceExe = Join-Path $projectRoot 'DesktopHover.exe'
 $installFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'DesktopHover'
 $installedExe = Join-Path $installFolder 'DesktopHover.exe'
 $wasInstalled = Test-Path -LiteralPath $installedExe
-Get-Process DesktopHover -ErrorAction SilentlyContinue |
+$running = @(Get-Process DesktopHover -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $sourceExe -or $_.Path -eq $installedExe } |
-    ForEach-Object { Stop-Process -Id $_.Id; if (-not $_.WaitForExit(5000)) { throw 'Desktop Hover did not stop.' } }
+    ForEach-Object { $_ })
+if ($running.Count -gt 0) {
+    try { $exitRequest = [Threading.EventWaitHandle]::OpenExisting('Local\DesktopHover_Exit') }
+    catch { throw 'Quit the running Desktop Hover from its tray menu, then run Install.ps1 again. This older version does not support a safe update request.' }
+    try { [void]$exitRequest.Set() } finally { $exitRequest.Dispose() }
+    $deadline = [DateTime]::UtcNow.AddSeconds(70)
+    do {
+        $remaining = @(Get-Process DesktopHover -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $sourceExe -or $_.Path -eq $installedExe })
+        if ($remaining.Count -eq 0) { break }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($remaining.Count -gt 0) { throw 'Desktop Hover is still finishing its work. No files were replaced; try the installation again after it closes.' }
+}
 New-Item -ItemType Directory -Path $installFolder -Force | Out-Null
-Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force
+$updateExe = Join-Path $installFolder ('update-' + [Guid]::NewGuid().ToString('N') + '.exe')
+try {
+    Copy-Item -LiteralPath $sourceExe -Destination $updateExe
+    if (Test-Path -LiteralPath $installedExe) { [IO.File]::Replace($updateExe, $installedExe, [NullString]::Value) }
+    else { [IO.File]::Move($updateExe, $installedExe) }
+} finally { if (Test-Path -LiteralPath $updateExe) { Remove-Item -LiteralPath $updateExe } }
 foreach ($documentation in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md', 'README.lv.md', 'assets', 'docs')) {
     $documentationSource = Join-Path $projectRoot $documentation
     if (Test-Path -LiteralPath $documentationSource) {

@@ -85,6 +85,17 @@ namespace DesktopHover
 
         internal void Pause() { if (!disposed && IsOpen) player.Pause(); }
 
+        internal void Seek(TimeSpan position)
+        {
+            if (disposed || failed || !IsOpen || Duration <= TimeSpan.Zero) return;
+            try
+            {
+                player.Position = TimeSpan.FromTicks(Math.Max(0, Math.Min(Duration.Ticks, position.Ticks)));
+                HasEnded = false;
+            }
+            catch { Fail(); }
+        }
+
         internal void Play()
         {
             if (disposed || failed || !IsOpen) return;

@@ -11,6 +11,9 @@ namespace DesktopHover
         private readonly bool interactive;
         private ToolStrip toolbar;
         private ToolStripButton previousButton, nextButton, playbackButton, zoomOutButton, zoomInButton, fitButton;
+        private ToolStripButton refreshButton;
+        private Timer refreshTimer;
+        private string observedChange;
         private ToolStripLabel pageLabel, zoomLabel, loadingLabel;
         private ToolStripSeparator zoomSeparator;
         private readonly ToolTip contentTip = new ToolTip { ShowAlways = true };
@@ -50,7 +53,7 @@ namespace DesktopHover
             toolbarFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
             toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, Dock = DockStyle.None,
                 AutoSize = false, BackColor = Brand.Background, ForeColor = Brand.Text, Font = toolbarFont,
-                Renderer = new PinnedToolbarRenderer(), ShowItemToolTips = true, CanOverflow = false };
+                Renderer = new PinnedToolbarRenderer(), ShowItemToolTips = true, CanOverflow = true };
             SystemCursors.UseHand(toolbar);
             previousButton = AddAction("‹", "previous", () => Navigate(-1));
             pageLabel = new ToolStripLabel { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
@@ -63,9 +66,33 @@ namespace DesktopHover
             toolbar.Items.Add(zoomLabel);
             zoomInButton = AddAction("+", "zoom_in", () => ChangeZoom(1.25f));
             fitButton = AddAction("", "fit", FitImage);
+            refreshButton = AddAction("↻", "refresh_preview", RefreshPinned);
             loadingLabel = new ToolStripLabel(); toolbar.Items.Add(loadingLabel);
             Controls.Add(toolbar);
+            InitializeOfficeView();
+            InitializeMediaControls();
             InitializePinnedChrome();
+            refreshTimer = new Timer { Interval = 750 };
+            refreshTimer.Tick += delegate
+            {
+                if (!Visible || IsPreviewLoading || CurrentPath == null || !System.IO.File.Exists(CurrentPath)) return;
+                string stamp = PreviewFileStamp.Read(CurrentPath);
+                if (stamp != contentStamp && stamp == observedChange) RefreshPinned();
+                observedChange = stamp;
+            };
+            refreshTimer.Start();
+        }
+
+        private bool ContentChanged() { return CurrentPath != null && contentStamp != PreviewFileStamp.Read(CurrentPath); }
+
+        private void RefreshPinned()
+        {
+            if (!interactive || CurrentPath == null || IsDisposed || !System.IO.File.Exists(CurrentPath)) return;
+            string path = CurrentPath; Point cursor = mediaCursor; Rectangle item = mediaItemBounds;
+            PowerPointPreviewReader.Invalidate(path);
+            ImagePreviewLoader.Invalidate();
+            ClearPreview(false);
+            ShowFile(path, cursor, item);
         }
 
         private ToolStripButton AddAction(string text, string key, Action action)
@@ -105,7 +132,7 @@ namespace DesktopHover
                     toolbarFont = new Font("Segoe UI", 12 * scale, FontStyle.Regular, GraphicsUnit.Pixel);
                     toolbar.Font = toolbarFont; previous.Dispose();
                 }
-                bool showTools = preview != null || HasPlayback || IsPreviewLoading;
+                bool showTools = CurrentPath != null;
                 int header = Px(44), tools = showTools ? Px(44) : 0, padding = Px(12), footer = Px(40);
                 toolbar.Visible = showTools;
                 toolbar.SetBounds(1, header, Math.Max(1, ClientSize.Width - 2), tools);
@@ -113,9 +140,11 @@ namespace DesktopHover
                 foreach (ToolStripItem item in toolbar.Items)
                     if (item is ToolStripButton) item.Size = new Size(Px(34), Px(30));
                 pageLabel.Size = new Size(Px(80), Px(30)); zoomLabel.Size = new Size(Px(62), Px(30));
-                viewport = new Rectangle(padding, header + tools + padding,
+                int transport = LayoutMediaControls(header + tools);
+                viewport = new Rectangle(padding, header + tools + transport + padding,
                     Math.Max(1, ClientSize.Width - padding * 2),
-                    Math.Max(1, ClientSize.Height - header - tools - footer - padding * 2));
+                    Math.Max(1, ClientSize.Height - header - tools - transport - footer - padding * 2));
+                LayoutOfficeView();
                 Size source = preview == null ? Size.Empty : preview.Size;
                 if (media != null && media.IsOpen && media.HasVideo) source = new Size(media.NaturalWidth, media.NaturalHeight);
                 imageArea = viewport;
@@ -142,7 +171,7 @@ namespace DesktopHover
                 }
                 if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
                 Text = String.IsNullOrEmpty(fileName) ? L10n.Text(language, "pinned_preview") : fileName + " — Desktop Hover";
-                UpdatePinnedChrome(); UpdateToolbar(); Invalidate();
+                UpdatePinnedChrome(); UpdateToolbar(); Invalidate(); QueueImageDetail();
             }
             finally { arrangingInteractive = false; }
         }
@@ -154,7 +183,9 @@ namespace DesktopHover
         private void UpdateToolbar()
         {
             if (toolbar == null) return;
+            UpdateMediaControls();
             toolbar.BackColor = Brand.Background; toolbar.ForeColor = Brand.Text;
+            refreshButton.Enabled = CurrentPath != null;
             foreach (ToolStripItem item in toolbar.Items)
                 if (item.Tag is string)
                 {
@@ -209,6 +240,7 @@ namespace DesktopHover
 
         private void LoadPdfPage(int index)
         {
+            CancelImageDetail();
             CancelDocumentLoad(); pdfPageIndex = index;
             documentLoading = true; mediaState = "document_loading";
             documentProgress = new DocumentProgress();
@@ -244,6 +276,7 @@ namespace DesktopHover
                 if (animatedGif != null)
                 {
                     if (!animatedGif.CanAdvance) animatedGif.Restart();
+                    animationTimer.Interval = animatedGif.FrameDelay;
                     if (animatedGif.CanAdvance) animationTimer.Start();
                 }
             }
@@ -273,7 +306,7 @@ namespace DesktopHover
             int width = (int)Math.Round(imageArea.Width * zoom), height = (int)Math.Round(imageArea.Height * zoom);
             pan = new Point((int)Math.Round(anchor.X - imageX * width - imageArea.X - (imageArea.Width - width) / 2.0),
                 (int)Math.Round(anchor.Y - imageY * height - imageArea.Y - (imageArea.Height - height) / 2.0));
-            ClampPan(); UpdateToolbar(); Invalidate(viewport);
+            ClampPan(); UpdateToolbar(); Invalidate(viewport); QueueImageDetail();
         }
 
         private Rectangle ZoomedImageArea()
@@ -334,8 +367,13 @@ namespace DesktopHover
         {
             if (interactive)
             {
+                if (keyData != Keys.F5 && keyData != Keys.Escape &&
+                    ((mediaSeek != null && (mediaSeek.Focused || mediaVolume.Focused || mediaMute.Focused)) ||
+                     (sheetPicker != null && sheetPicker.ComboBox.Focused)))
+                    return base.ProcessCmdKey(ref msg, keyData);
                 switch (keyData)
                 {
+                    case Keys.F5: RefreshPinned(); return true;
                     case Keys.Escape: Close(); return true;
                     case Keys.Space: if (HasPlayback) { TogglePlayback(); return true; } break;
                     case Keys.Left: case Keys.PageUp: Navigate(-1); return true;
@@ -355,6 +393,7 @@ namespace DesktopHover
             wheelRemainder += e.Delta;
             int steps = wheelRemainder / 120; wheelRemainder %= 120;
             if (steps == 0) return;
+            if (IsOfficeView && (ModifierKeys & Keys.Control) == 0) { ScrollOffice(steps); return; }
             if (mediaKind == MediaKind.Text && textPreview != null)
             {
                 int lines = SystemInformation.MouseWheelScrollLines;
@@ -390,7 +429,7 @@ namespace DesktopHover
 
     internal sealed class PinnedToolbarRenderer : ToolStripProfessionalRenderer
     {
-        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { e.Graphics.Clear(Brand.Background); }
+        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { WindowBackdrop.Clear(e.Graphics, e.ToolStrip); }
         protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
         { using (var pen = new Pen(Brand.Border)) e.Graphics.DrawLine(pen, 10, e.ToolStrip.Height - 1, e.ToolStrip.Width - 10, e.ToolStrip.Height - 1); }
         protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e) { }
@@ -430,6 +469,11 @@ namespace DesktopHover
                         g.DrawLines(pen, new[] { new PointF(2, -6), new PointF(7, -6), new PointF(7, -1) });
                         g.DrawLines(pen, new[] { new PointF(-7, 1), new PointF(-7, 6), new PointF(-2, 6) });
                         g.DrawLines(pen, new[] { new PointF(7, 1), new PointF(7, 6), new PointF(2, 6) });
+                    }
+                    else if (key == "refresh_preview")
+                    {
+                        g.DrawArc(pen, -7, -7, 14, 14, 30, 290);
+                        g.DrawLines(pen, new[] { new PointF(2, -8), new PointF(7, -5), new PointF(7, -11) });
                     }
                     else
                     {

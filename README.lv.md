@@ -8,7 +8,7 @@
 <p align="center">Apskati attēlus, dokumentus un dizaina projektus, atskaņo medijus un lasi kodu, neatverot citu programmu.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā un gaišā tēma &nbsp;·&nbsp; 12 valodas
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā, gaišā un caurspīdīgā tēma &nbsp;·&nbsp; 12 valodas
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Paturēt priekšskatījumu atvērtu** | Piespraud pēdējo priekšskatījumu, pāršķir PDF lapas vai slaidus, apturi atskaņošanu, palielini un pārvieto attēlu vai ritini tekstu. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
 | **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi, Photoshop apvienotie attēli un ar PDF saderīgs Illustrator saturs. Citiem Adobe projektiem izmanto iegultos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. |
-| **Pielāgot sev** | Tumšā vai gaišā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
+| **Pielāgot sev** | Tumšā, gaišā vai caurspīdīgā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
 
@@ -69,9 +69,9 @@ Atslēgvārdi, virknes, komentāri, skaitļi un citi elementi ir iekrāsoti. Kod
 
 </details>
 
-### Viens iestatījumu logs. Divas tēmas.
+### Viens iestatījumu logs. Trīs tēmas.
 
-Izskatu pārslēdz ar saules/mēness pogu blakus valodas izvēlei. Iestatījumi atveras maināma izmēra lietotnes logā ar 1000 × 780 satura laukumu pie 100% mēroga, nepārsniedzot ekrāna robežas. Virsrakstjoslā logu var maksimizēt vai samazināt. Platā logā iestatījumi ir divās kolonnās, šaurā — vienā ritināmā kolonnā. Atkārtoti atverot esošo logu, saglabājas tā izmērs un maksimizētais stāvoklis. Slēdži stājas spēkā uzreiz, bet slīdņu izmaiņas saglabājas pēc 300 ms pauzes vai aizverot iestatījumus.
+Ar tēmas pogu blakus valodas izvēlei vai teknes izvēlnē izvēlies Tumšo, Gaišo vai Caurspīdīgo tēmu. Caurspīdīgā tēma izmanto Windows Acrylic izpludinājumu ar tumšu tonējumu; teksts, vadības elementi un priekšskatījuma attēli saglabājas necaurspīdīgi. Ja efekts nav atbalstīts, izmanto vienkrāsainu fonu. Iestatījumi atveras maināma izmēra lietotnes logā ar 1000 × 780 satura laukumu pie 100% mēroga, nepārsniedzot ekrāna robežas. Virsrakstjoslā logu var maksimizēt vai samazināt. Platā logā iestatījumi ir divās kolonnās, šaurā — vienā ritināmā kolonnā. Atkārtoti atverot esošo logu, saglabājas tā izmērs un maksimizētais stāvoklis. Slēdži stājas spēkā uzreiz, bet slīdņu izmaiņas saglabājas pēc 300 ms pauzes vai aizverot iestatījumus.
 
 Iestatījumu logs atveras ar īsu uzpeldēšanu, pogas un slēdži reaģē plūstoši, bet kompaktā teknes izvēlne uzpeld no ikonai tuvākā stūra. Valodu izvēlnes pakāpeniski parādās, un arī priekšskatījumiem ir īsa parādīšanās kustība. Izslēdz **Animācijas** iestatījumos vai teknes izvēlnē, lai šos efektus noņemtu uzreiz; izvēle saglabājas. GIF, video un automātiskā slaidu maiņa turpina darboties kā iepriekš.
 
@@ -122,7 +122,17 @@ powershell -ExecutionPolicy Bypass -File .\Install.ps1 -OpenSettings
 
 Skripts iekopē lietotni un dokumentāciju mapē `%LOCALAPPDATA%\DesktopHover` un atver iestatījumus. **Pirmajā uzstādīšanas reizē tiek ieslēgta palaišana kopā ar Windows.** To var izslēgt iestatījumos. Atkārtota skripta palaišana atjaunina uzstādīto kopiju, saglabājot izvēlētos iestatījumus.
 
+Atjauninot skripts pieprasa parastu aizvēršanos un sagaida iestatījumu saglabāšanu un priekšskatījumu/Explorer palīgprocesu pabeigšanu. Ja vecā palaistā versija šo pieprasījumu neatbalsta, vispirms aizver to teknes izvēlnē. Ja gaidīšanas laiks beidzas, uzstādītais izpildfails netiek aizstāts.
+
 ## Ikdienas vadība
+
+Atver **Iestatījumi → Papildu iestatījumi**, lai izvēlētos atļautos failu formātus. **Atzīmēts ķeksītis atļauj priekšskatījumu, neatzīmēts to izslēdz.** Piemēram, `.jpg` neietekmē `.jpeg`. Pie katras sadaļas ir slēdzis, kas ir sinhronizēts ar galvenā loga kategorijas slēdzi. Izslēgta sadaļa aptur visus tās priekšskatījumus un saglabā individuālās izvēles. Formātus var meklēt, izvēles saglabājas uzreiz, bet **Atļaut visus formātus** noņem individuālos izņēmumus.
+
+Piespraustais priekšskatījums nosaka saglabātas faila izmaiņas, arī atbilstošajos Adobe priekšskatījumu eksporta failos. **Atjaunot / F5** pārlādē saturu uzreiz. Atkārtoti piespraužot nemainītu failu, saglabājas esošais skats. Audio un video piespraustajā logā ir pārtīšanas josla, skaļuma regulēšana un skaņas izslēgšana.
+
+Piespraustus Word OOXML dokumentus var ritināt tālāk par sākotnējo fragmentu (līdz 2000 satura blokiem). Excel OOXML failiem var izvēlēties redzamo darblapu, saglabājas kolonnu platumu proporcijas un var ritināt līdz 5000 rindām pirmajās astoņās kolonnās. Tie ir vienkāršoti skatītāji bez formulu pārrēķina un pilnīgas Office maketa atveides. Peles ritenis ritina saturu, **Ctrl+ritenis** maina tālummaiņu.
+
+Palielinot attēlus, PDF un atbalstītus dizaina priekšskatījumus, tiek pieprasīta lielāka avota izšķirtspēja — līdz 4096 pikseļiem katrā malā, saglabājot mērogu un attēla novietojumu. Iegultie sīktēli nevar sniegt vairāk detaļu, nekā tajos saglabāts. Pārslēdzot PowerPoint failu, iepriekšējais eksports apstājas starp slaidiem; atsevišķai Office atvēršanas/eksporta darbībai vispirms jāpabeidzas. Lielākus kešatmiņā esošus slaidu attēlus izmanto arī mazākiem priekšskatījumiem.
 
 Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows failu informācijas lodziņus pašreizējā Explorer vai darbvirsmas failu skatā, lai tie atkārtoti neparādītos virs priekšskatījuma. Tas attiecas arī uz neatbalstītiem failiem šajā skatā. Aizejot no skata, iepauzējot priekšskatījumus vai aizverot lietotni, vadīklas tiek atjaunotas; neliels fona palīgprocess tās atjauno arī pēc galvenā procesa piespiedu apturēšanas. Windows iestatījumi un Explorer priekšskatījuma sānu panelis netiek mainīti. Pirmais lodziņš var īslaicīgi parādīties, pirms tā vadīkla ir noteikta.
 
@@ -155,7 +165,7 @@ Piespraustais skatītājs izmanto lietotnes tēmu un noapaļotu logu. Tā izmēr
 | Automātiska mediju atskaņošana | Sākt audio/video pēc peles uzvešanas vai atvērt pauzē un atskaņot piespraustajā logā. |
 | Atkārtot video | Pēc beigām automātiski sākt video no jauna. Sākotnēji ieslēgts; pieejams iestatījumos un teknes izvēlnē. Pauze vai peles aizvirzīšana no parastā priekšskatījuma aptur atskaņošanu. Audio netiek atkārtots. |
 | Ieslēgtie failu tipi | Atsevišķi ieslēdz attēlus/GIF, dokumentus/dizaina projektus, tekstu/kodu, audio un video. |
-| Izskats | Tumšā vai gaišā tēma, arī izvēlnēs un koda priekšskatījumos. |
+| Izskats | Tumšā, gaišā vai caurspīdīgā tēma. Izvēlnēm un koda priekšskatījumiem pieskaņotas salasāmas krāsas. |
 | Animācijas | Ieslēgt vai izslēgt saskarnes kustību iestatījumos vai teknes izvēlnē. Sākotnēji ieslēgtas. |
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
 | Palaišana kopā ar Windows | Automātiska palaišana pēc pierakstīšanās. |

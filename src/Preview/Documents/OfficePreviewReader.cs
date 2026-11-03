@@ -30,7 +30,7 @@ namespace DesktopHover
             }
         }
 
-        internal static DocumentPreviewResult TryLoad(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null)
+        internal static DocumentPreviewResult TryLoad(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null, OfficeViewOptions view = null)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
             int kind;
@@ -72,8 +72,8 @@ namespace DesktopHover
                             XmlDocument document = package.Xml(main);
                             if (document != null)
                             {
-                                DocumentPreviewResult themed = kind == 1 ? RenderWord(package, main, document, maxSize, palette)
-                                    : RenderSheet(package, main, document, maxSize, palette);
+                                DocumentPreviewResult themed = kind == 1 ? RenderWord(package, main, document, maxSize, palette, view)
+                                    : RenderSheet(package, main, document, maxSize, palette, view);
                                 if (themed != null) return themed;
                             }
                         }
@@ -288,12 +288,13 @@ namespace DesktopHover
                 || (bytes[0] == 'M' && bytes[1] == 'M' && bytes[2] == 0 && bytes[3] == 42);
         }
 
-        private static DocumentPreviewResult RenderWord(Package package, string part, XmlDocument document, Size maximum, OfficePreviewPalette palette)
+        private static DocumentPreviewResult RenderWord(Package package, string part, XmlDocument document, Size maximum, OfficePreviewPalette palette, OfficeViewOptions view = null)
         {
             XmlNode body = document.SelectSingleNode("/*[local-name()='document']/*[local-name()='body']");
             if (body == null) return null;
             Dictionary<string, Relation> relations = package.Relations(part);
             Size size = new Size(maximum.Width, maximum.Height);
+            int contentHeight = size.Height;
             var image = new Bitmap(size.Width, size.Height);
             try
             {
@@ -306,13 +307,14 @@ namespace DesktopHover
                 using (var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter })
                 {
                     Prepare(g, palette);
+                    if (view != null) g.TranslateTransform(0, -view.ScrollY);
                     float margin = Math.Max(12, size.Width / 24F), y = margin;
                     float width = Math.Max(1, size.Width - margin * 2);
                     int count = 0;
                     foreach (XmlNode block in body.ChildNodes)
                     {
                         package.Cancellation.ThrowIfCancellationRequested();
-                        if (++count > 300 || y > size.Height - regular.Height) break;
+                        if (++count > (view == null ? 300 : 2000) || y > (view == null ? size.Height - regular.Height : 1000000)) break;
                         if (block.LocalName == "p")
                         {
                             string text = ParagraphText(block, 8000);
@@ -323,7 +325,8 @@ namespace DesktopHover
                             if (block.SelectSingleNode("./*[local-name()='pPr']/*[local-name()='numPr']") != null) text = "• " + text;
                             if (text.Length > 0)
                             {
-                                float height = Math.Min(size.Height - margin - y, g.MeasureString(text, font, (int)width, format).Height + 3);
+                                float height = Math.Min(view == null ? size.Height - margin - y : 1000000 - y,
+                                    g.MeasureString(text, font, (int)width, format).Height + 3);
                                 if (height <= 0) break;
                                 g.DrawString(text, font, isHeading ? accent : ink, new RectangleF(margin, y, width, height), format);
                                 y += height + regular.Height * 0.4F;
@@ -332,9 +335,9 @@ namespace DesktopHover
                             foreach (XmlNode blip in block.SelectNodes(".//*[local-name()='blip']"))
                             {
                                 Relation picture;
-                                if (++pictures > 4 || y >= size.Height - margin) break;
+                                if (++pictures > 4 || (view == null && y >= size.Height - margin)) break;
                                 if (!relations.TryGetValue(Attr(blip, "embed"), out picture)) continue;
-                                using (Bitmap bitmap = package.Image(picture.Target, new Size((int)width, (int)Math.Max(1, size.Height - margin - y))))
+                                using (Bitmap bitmap = package.Image(picture.Target, new Size((int)width, (int)Math.Max(1, view == null ? size.Height - margin - y : size.Height - margin * 2))))
                                 {
                                     if (bitmap == null) continue;
                                     g.DrawImage(bitmap, margin, y, bitmap.Width, bitmap.Height);
@@ -352,7 +355,7 @@ namespace DesktopHover
                                 int columns = Math.Min(8, cells.Count);
                                 if (columns == 0) continue;
                                 float cellWidth = width / columns, rowHeight = regular.Height * 2.2F;
-                                if (y + rowHeight > size.Height - margin) break;
+                                if (y + rowHeight > (view == null ? size.Height - margin : 1000000)) break;
                                 for (int i = 0; i < columns; i++)
                                 {
                                     var box = new RectangleF(margin + i * cellWidth, y, cellWidth, rowHeight);
@@ -365,25 +368,29 @@ namespace DesktopHover
                             y += regular.Height * 0.6F;
                         }
                     }
+                    contentHeight = Math.Max(size.Height, (int)Math.Ceiling(y + margin));
                 }
-                return new DocumentPreviewResult(image, "document_word");
+                return new DocumentPreviewResult(image, "document_word") { ContentHeight = contentHeight };
             }
             catch { image.Dispose(); throw; }
         }
 
-        private static DocumentPreviewResult RenderSheet(Package package, string part, XmlDocument workbook, Size maximum, OfficePreviewPalette palette)
+        private static DocumentPreviewResult RenderSheet(Package package, string part, XmlDocument workbook, Size maximum, OfficePreviewPalette palette, OfficeViewOptions view = null)
         {
             Dictionary<string, Relation> relations = package.Relations(part);
             XmlNode selected = null;
             Relation sheetRelation = null;
+            var visibleSheets = new List<XmlNode>();
             foreach (XmlNode sheet in workbook.SelectNodes("/*[local-name()='workbook']/*[local-name()='sheets']/*[local-name()='sheet']"))
             {
                 string state = Attr(sheet, "state");
                 if (state == "hidden" || state == "veryHidden") continue;
                 Relation candidate;
                 if (relations.TryGetValue(RelationId(sheet), out candidate) && candidate.Type.EndsWith("/worksheet", StringComparison.Ordinal))
-                { selected = sheet; sheetRelation = candidate; break; }
+                    visibleSheets.Add(sheet);
             }
+            int selectedIndex = Math.Max(0, Math.Min(visibleSheets.Count - 1, view == null ? 0 : view.SheetIndex));
+            if (visibleSheets.Count > 0) { selected = visibleSheets[selectedIndex]; sheetRelation = relations[RelationId(selected)]; }
             if (selected == null) return null;
             XmlDocument worksheet = package.Xml(sheetRelation.Target);
             if (worksheet == null) return null;
@@ -415,13 +422,13 @@ namespace DesktopHover
             {
                 package.Cancellation.ThrowIfCancellationRequested();
                 int rowIndex = Int(Attr(row, "r"), highestRow + 1);
-                if (rowIndex > 30) break;
+                if (rowIndex > (view == null ? 30 : 5000)) break;
                 if (rowIndex < 1 || Attr(row, "hidden") == "1") continue;
                 int nextColumn = 0;
                 foreach (XmlNode cell in row.ChildNodes)
                 {
                     if (cell.LocalName != "c") continue;
-                    if (++scanned > 10000) break;
+                    if (++scanned > (view == null ? 10000 : 100000)) break;
                     int column = ColumnIndex(Attr(cell, "r"));
                     if (column < 0) column = nextColumn;
                     nextColumn = column + 1;
@@ -450,6 +457,7 @@ namespace DesktopHover
                     highestRow = Math.Max(highestRow, rowIndex);
                 }
             }
+            int contentHeight = maximum.Height;
             var image = new Bitmap(maximum.Width, maximum.Height);
             try
             {
@@ -467,16 +475,30 @@ namespace DesktopHover
                     float unit = Math.Max(1, maximum.Width / 720F);
                     float rowHeight = Math.Max(24 * unit, font.Height + 10 * unit), gutter = 36 * unit, top = rowHeight;
                     int columns = Math.Max(3, Math.Min(8, highestColumn));
-                    float cellWidth = Math.Max(1, (maximum.Width - gutter) / columns);
+                    float[] widths = new float[columns], positions = new float[columns + 1];
+                    for (int col = 0; col < columns; col++) widths[col] = 8.43f;
+                    foreach (XmlNode col in worksheet.SelectNodes("/*[local-name()='worksheet']/*[local-name()='cols']/*[local-name()='col']"))
+                    {
+                        double width;
+                        if (!Double.TryParse(Attr(col, "width"), NumberStyles.Float, CultureInfo.InvariantCulture, out width) || Double.IsNaN(width) || Double.IsInfinity(width)) continue;
+                        for (int i = Math.Max(0, Int(Attr(col, "min"), 1) - 1); i < Math.Min(columns, Int(Attr(col, "max"), columns)); i++)
+                            widths[i] = Attr(col, "hidden") == "1" ? 0 : (float)Math.Max(1, Math.Min(100, width));
+                    }
+                    float totalWidth = 0; foreach (float width in widths) totalWidth += width;
+                    positions[0] = gutter;
+                    for (int col = 0; col < columns; col++) { widths[col] *= (maximum.Width - gutter) / Math.Max(1, totalWidth); positions[col + 1] = positions[col] + widths[col]; }
                     g.FillRectangle(tab, 0, 0, image.Width, top);
                     using (var title = new SolidBrush(palette.TabText))
                         g.DrawString(Limit(Attr(selected, "name"), 100), bold, title, new RectangleF(12, 0, image.Width - 24, top), format);
                     g.FillRectangle(header, 0, top, image.Width, rowHeight);
-                    int rows = Math.Max(0, Math.Min(30, (int)((image.Height - top - rowHeight) / rowHeight)));
+                    int rows = Math.Max(0, Math.Min(view == null ? 30 : 5000, (int)Math.Ceiling((image.Height - top - rowHeight) / rowHeight)));
+                    int firstRow = view == null ? 0 : Math.Max(0, Math.Min(highestRow - rows, (int)(view.ScrollY / rowHeight)));
+                    contentHeight = Math.Max(maximum.Height, (int)Math.Ceiling(top + (highestRow + 1) * rowHeight));
                     g.FillRectangle(header, 0, top, gutter, image.Height - top);
                     for (int col = 0; col < columns; col++)
                     {
-                        var box = new RectangleF(gutter + col * cellWidth, top, cellWidth, rowHeight);
+                        if (widths[col] < 1) continue;
+                        var box = new RectangleF(positions[col], top, widths[col], rowHeight);
                         using (var centered = (StringFormat)format.Clone())
                         { centered.Alignment = StringAlignment.Center; g.DrawString(((char)('A' + col)).ToString(), bold, muted, box, centered); }
                     }
@@ -484,18 +506,20 @@ namespace DesktopHover
                     {
                         package.Cancellation.ThrowIfCancellationRequested();
                         float y = top + (row + 1) * rowHeight;
-                        g.DrawString((row + 1).ToString(CultureInfo.InvariantCulture), font, muted, new RectangleF(5, y, gutter - 8, rowHeight), format);
+                        g.DrawString((firstRow + row + 1).ToString(CultureInfo.InvariantCulture), font, muted, new RectangleF(5, y, gutter - 8, rowHeight), format);
                         for (int col = 0; col < columns; col++)
                         {
                             string value;
-                            if (values.TryGetValue(row * 8 + col, out value))
-                                g.DrawString(value, font, ink, new RectangleF(gutter + col * cellWidth + 6, y, Math.Max(1, cellWidth - 12), rowHeight), format);
+                            if (widths[col] > 12 && values.TryGetValue((firstRow + row) * 8 + col, out value))
+                                g.DrawString(value, font, ink, new RectangleF(positions[col] + 6, y, widths[col] - 12, rowHeight), format);
                         }
                     }
                     for (int row = 0; row <= rows + 1; row++) g.DrawLine(pen, 0, top + row * rowHeight, image.Width, top + row * rowHeight);
-                    for (int col = 0; col <= columns; col++) g.DrawLine(pen, gutter + col * cellWidth, top, gutter + col * cellWidth, image.Height);
+                    for (int col = 0; col <= columns; col++) g.DrawLine(pen, positions[col], top, positions[col], image.Height);
                 }
-                return new DocumentPreviewResult(image, "document_sheet");
+                var names = new string[visibleSheets.Count];
+                for (int i = 0; i < names.Length; i++) names[i] = Attr(visibleSheets[i], "name");
+                return new DocumentPreviewResult(image, "document_sheet") { SheetNames = names, SheetIndex = selectedIndex, ContentHeight = contentHeight };
             }
             catch { image.Dispose(); throw; }
         }

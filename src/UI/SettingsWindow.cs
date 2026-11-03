@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,10 +25,11 @@ namespace DesktopHover
         private readonly Action<bool> pauseChanged;
         private readonly HoverButton[] presets = new HoverButton[4];
         private readonly HoverButton[] delays = new HoverButton[5];
-        private readonly HoverButton languagePicker, themeToggle, githubProject;
+        private readonly HoverButton languagePicker, themeToggle, githubProject, advancedButton;
+        private AdvancedSettingsWindow advancedWindow;
         private readonly Label autosavedLabel;
         private const string ProjectUrl = "https://github.com/LaxZo/DesktopHover";
-        private readonly ContextMenuStrip languageMenu;
+        private readonly ContextMenuStrip languageMenu, themeMenu;
         private readonly ToolTip windowToolTip = new ToolTip();
         private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
         private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle, autoPlayToggle, loopVideoToggle;
@@ -88,11 +89,27 @@ namespace DesktopHover
 
             themeToggle = new HoverButton { Name = "theme-toggle", Compact = true, ThemeSelector = true };
             themeToggle.SetBounds(242, 1158, 40, 32);
-            themeToggle.Click += delegate
-            {
-                this.settings.Theme = Brand.IsLight ? "dark" : "light";
-                Apply();
+            themeMenu = new ContextMenuStrip {
+                Name = "theme-menu", Font = bodyFont, ShowImageMargin = false, ShowCheckMargin = true,
+                DropShadowEnabled = false, Padding = new Padding(5), Renderer = new HoverMenuRenderer()
             };
+            MenuMotion.Attach(themeMenu); SystemCursors.UseHand(themeMenu);
+            foreach (string theme in new[] { "dark", "light", "glass" })
+            {
+                string selectedTheme = theme;
+                var item = new ToolStripMenuItem { Name = "theme-" + theme, Tag = theme, AutoSize = false, Size = new Size(240, 34) };
+                item.Click += delegate { this.settings.Theme = selectedTheme; Apply(); };
+                themeMenu.Items.Add(item);
+            }
+            themeMenu.Opened += delegate
+            {
+                themeToggle.Selected = true;
+                using (GraphicsPath path = Brand.RoundRect(new RectangleF(0, 0, themeMenu.Width, themeMenu.Height), 9))
+                { Region previous = themeMenu.Region; themeMenu.Region = new Region(path); if (previous != null) previous.Dispose(); }
+                foreach (ToolStripMenuItem item in themeMenu.Items) if (item.Checked) { item.Select(); break; }
+            };
+            themeMenu.Closed += delegate { themeToggle.Selected = false; };
+            themeToggle.Click += delegate { ShowThemeMenu(); };
             Controls.Add(themeToggle);
 
             languagePicker = new HoverButton
@@ -274,6 +291,9 @@ namespace DesktopHover
                 typeToggles[i] = toggle;
             }
 
+            advancedButton = new HoverButton { Name = "advanced-settings", Compact = true };
+            advancedButton.Click += delegate { ShowAdvancedSettings(); };
+            Controls.Add(advancedButton);
             Controls.Add(languagePicker);
             SyncControls();
             windowMotion = new WindowMotion(this, true, true);
@@ -283,10 +303,27 @@ namespace DesktopHover
             ArrangeSettings();
         }
 
+        private void ShowAdvancedSettings()
+        {
+            FlushSettings();
+            if (advancedWindow != null && !advancedWindow.IsDisposed) { advancedWindow.Activate(); return; }
+            advancedWindow = new AdvancedSettingsWindow(settings,
+                delegate(string extension, bool allowed) { settings.SetExtensionDisabled(extension, !allowed); Apply(); },
+                delegate(MediaKind kind, bool allowed) { settings.SetAllowed(kind, allowed); Apply(); },
+                delegate { settings.DisabledExtensions = ""; Apply(); }, uiScale);
+            advancedWindow.FormClosed += delegate { advancedWindow = null; };
+            advancedWindow.ShowFor(this);
+        }
+
         private void ShowLanguageMenu()
         {
             if (languageMenu.Visible) { languageMenu.Close(); return; }
             languageMenu.Show(languagePicker, new Point(languagePicker.Width, -5), ToolStripDropDownDirection.AboveLeft);
+        }
+        private void ShowThemeMenu()
+        {
+            if (themeMenu.Visible) { themeMenu.Close(); return; }
+            themeMenu.Show(themeToggle, new Point(themeToggle.Width, -5), ToolStripDropDownDirection.AboveLeft);
         }
 
         private void OpenProject()
@@ -329,6 +366,7 @@ namespace DesktopHover
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (advancedWindow != null) advancedWindow.Close();
             FlushSettings(); base.OnFormClosing(e);
         }
 
@@ -371,6 +409,7 @@ namespace DesktopHover
             UiMotion.Enabled = settings.AnimationsEnabled;
             settings.Language = L10n.Normalize(settings.Language);
             Brand.SetTheme(settings.Theme);
+            WindowBackdrop.Apply(this, settings.Theme);
             BackColor = Brand.Background;
             ForeColor = Brand.Text;
             ApplyTitleBarTheme();
@@ -386,13 +425,19 @@ namespace DesktopHover
             autosavedLabel.ForeColor = Brand.Muted;
             windowToolTip.SetToolTip(autosavedLabel, autosavedLabel.Text);
             githubProject.AccessibleName = T("project_link");
+            advancedButton.Text = advancedButton.AccessibleName = T("advanced_settings");
             githubProject.AccessibleDescription = ProjectUrl;
             windowToolTip.SetToolTip(githubProject, githubProject.AccessibleName + "\r\n" + ProjectUrl);
-            themeToggle.Selected = Brand.IsLight;
-            themeToggle.AccessibleName = String.Format(L10n.Culture(settings.Language), T("theme_switch"),
-                T(Brand.IsLight ? "theme_dark" : "theme_light"));
-            themeToggle.AccessibleDescription = T("theme") + ": " + T(Brand.IsLight ? "theme_light" : "theme_dark");
-            windowToolTip.SetToolTip(themeToggle, themeToggle.AccessibleName);
+            themeToggle.Selected = themeMenu.Visible;
+            themeMenu.AccessibleName = themeToggle.AccessibleName = T("theme");
+            themeToggle.AccessibleDescription = T("theme") + ": " + T("theme_" + AppSettings.NormalizeTheme(settings.Theme));
+            windowToolTip.SetToolTip(themeToggle, themeToggle.AccessibleDescription);
+            themeMenu.BackColor = Brand.Surface; themeMenu.ForeColor = Brand.Text;
+            foreach (ToolStripMenuItem item in themeMenu.Items)
+            {
+                item.Text = T("theme_" + (string)item.Tag); item.Checked = (string)item.Tag == AppSettings.NormalizeTheme(settings.Theme);
+                item.BackColor = Brand.Surface; item.ForeColor = Brand.Text;
+            }
             Text = "Desktop Hover — " + T("settings");
             AccessibleName = Text;
             L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
@@ -449,6 +494,7 @@ namespace DesktopHover
                 LocalizeToggle(typeToggles[i], TypeKeys[i], "preview_detail");
             }
             syncing = false;
+            if (advancedWindow != null && !advancedWindow.IsDisposed) advancedWindow.UpdateSettings(settings);
             Invalidate(true);
         }
 
@@ -497,7 +543,8 @@ namespace DesktopHover
             Font oldSmall = scaledSmallFont, oldBody = scaledBodyFont;
             scaledSmallFont = new Font(smallFont.FontFamily, smallFont.Size * uiScale, smallFont.Style, GraphicsUnit.Pixel);
             scaledBodyFont = new Font(bodyFont.FontFamily, bodyFont.Size * uiScale, bodyFont.Style, GraphicsUnit.Pixel);
-            autosavedLabel.Font = scaledSmallFont; languageMenu.Font = scaledBodyFont;
+            autosavedLabel.Font = scaledSmallFont; languageMenu.Font = themeMenu.Font = scaledBodyFont;
+            foreach (ToolStripItem item in themeMenu.Items) item.Size = new Size((int)Math.Round(240 * uiScale), (int)Math.Round(34 * uiScale));
             if (oldSmall != null) oldSmall.Dispose(); if (oldBody != null) oldBody.Dispose();
             PositionChrome();
         }
@@ -514,6 +561,7 @@ namespace DesktopHover
 
         private Rectangle ControlBounds(Control control, Rectangle original)
         {
+            if (control == advancedButton) return Rectangle.Round(new RectangleF(24, wideLayout ? 708 : 1196, Math.Min(300, columnWidth), 32));
             if (control == autosavedLabel) return Rectangle.Round(new RectangleF(24, footerY, canvasWidth - 280, 32));
             if (control == githubProject) return Rectangle.Round(new RectangleF(canvasWidth - 230, footerY, 40, 32));
             if (control == themeToggle) return Rectangle.Round(new RectangleF(canvasWidth - 182, footerY, 40, 32));
@@ -534,7 +582,7 @@ namespace DesktopHover
                 canvasWidth = Math.Max(424, (content.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / uiScale);
                 wideLayout = canvasWidth >= 860;
                 columnWidth = wideLayout ? (canvasWidth - 80) / 2 : canvasWidth - 48;
-                footerY = Math.Max(wideLayout ? 716 : 1202, content.ClientSize.Height / uiScale + 80 - 54);
+                footerY = Math.Max(wideLayout ? 764 : 1250, content.ClientSize.Height / uiScale + 80 - 54);
                 foreach (var item in designBounds)
                 {
                     Rectangle rect = ControlBounds(item.Key, item.Value);
@@ -598,6 +646,7 @@ namespace DesktopHover
             if (keyData == Keys.Escape)
             {
                 if (languageMenu.Visible) languageMenu.Close();
+                else if (themeMenu.Visible) themeMenu.Close();
                 else Close();
                 return true;
             }
@@ -606,6 +655,8 @@ namespace DesktopHover
                 ShowLanguageMenu();
                 return true;
             }
+            if (themeToggle.Focused && (keyData == Keys.Up || keyData == Keys.Down || keyData == (Keys.Alt | Keys.Down) || keyData == Keys.F4))
+            { ShowThemeMenu(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -677,8 +728,9 @@ namespace DesktopHover
             if (disposing)
             {
                 FlushSettings(); saveTimer.Dispose();
+                if (advancedWindow != null) advancedWindow.Dispose();
                 if (windowMotion != null) windowMotion.Dispose();
-                languageMenu.Dispose();
+                languageMenu.Dispose(); themeMenu.Dispose();
                 windowToolTip.Dispose();
                 headingFont.Dispose();
                 titleFont.Dispose();
@@ -848,7 +900,7 @@ namespace DesktopHover
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Brand.Background);
+            WindowBackdrop.Clear(g, this);
             g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Color fill = UiMotion.Blend(Brand.Surface, Brand.SelectedSurface, selectionMotion.Value);
@@ -971,7 +1023,13 @@ namespace DesktopHover
                 {
                     pen.StartCap = pen.EndCap = LineCap.Round;
                     pen.LineJoin = LineJoin.Round;
-                    if (Brand.IsLight)
+                    if (Brand.IsGlass)
+                    {
+                        graphics.DrawRectangle(pen, 2, 6, 12, 12);
+                        graphics.DrawRectangle(pen, 6, 2, 12, 12);
+                        graphics.DrawLine(pen, 8, 10, 12, 6);
+                    }
+                    else if (!Brand.IsLight)
                     {
                         using (var moon = new GraphicsPath())
                         {
@@ -1054,7 +1112,7 @@ namespace DesktopHover
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Brand.Background);
+            WindowBackdrop.Clear(g, this);
             g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             double emphasis = Focused && ShowFocusCues ? 1 : hoverMotion.Value;
@@ -1202,7 +1260,7 @@ namespace DesktopHover
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Brand.Background);
+            WindowBackdrop.Clear(g, this);
             g.ScaleTransform(UiScale, UiScale);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             double shownValue = Math.Max(Minimum, Math.Min(Maximum, valueMotion.Value));

@@ -9,12 +9,14 @@ namespace DesktopHover
     internal static class Brand
     {
         public static bool IsLight { get; private set; }
+        public static bool IsGlass { get; private set; }
         public static void SetTheme(string theme)
         {
             IsLight = String.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
+            IsGlass = String.Equals(theme, "glass", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static Color Background { get { return IsLight ? Color.FromArgb(250, 246, 248) : Color.FromArgb(12, 10, 12); } }
+        public static Color Background { get { return IsGlass ? Color.Black : IsLight ? Color.FromArgb(250, 246, 248) : Color.FromArgb(12, 10, 12); } }
         public static Color Surface { get { return IsLight ? Color.White : Color.FromArgb(21, 15, 19); } }
         public static Color Border { get { return IsLight ? Color.FromArgb(226, 208, 216) : Color.FromArgb(48, 29, 38); } }
         public static Color Text { get { return IsLight ? Color.FromArgb(43, 28, 36) : Color.FromArgb(233, 229, 231); } }

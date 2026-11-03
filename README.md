@@ -8,7 +8,7 @@
 <p align="center">Preview images, documents and design projects, play media, and read code without opening another app.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark &amp; light themes &nbsp;·&nbsp; 12 languages
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark, light &amp; translucent themes &nbsp;·&nbsp; 12 languages
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | **Keep a preview open** | Pin the last preview, browse PDF pages or slides, pause playback, zoom and pan images, or scroll text. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
 | **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides, Photoshop composites and PDF-compatible Illustrator artwork. Other Adobe projects use embedded previews, matching image/video preview files or Windows thumbnails. |
-| **Make it your own** | Dark or light appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
+| **Make it your own** | Dark, light or translucent appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
 
 ## Screenshots
 
@@ -69,9 +69,9 @@ The preview highlights keywords, strings, comments, numbers and other tokens. It
 
 </details>
 
-### One settings window. Two themes.
+### One settings window. Three themes.
 
-Change the appearance with the sun/moon button beside the language selector. Settings open in a resizable application window with a 1000 × 780 content area at 100% scaling, bounded by your screen. Use the title bar to maximize or minimize it. Wide windows show two columns; narrow windows switch to a scrolling single column. Reopening an existing window preserves its size and maximized state. Switches apply immediately; slider changes are saved after a 300 ms pause or when you close Settings.
+Choose Dark, Light or Translucent from the theme button beside the language selector, or from the tray menu. The translucent theme uses native Windows Acrylic blur with a dark tint; text, controls and preview images remain opaque. Unsupported systems use a solid background. Settings open in a resizable application window with a 1000 × 780 content area at 100% scaling, bounded by your screen. Use the title bar to maximize or minimize it. Wide windows show two columns; narrow windows switch to a scrolling single column. Reopening an existing window preserves its size and maximized state. Switches apply immediately; slider changes are saved after a 300 ms pause or when you close Settings.
 
 Settings open with a short fade and rise, buttons and switches respond smoothly, and the compact tray menu rises from the corner nearest its icon. Language menus fade in, and preview cards have a brief entrance motion. Turn **Animations** off in Settings or the tray menu to disable these effects immediately; this preference is saved. GIFs, videos and automatic slide changes keep playing normally.
 
@@ -122,7 +122,17 @@ powershell -ExecutionPolicy Bypass -File .\Install.ps1 -OpenSettings
 
 The script copies the app and documentation to `%LOCALAPPDATA%\DesktopHover` and opens Settings. **A first installation enables startup with Windows.** You can turn it off in Settings. Running the script again updates the installed copy while keeping your preferences.
 
+Updates request a normal exit and wait for settings saves and preview/Explorer helpers to finish before replacing the executable. If an older running version cannot accept this request, quit it from the tray menu first. A timeout leaves the installed executable intact.
+
 ## Everyday controls
+
+Open **Settings → Advanced settings** to choose allowed file extensions. **Checked means previews are allowed; unchecked means disabled.** For example, `.jpg` does not affect `.jpeg`. Each section has a switch synchronized with its category switch in the main settings. Turning a section off pauses all its previews and preserves individual format choices. Search narrows the list, changes save immediately, and **Allow all formats** clears individual exclusions.
+
+Pinned previews detect saved file changes, including matching Adobe preview exports. Use **Refresh / F5** to reload immediately. Unchanged files retain their current view when pinned again. Audio and video have a seek bar, volume control and mute button in the pinned window.
+
+Pinned Word OOXML documents scroll beyond the initial excerpt (up to 2,000 blocks); Excel OOXML workbooks offer visible worksheet selection, saved column-width proportions and scrolling through up to 5,000 rows in the first eight columns. These are simplified readers, without formula recalculation or full Office layout fidelity. Use the mouse wheel to scroll and **Ctrl+wheel** to zoom.
+
+Zooming images, PDFs and supported design previews requests more source detail, up to 4,096 pixels per edge, while retaining the current zoom and pan. Embedded thumbnails can only show the detail saved in them. PowerPoint exports stop between slides when superseded; an individual Office open/export operation must finish before the next request starts. Larger cached slide images can also serve smaller previews.
 
 While previews are enabled, DesktopHover temporarily deactivates Windows file infotips in the current Explorer or desktop file view, so they do not repeatedly appear over the preview. This also applies to unsupported files in that view. Leaving the view, pausing previews or quitting restores the controls; a small background helper restores them if the main process is forcibly stopped. Windows preferences and the Explorer Preview pane are unchanged. A first tooltip may briefly appear before its control is detected.
 
@@ -155,7 +165,7 @@ The pinned viewer uses the app’s theme and rounded window controls. Resize or 
 | Autoplay audio and video | Start playback on hover, or open paused and play from a pinned window. |
 | Loop videos | Restart videos after playback ends. Enabled by default; available in Settings and the tray menu. Pausing or leaving a hover preview stops playback. Audio is not looped. |
 | Enabled file types | Independently enable images/GIFs, documents/design projects, text/code, audio and video. |
-| Appearance | Dark or light, including menus and code previews. |
+| Appearance | Dark, light or translucent. Menus and code previews use matching readable colors. |
 | Animations | Enable or disable interface motion in Settings or the tray menu. Enabled by default. |
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
 | Start with Windows | Run automatically after you sign in. |

@@ -152,7 +152,7 @@ namespace DesktopHover
             if (window.WindowState == FormWindowState.Normal)
                 window.Location = new Point(destination.X, destination.Y + (int)Math.Round(offset * (1 - value)));
             // WPF video children must never be hosted in a layered/transparent window.
-            if (fade) window.Opacity = Math.Max(0.01, value);
+            if (fade) window.Opacity = WindowBackdrop.IsRequested(window) ? 1 : Math.Max(0.01, value);
             if (closing && value == 0)
             {
                 allowClose = true;

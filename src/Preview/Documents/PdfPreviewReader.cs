@@ -24,8 +24,8 @@ namespace DesktopHover
         internal static Bitmap RenderPage(string path, System.Drawing.Size maxSize, int pageIndex, out int pageCount)
         {
             pageCount = 0;
-            int maxWidth = Math.Max(1, Math.Min(1600, maxSize.Width));
-            int maxHeight = Math.Max(1, Math.Min(1200, maxSize.Height));
+            int maxWidth = Math.Max(1, Math.Min(4096, maxSize.Width));
+            int maxHeight = Math.Max(1, Math.Min(4096, maxSize.Height));
             StorageFile file = Wait(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
             PdfDocument document = Wait(PdfDocument.LoadFromFileAsync(file));
             pageCount = checked((int)document.PageCount);

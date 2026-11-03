@@ -13,6 +13,9 @@ namespace DesktopHover
         private WindowCaptionButton minimizeButton, maximizeButton, closeButton;
         private Size roundedSize;
         private float roundedScale;
+        private Rectangle normalBounds;
+        private FormWindowState lastWindowState = FormWindowState.Normal;
+        private bool restoringBounds;
         internal ScrollableControl SettingsViewport { get { return content; } }
 
         private void InitializeChrome()
@@ -52,6 +55,35 @@ namespace DesktopHover
         {
             windowMotion.Finish();
             WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+        }
+        protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Clear(e.Graphics, this); }
+
+        protected override void OnResize(EventArgs e)
+        {
+            if (IsHandleCreated && WindowState == FormWindowState.Normal && lastWindowState != FormWindowState.Normal &&
+                !normalBounds.IsEmpty && !restoringBounds)
+            {
+                Rectangle saved = normalBounds;
+                restoringBounds = true;
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    // Do not overwrite an explicit resize made before this callback.
+                    if (!IsDisposed && WindowState == FormWindowState.Normal &&
+                        Math.Abs(Width - saved.Width) <= 64 && Math.Abs(Height - saved.Height) <= 64) Bounds = saved;
+                    restoringBounds = false;
+                    if (!IsDisposed && WindowState == FormWindowState.Normal) normalBounds = Bounds;
+                });
+            }
+            lastWindowState = WindowState;
+            base.OnResize(e);
+            if (WindowState == FormWindowState.Normal && !restoringBounds) normalBounds = Bounds;
+        }
+
+        protected override void OnLocationChanged(EventArgs e)
+        {
+            base.OnLocationChanged(e);
+            if (WindowState == FormWindowState.Normal && lastWindowState == FormWindowState.Normal && !restoringBounds)
+                normalBounds = Bounds;
         }
 
         private void UpdateChrome()
@@ -170,6 +202,7 @@ namespace DesktopHover
         private sealed class SettingsSurface : Panel
         {
             internal SettingsSurface() { DoubleBuffered = true; ResizeRedraw = true; }
+            protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Clear(e.Graphics, this); }
         }
     }
 
@@ -190,7 +223,7 @@ namespace DesktopHover
         protected override void OnMouseLeave(EventArgs e) { hover.AnimateTo(0, 160); base.OnMouseLeave(e); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            Graphics g = e.Graphics; g.Clear(Brand.Background);
+            Graphics g = e.Graphics; WindowBackdrop.Clear(g, this);
             g.ScaleTransform(UiScale, UiScale); g.SmoothingMode = SmoothingMode.AntiAlias;
             float width = Width / UiScale, height = Height / UiScale;
             double amount = Focused && ShowFocusCues ? 1 : hover.Value;

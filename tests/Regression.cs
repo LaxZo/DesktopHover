@@ -17,6 +17,7 @@ namespace DesktopHover
         private static string output;
         [STAThread] private static int Main(string[] args)
         {
+            if (InfoTipRestoreGuard.TryRunWorker(args)) return 0;
             if (DocumentPreviewWorker.TryRunWorker(args)) return Environment.ExitCode;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -26,7 +27,17 @@ namespace DesktopHover
             {
                 if (args.Length > 1 && args[1] == "settings")
                 {
-                    SettingsLayout(); SettingsSaving();
+                    SettingsLayout(); SettingsSaving(); FormatPreferences(); ThemePreferences(); GlassCorners();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "themes")
+                {
+                    ThemePreferences(); GlassCorners();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "corners")
+                {
+                    GlassCorners();
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
                 if (args.Length > 1 && args[1] == "video")
@@ -46,17 +57,33 @@ namespace DesktopHover
                 }
                 if (args.Length > 1 && args[1] == "office")
                 {
-                    OfficeThemes(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                    OfficeThemes(); OfficeNavigation(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "fixes")
+                {
+                    RefreshAndDetail(); AnimatedImages(); SettingsLayout(); OfficeNavigation(); Playback(); Shutdown();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 3 && args[1] == "powerpoint-priority")
+                {
+                    PowerPointPriority(args[2], args[3]);
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
                 Images();
                 AnimatedImages();
                 SettingsLayout();
                 SettingsSaving();
+                Shutdown();
                 TrayLayoutAndMotion();
                 FolderLookup();
                 Preferences();
+                FormatPreferences();
+                ThemePreferences();
+                GlassCorners();
                 PinnedViewer();
                 OfficeThemes();
+                OfficeNavigation();
+                RefreshAndDetail();
                 Playback();
                 VideoLoop(null);
                 Hotkeys();
@@ -136,6 +163,34 @@ namespace DesktopHover
                 Snapshot(pinned, "pinned-powerpoint.png");
             }
         }
+        private static void PowerPointPriority(string large, string next)
+        {
+            PowerPointPreviewReader.Invalidate(large); PowerPointPreviewReader.Invalidate(next);
+            int count = 0;
+            var old = System.Threading.Tasks.Task.Factory.StartNew(delegate
+            {
+                using (var result = PowerPointPreviewReader.Load(large, new Size(2800, 2100), CancellationToken.None,
+                    value => { if (value.Slides != null) Interlocked.Exchange(ref count, value.Slides.Length); value.Dispose(); })) { }
+            });
+            Until(() => Volatile.Read(ref count) > 0 || old.IsCompleted, 65000);
+            Check(Volatile.Read(ref count) > 0 && !old.IsCompleted, "long native export delivers slides progressively");
+            object work = typeof(PowerPointPreviewReader).GetField("pendingExport", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var timer = Stopwatch.StartNew();
+            var newer = System.Threading.Tasks.Task.Factory.StartNew(() => PowerPointPreviewReader.Load(next, new Size(1600, 1200), CancellationToken.None));
+            Until(() => newer.IsCompleted, 65000);
+            using (var result = newer.GetAwaiter().GetResult())
+                Check(result != null && result.Slides != null && result.Slides.Length > 0, "latest presentation receives a native export: " + (result == null ? "no result" : result.DetailKey));
+            Until(() => old.IsCompleted, 3000);
+            Check(old.IsFaulted && old.Exception != null && old.Exception.GetBaseException() is OperationCanceledException, "superseded request is cancelled");
+            Check(Field<byte[][]>(work, "Slides").Length < 200 && Field<CancellationTokenSource>(work, "Cancellation").IsCancellationRequested,
+                "old native export stops before all 200 slides");
+            Console.WriteLine("Latest presentation ready in " + timer.ElapsedMilliseconds + " ms");
+            timer.Restart();
+            using (var cached = PowerPointPreviewReader.Load(next, new Size(640, 480), CancellationToken.None))
+                Check(cached.Slides != null && cached.Image.Width <= 640, "larger cached export supplies a smaller preview");
+            Check(timer.ElapsedMilliseconds < 1000, "cached presentation does not start another native export");
+        }
+
         private static void AnimatedImages()
         {
             string path = Path.Combine(output, "two-frames.gif");
@@ -167,6 +222,22 @@ namespace DesktopHover
                 window.ClearPreview();
                 using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
             }
+            byte[] looping = File.ReadAllBytes(path);
+            byte[] finite = new byte[looping.Length - 19];
+            Array.Copy(looping, 0, finite, 0, 19); Array.Copy(looping, 38, finite, 19, looping.Length - 38);
+            File.WriteAllBytes(path, finite);
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false });
+                window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                Until(() => Field<bool>(window, "playbackPaused"), 5000);
+                var button = Field<ToolStripButton>(window, "playbackButton");
+                Check(button.Text == "▶", "finished GIF displays play");
+                button.PerformClick();
+                Check(!Field<bool>(window, "playbackPaused") && Field<System.Windows.Forms.Timer>(window, "animationTimer").Enabled,
+                    "finished GIF restarts on the first click");
+                Check(Field<Bitmap>(window, "preview").GetPixel(0, 0).R > 200, "GIF restart selects its first frame");
+            }
         }
         private static void SettingsLayout()
         {
@@ -194,13 +265,15 @@ namespace DesktopHover
                 Size chosen = window.Size;
                 window.ShowCentered(new Point(300, 300));
                 Check(window.Size == chosen, "opening settings again preserves the resized window");
-                maximize.PerformClick(); Pump(80);
+                // Windows' own minimize/maximize animation is independent of UiMotion.
+                // Let it settle before issuing the next native state transition.
+                maximize.PerformClick(); Pump(400);
                 window.ShowCentered(new Point(300, 300));
                 Check(window.WindowState == FormWindowState.Maximized, "settings support maximization and preserve it on reopen");
                 Check(window.RectangleToScreen(window.ClientRectangle) == Screen.FromControl(window).WorkingArea,
                     "maximized custom caption leaves taskbar available");
-                Field<WindowCaptionButton>(window, "minimizeButton").PerformClick(); Pump(50);
-                window.ShowCentered(new Point(300, 300)); Pump(50);
+                Field<WindowCaptionButton>(window, "minimizeButton").PerformClick(); Pump(400);
+                window.ShowCentered(new Point(300, 300)); Pump(400);
                 Check(window.WindowState == FormWindowState.Maximized, "minimized maximized settings restore correctly");
                 maximize.PerformClick();
                 Check(window.WindowState == FormWindowState.Normal, "up-chevron restores normal window size");
@@ -208,6 +281,14 @@ namespace DesktopHover
                 object[] message = { Message.Create(window.Handle, 0x84, IntPtr.Zero, new IntPtr((long)(ushort)edge.X | ((long)(ushort)edge.Y << 16))) };
                 typeof(SettingsWindow).GetMethod("WndProc", Private).Invoke(window, message);
                 Check(((Message)message[0]).Result.ToInt32() == 10, "custom window retains native edge resizing");
+                Pump(400);
+                Check(window.WindowState == FormWindowState.Normal && window.Size == chosen,
+                    "restored settings retain their exact original size: " + window.Size + " expected " + chosen);
+                for (int cycle = 0; cycle < 3; cycle++)
+                {
+                    maximize.PerformClick(); Pump(400); maximize.PerformClick(); Pump(400);
+                    Check(window.Size == chosen, "settings do not grow after restore cycle " + (cycle + 1));
+                }
                 window.ClientSize = new Size(650, 600); Pump(50);
                 Check(!Field<bool>(window, "wideLayout") && viewport.VerticalScroll.Visible, "narrow window reflows into one scrolling column");
                 viewport.ScrollControlIntoView(last); Pump(50);
@@ -235,6 +316,34 @@ namespace DesktopHover
                 Check(window.IsDisposed, "custom close button closes settings");
             }
         }
+        private static void Shutdown()
+        {
+            int saved = 0;
+            using (var context = new HoverContext())
+            {
+                typeof(HoverContext).GetField("paused", Private).SetValue(context, true);
+                var settings = new SettingsWindow(new AppSettings { AnimationsEnabled = false }, false,
+                    value => { if (value.VolumePercent == 42) saved++; }, null);
+                typeof(HoverContext).GetField("settingsWindow", Private).SetValue(context, settings);
+                settings.ShowCentered(new Point(300, 300));
+                Field<HoverSlider>(settings, "volumeSlider").Value = 42;
+                Check(saved == 0, "shutdown begins with a pending settings save");
+                Program.ExitEvent.Set();
+                Call(context, "Tick", null, EventArgs.Empty);
+                Check(saved == 1 && settings.IsDisposed && Field<bool>(context, "stopping"), "exit request flushes settings before shutting down");
+            }
+            int worker;
+            using (var guard = new InfoTipRestoreGuard())
+            {
+                Check(guard.Remember(new InfoTipRestoreGuard.Lease { Window = new IntPtr(1) }), "Explorer guard starts with a harmless invalid lease");
+                worker = Field<Process>(guard, "worker").Id;
+            }
+            bool alive = false;
+            foreach (Process process in Process.GetProcesses())
+                using (process) if (process.Id == worker) alive = true;
+            Check(!alive, "guard consumes pipe EOF and exits before disposal returns");
+        }
+
         private static void TrayLayoutAndMotion()
         {
             var settings = new AppSettings { Language = "lv", AnimationsEnabled = false };
@@ -316,6 +425,330 @@ namespace DesktopHover
                 File.Delete(created);
             }
         }
+        private static void FormatPreferences()
+        {
+            string path = Path.Combine(output, "format-preferences.ini");
+            var settings = new AppSettings { Language = "lv", AnimationsEnabled = false, DisabledExtensions = " JPG, .jpg, .PNG, ../invalid " };
+            Check(settings.DisabledExtensions == ".jpg,.png", "format preferences normalize case, duplicates and invalid values");
+            settings.Save(path); settings = AppSettings.Load(path);
+            Check(!settings.Allows("photo.JPG") && settings.Allows("photo.jpeg") && settings.Allows("photo.jpg.txt"), "extension filters match exactly and ignore letter case");
+            var clone = settings.Clone(); clone.SetExtensionDisabled(".jpg", false);
+            Check(settings.IsExtensionDisabled(".jpg") && !clone.IsExtensionDisabled(".jpg"), "settings copies own independent format selections");
+            Check(AppSettings.Load(Path.Combine(output, "no-format-preferences.ini")).DisabledExtensions == "", "older preferences allow all formats by default");
+            var catalog = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string extension in PreviewFormats.Extensions)
+                if (!catalog.Add(extension) || MediaFiles.Kind("sample" + extension) == MediaKind.None)
+                    throw new InvalidOperationException("Invalid format catalog entry: " + extension);
+            Check(catalog.Contains(".jpg") && catalog.Contains(".jpeg") && catalog.Contains(".psd") && catalog.Contains(".pptx") && catalog.Contains(".mp4"), "format catalog covers images, Office, Adobe and media");
+            string jpg = Path.Combine(output, "format-filter.jpg"), jpeg = Path.Combine(output, "format-filter.jpeg");
+            WriteImage(jpg, Color.Tomato); WriteImage(jpeg, Color.CornflowerBlue);
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(settings);
+                Check(!window.ShowFile(jpg, Point.Empty, Rectangle.Empty) && !window.ShowImage(jpg, Point.Empty, Rectangle.Empty), "blocked JPEG cannot start a hover or direct image load");
+                window.ShowFile(jpeg, new Point(300, 300), Rectangle.Empty);
+                Until(() => window.HasImage, 5000);
+                settings.SetExtensionDisabled(".jpeg", true); window.Configure(settings);
+                Check(!window.HasImage && window.CurrentPath == null && !window.Visible, "disabling a format immediately closes its existing pinned preview");
+            }
+            settings.DisabledExtensions = "";
+            using (var owner = new SettingsWindow(settings, false, value => { settings = value; value.Save(path); }, null))
+            {
+                owner.ShowCentered(new Point(300, 300)); Pump(40);
+                var button = Field<HoverButton>(owner, "advancedButton");
+                Check(button.Text == "Papildu iestatījumi" && button.Visible, "settings expose the localized advanced button");
+                button.PerformClick(); Pump(40);
+                var advanced = Field<AdvancedSettingsWindow>(owner, "advancedWindow");
+                Check(advanced.Visible && advanced.Owner == owner, "advanced formats open in a separate owned window");
+                var checks = Field<System.Collections.Generic.Dictionary<string, CheckBox>>(advanced, "checks");
+                Check(checks.Count == catalog.Count && checks[".jpg"].Visible && checks[".jpg"] is HoverCheckBox, "every supported extension has a themed checkbox");
+                Check(checks[".jpg"].Checked && checks[".jpeg"].Checked, "allowed formats are checked by default");
+                Call(checks[".jpg"], "OnClick", EventArgs.Empty);
+                Check(!checks[".jpg"].Checked && !settings.Allows(jpg) && settings.Allows(jpeg) && AppSettings.Load(path).IsExtensionDisabled(".jpg"), "unchecking JPG blocks only JPG and saves immediately");
+                var search = Field<TextBox>(advanced, "search"); search.Text = "JPG"; Pump(30);
+                Check(checks[".jpg"].Visible && !checks[".png"].Visible && !checks[".jpg"].Checked, "format search preserves selections and ignores case");
+                var sections = Field<System.Collections.Generic.Dictionary<MediaKind, HoverToggle>>(advanced, "sectionToggles");
+                var types = Field<HoverToggle[]>(owner, "typeToggles");
+                sections[MediaKind.Image].PerformClick();
+                Check(!settings.PreviewImages && !types[0].Checked && !checks[".jpg"].Enabled && checks[".png"].Checked &&
+                    !AppSettings.Load(path).PreviewImages, "section switch updates main settings and preserves individual choices even while searching");
+                types[0].PerformClick();
+                Check(sections[MediaKind.Image].Checked && checks[".jpg"].Enabled && !checks[".jpg"].Checked && settings.Allows("picture.png"),
+                    "main settings switch updates the advanced section without resetting exclusions");
+                Snapshot(advanced, "advanced-formats-search.png");
+                FormatNavigation(advanced, checks);
+                Snapshot(advanced, "advanced-formats-lv.png");
+                advanced.Close(); button.PerformClick(); Pump(30);
+                advanced = Field<AdvancedSettingsWindow>(owner, "advancedWindow");
+                checks = Field<System.Collections.Generic.Dictionary<string, CheckBox>>(advanced, "checks");
+                Check(!checks[".jpg"].Checked, "reopening advanced settings keeps previously disabled formats unchecked");
+                checks[".jpg"].AccessibilityObject.DoDefaultAction();
+                Check(checks[".jpg"].Checked && settings.Allows(jpg) &&
+                    (checks[".jpg"].AccessibilityObject.State & AccessibleStates.Checked) != 0, "checking restores the format through the accessible checkbox action");
+                sections = Field<System.Collections.Generic.Dictionary<MediaKind, HoverToggle>>(advanced, "sectionToggles");
+                var categoryKinds = new[] { MediaKind.Image, MediaKind.Document, MediaKind.Text, MediaKind.Audio, MediaKind.Video };
+                for (int i = 0; i < categoryKinds.Length; i++)
+                {
+                    MediaKind kind = categoryKinds[i];
+                    sections[kind].PerformClick();
+                    Check(!settings.Allows(kind) && !types[i].Checked, "advanced section disables its matching category: " + kind);
+                    sections[kind].PerformClick();
+                    Check(settings.Allows(kind) && types[i].Checked, "advanced section restores its matching category: " + kind);
+                }
+                checks[".mp4"].Checked = false;
+                types[0].PerformClick();
+                Field<HoverButton>(advanced, "allowAll").PerformClick();
+                Check(settings.DisabledExtensions == "" && !settings.Allows(jpg) && settings.Allows("video.mp4"), "allow all clears individual exclusions without overriding category switches");
+                settings.Theme = "light"; settings.Language = "de"; Brand.SetTheme("light"); owner.UpdateSettings(settings);
+                Check(advanced.BackColor == Brand.Background && advanced.Text == "Erweiterte Einstellungen", "advanced window follows live theme and language changes");
+                Snapshot(advanced, "advanced-formats-light.png");
+                owner.Close(); Check(advanced.IsDisposed, "closing settings also closes the advanced window");
+            }
+            Brand.SetTheme("dark");
+            settings.Theme = "dark"; settings.Language = "lv"; settings.PreviewImages = true;
+            using (var owner = new Form { Bounds = new Rectangle(150, 100, 900, 700) })
+            using (var advanced = new AdvancedSettingsWindow(settings, delegate { }, delegate { }, delegate { }, 1.5f))
+            {
+                owner.Show(); advanced.ShowFor(owner); Pump(40);
+                var checks = Field<System.Collections.Generic.Dictionary<string, CheckBox>>(advanced, "checks");
+                var list = Field<Panel>(advanced, "formats");
+                var sections = Field<System.Collections.Generic.Dictionary<MediaKind, HoverToggle>>(advanced, "sectionToggles");
+                Check(checks[".jpg"].Height == 54 && sections[MediaKind.Image].Height == 66 &&
+                    !checks[".jpg"].Bounds.IntersectsWith(checks[".jpeg"].Bounds) && !list.HorizontalScroll.Visible,
+                    "themed format cards and section switches fit at 150 percent DPI");
+                Snapshot(advanced, "advanced-formats-150-percent.png");
+            }
+        }
+
+        private static void FormatNavigation(AdvancedSettingsWindow window, System.Collections.Generic.Dictionary<string, CheckBox> checks)
+        {
+            var searchField = Field<HoverSearchBox>(window, "searchField");
+            var host = Field<HoverScrollPanel>(window, "formatHost");
+            var bar = host.ScrollBar;
+            Check(!bar.Visible && bar.Maximum == 0, "short search results hide the scrollbar");
+            searchField.ClearButton.PerformClick(); Pump(30);
+            Check(searchField.Editor.Text == "" && searchField.Editor.Focused && !searchField.ClearButton.Visible &&
+                checks[".png"].Visible && !checks[".jpg"].Checked, "clear search restores all formats and input focus without changing choices");
+            Check(bar.Visible && bar.Maximum > 0 && !host.Content.HorizontalScroll.Visible, "long format lists use the themed vertical scrollbar");
+            bar.AccessibilityObject.GetChild(1).DoDefaultAction();
+            Check(bar.Value > 0 && -host.Content.AutoScrollPosition.Y == bar.Value, "accessible down arrow scrolls the format list");
+            bar.AccessibilityObject.GetChild(0).DoDefaultAction();
+            Check(bar.Value == 0 && host.Content.AutoScrollPosition.Y == 0, "accessible up arrow returns to the top");
+            Call(bar, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, bar.Width / 2, bar.Height - 8, 0));
+            Call(bar, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, bar.Width / 2, bar.Height - 8, 0));
+            Check(bar.Value > 0 && !bar.Capture, "mouse arrow click scrolls and releases capture");
+            Call(bar, "OnKeyDown", new KeyEventArgs(Keys.End));
+            Check(bar.Value == bar.Maximum && -host.Content.AutoScrollPosition.Y == bar.Maximum, "End reaches the bottom of the list");
+            Call(bar, "OnKeyDown", new KeyEventArgs(Keys.Home));
+            Call(host.Content, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, 20, 20, -120));
+            Check(bar.Value > 0 && bar.Value == -host.Content.AutoScrollPosition.Y, "mouse wheel over the list updates the themed thumb");
+            Call(bar, "OnKeyDown", new KeyEventArgs(Keys.Home));
+            Call(bar, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, 10, 60, -60));
+            Call(bar, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, 10, 60, -60));
+            Check(bar.Value > 0 && bar.Value == -host.Content.AutoScrollPosition.Y, "scrollbar accumulates small wheel deltas");
+            Call(bar, "OnKeyDown", new KeyEventArgs(Keys.Home));
+            Rectangle thumb = (Rectangle)bar.GetType().GetProperty("Thumb", Private).GetValue(bar, null);
+            int middle = thumb.Top + thumb.Height / 2;
+            Call(bar, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, bar.Width / 2, middle, 0));
+            Call(bar, "OnMouseMove", new MouseEventArgs(MouseButtons.Left, 0, bar.Width / 2, middle + 80, 0));
+            Call(bar, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, bar.Width / 2, middle + 80, 0));
+            Check(bar.Value > 0 && bar.Value == -host.Content.AutoScrollPosition.Y, "dragging the thumb moves the format list");
+            Check(checks[".wmv"].Focus(), "last format accepts keyboard focus"); Pump(30);
+            Rectangle last = checks[".wmv"].RectangleToScreen(checks[".wmv"].ClientRectangle);
+            Check(host.ViewportBounds.Contains(last) && bar.Value == -host.Content.AutoScrollPosition.Y,
+                "focusing a lower format reveals it and synchronizes the scrollbar");
+            searchField.Editor.Focus(); searchField.Editor.Text = "jpg"; Pump(30);
+            Check(bar.Maximum == 0 && !bar.Visible && host.Content.AutoScrollPosition.Y == 0 && checks[".jpg"].Visible,
+                "filtering a scrolled list resets the position and hides the scrollbar");
+            searchField.ClearButton.PerformClick(); Pump(30);
+            // Capture the actual clipped windows too: DrawToBitmap paints native
+            // child scrollbars beyond their parent's clip when processing WM_PRINT.
+            using (var image = new Bitmap(window.Width, window.Height))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                graphics.CopyFromScreen(window.Location, Point.Empty, image.Size);
+                image.Save(Path.Combine(output, "advanced-formats-screen.png"));
+            }
+        }
+
+        private static void ThemePreferences()
+        {
+            string path = Path.Combine(output, "theme-preferences.ini");
+            var settings = new AppSettings { Theme = "GLASS", Language = "lv", AnimationsEnabled = false };
+            settings.Save(path);
+            Check(settings.Theme == "glass" && AppSettings.Load(path).Theme == "glass", "translucent theme survives normalization and restart");
+            Check(AppSettings.NormalizeTheme("missing") == "dark", "unknown themes retain the solid dark fallback");
+            using (var tray = new TrayMenu(() => settings, () => false, value => settings = value, delegate { }, delegate { }, delegate { }))
+            {
+                var choices = (ToolStripMenuItem)tray.Items["theme"];
+                tray.RefreshState();
+                Check(choices.DropDownItems.Count == 3 && ((ToolStripMenuItem)choices.DropDownItems["theme-glass"]).Checked &&
+                    !((ToolStripMenuItem)choices.DropDownItems["theme-dark"]).Checked, "tray theme menu marks only the translucent choice");
+                choices.DropDownItems["theme-light"].PerformClick();
+                Check(settings.Theme == "light" && !((ToolStripMenuItem)choices.DropDownItems["theme-glass"]).Checked,
+                    "tray theme choices share the same settings");
+            }
+            settings.Theme = "dark";
+            using (var background = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual,
+                Bounds = new Rectangle(60, 40, 1180, 900), ShowInTaskbar = false, TopMost = true })
+            using (var window = new SettingsWindow(settings, false, value => { settings = value; value.Save(path); }, null))
+            {
+                background.Paint += delegate(object sender, PaintEventArgs e)
+                {
+                    e.Graphics.Clear(Color.FromArgb(190, 35, 65));
+                    using (var blue = new SolidBrush(Color.FromArgb(35, 90, 190))) e.Graphics.FillRectangle(blue, 590, 0, 590, 900);
+                    for (int x = 0; x < 1180; x += 40) e.Graphics.FillRectangle(Brushes.White, x, 0, 2, 900);
+                };
+                background.Show(); window.Owner = background; window.TopMost = true; window.ShowCentered(new Point(650, 460));
+                window.Location = new Point(100, 80); Pump(100);
+                var button = Field<HoverButton>(window, "themeToggle");
+                var menu = Field<ContextMenuStrip>(window, "themeMenu");
+                button.PerformClick(); Pump(50);
+                Check(menu.Visible && menu.Items.Count == 3 && menu.Items[2].Text == "Caurspīdīga", "theme button opens three localized choices");
+                CaptureScreen(window, "theme-menu.png");
+                menu.Items[1].PerformClick(); menu.Close(); Pump(100);
+                Check(settings.Theme == "light" && Brand.IsLight && !WindowBackdrop.IsActive(window), "light theme stays solid");
+                menu.Items[2].PerformClick(); Pump(300);
+                Check(settings.Theme == "glass" && Brand.IsGlass && AppSettings.Load(path).Theme == "glass" &&
+                    ((ToolStripMenuItem)menu.Items[2]).Checked, "selecting translucent applies and saves the third theme");
+                Check(WindowBackdrop.IsRequested(window) && window.Opacity == 1 && window.TransparencyKey.IsEmpty,
+                    "glass uses a native backdrop without making text translucent or click-through");
+                Console.WriteLine("Native backdrop active: " + WindowBackdrop.IsActive(window));
+                bool nativeGlass = WindowBackdrop.IsActive(window);
+                CaptureScreen(window, "settings-glass.png");
+                if (WindowBackdrop.IsActive(window))
+                    using (var screen = new Bitmap(Path.Combine(output, "settings-glass.png")))
+                    {
+                        Color left = screen.GetPixel(12, 360), right = screen.GetPixel(screen.Width - 12, 360);
+                        Check(left.R > left.B && right.B > right.R && left.GetBrightness() < .5 && right.GetBrightness() < .5,
+                            "native blur reveals tinted background colors without becoming fully transparent");
+                    }
+                Field<HoverButton>(window, "advancedButton").PerformClick(); Pump(150);
+                var advanced = Field<AdvancedSettingsWindow>(window, "advancedWindow");
+                Check(WindowBackdrop.IsRequested(advanced) && advanced.Opacity == 1, "advanced settings inherit the translucent theme");
+                Field<TextBox>(advanced, "search").Text = "jpg"; Pump(80);
+                CaptureScreen(advanced, "advanced-glass-search.png");
+                Field<HoverSearchBox>(advanced, "searchField").ClearButton.PerformClick(); Pump(40);
+                CaptureScreen(advanced, "advanced-glass.png");
+                menu.Items[0].PerformClick(); Pump(80);
+                Check(settings.Theme == "dark" && !WindowBackdrop.IsActive(window) && !WindowBackdrop.IsActive(advanced),
+                    "returning to dark removes blur from both open settings windows");
+                menu.Items[2].PerformClick(); Pump(80);
+                advanced.Close(); Pump(40);
+                Call(window, "RecreateHandle"); Pump(100);
+                Check(WindowBackdrop.IsRequested(window) && WindowBackdrop.IsActive(window) == nativeGlass,
+                    "glass is reapplied when Windows recreates the window handle");
+                Size before = window.Size;
+                window.WindowState = FormWindowState.Maximized; Pump(400);
+                window.WindowState = FormWindowState.Normal; Pump(400);
+                Check(window.Size == before && WindowBackdrop.IsActive(window) == nativeGlass,
+                    "glass survives maximize and restore without growing the window");
+                settings.AnimationsEnabled = true; window.UpdateSettings(settings);
+                window.Hide(); window.ShowCentered(window.Location); Pump(40);
+                Check(window.Opacity == 1, "glass opening animation keeps the native material and text opaque");
+                Call(window, "SetUiScale", 1.5f); window.Size = new Size(1420, 1020);
+                window.SettingsViewport.AutoScrollPosition = Point.Empty; Call(window, "ArrangeSettings"); Pump(100);
+                CaptureScreen(window, "settings-glass-150-percent.png");
+                settings.AnimationsEnabled = false; window.UpdateSettings(settings); window.Close();
+            }
+            settings.Theme = "glass";
+            string imagePath = Path.Combine(output, "glass-image.png"); WriteImage(imagePath, Color.CornflowerBlue);
+            using (var mediaBackground = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual,
+                Bounds = Screen.PrimaryScreen.WorkingArea, BackColor = Color.Black, TopMost = true, ShowInTaskbar = false })
+            using (var preview = new PreviewWindow(true))
+            {
+                // Keep screenshot checks independent of other apps and video behind the preview.
+                mediaBackground.Show(); preview.Owner = mediaBackground; preview.TopMost = true;
+                preview.Configure(settings); preview.ShowFile(imagePath, new Point(300, 300), Rectangle.Empty);
+                Until(() => preview.HasImage, 5000); Pump(200);
+                Check(WindowBackdrop.IsRequested(preview) && preview.Opacity == 1, "pinned previews use glass without a layered video window");
+                CaptureScreen(preview, "preview-glass.png");
+                using (var screen = new Bitmap(Path.Combine(output, "preview-glass.png")))
+                    Check(screen.GetPixel(screen.Width / 2, screen.Height / 2).ToArgb() == Color.CornflowerBlue.ToArgb(),
+                        "glass leaves preview image colors fully opaque");
+                settings.Theme = "light"; preview.Configure(settings);
+                Check(!WindowBackdrop.IsActive(preview) && preview.HasImage, "switching away from glass preserves the loaded preview");
+                string videoPath = Path.Combine(output, "glass-video.avi"); WriteVideo(videoPath);
+                settings.Theme = "glass"; settings.VolumePercent = 0; preview.Configure(settings);
+                preview.ShowFile(videoPath, new Point(300, 300), Rectangle.Empty);
+                Until(() => preview.MediaState != "media_loading", 16000); Pump(300);
+                var media = Field<MediaPlayback>(preview, "media");
+                Check(media != null && media.IsOpen && media.HasVideo && preview.MediaState == "media_playing" && preview.Opacity == 1,
+                    "native video playback remains active inside the translucent preview");
+                Call(preview, "TogglePlayback"); Pump(100);
+                CaptureScreen(preview, "video-glass.png");
+                using (var screen = new Bitmap(Path.Combine(output, "video-glass.png")))
+                {
+                    Color pixel = screen.GetPixel(screen.Width / 2, screen.Height / 2);
+                    Check(Math.Max(pixel.R, pixel.B) > 220 && Math.Abs(pixel.G - 50) < 20,
+                        "video frames remain visible above the glass backdrop");
+                }
+            }
+            Brand.SetTheme("dark");
+        }
+        private static void CaptureScreen(Form window, string name)
+        {
+            using (var image = new Bitmap(window.Width, window.Height))
+            using (var graphics = Graphics.FromImage(image))
+            { graphics.CopyFromScreen(window.Location, Point.Empty, image.Size); image.Save(Path.Combine(output, name)); }
+        }
+
+        private static void GlassCorners()
+        {
+            var settings = new AppSettings { Theme = "glass", AnimationsEnabled = false };
+            Brand.SetTheme("glass");
+            using (var background = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual,
+                Bounds = new Rectangle(60, 40, 1200, 900), BackColor = Color.Lime, TopMost = true, ShowInTaskbar = false })
+            {
+                background.Show();
+                using (var window = new SettingsWindow(settings, false, delegate { }, null))
+                {
+                    window.Owner = background; window.TopMost = true;
+                    window.ShowCentered(new Point(600, 450)); window.Bounds = new Rectangle(100, 80, 1000, 780);
+                    Pump(200); CheckGlassCorners(window, "settings-glass-corners.png");
+                    window.WindowState = FormWindowState.Maximized; Pump(400);
+                    Check(window.Region == null, "maximized glass settings keep the full rectangular work area");
+                    window.WindowState = FormWindowState.Normal; Pump(400);
+                    CheckGlassCorners(window, "settings-glass-restored-corners.png");
+                    settings.Theme = "dark"; window.UpdateSettings(settings); Pump(50);
+                    settings.Theme = "glass"; window.UpdateSettings(settings); Pump(150);
+                    CheckGlassCorners(window, "settings-glass-switched-corners.png");
+                    Call(window, "RecreateHandle"); Pump(150);
+                    CheckGlassCorners(window, "settings-glass-recreated-corners.png");
+                }
+                using (var advanced = new AdvancedSettingsWindow(settings, delegate { }, delegate { }, delegate { }, 1))
+                { advanced.TopMost = true; advanced.ShowFor(background); Pump(150); CheckGlassCorners(advanced, "advanced-glass-corners.png"); }
+                string path = Path.Combine(output, "corners-image.png"); WriteImage(path, Color.CornflowerBlue);
+                foreach (bool pinned in new[] { false, true })
+                    using (var preview = new PreviewWindow(pinned))
+                    {
+                        preview.Owner = background; preview.TopMost = true; preview.Configure(settings);
+                        preview.ShowFile(path, new Point(300, 250), Rectangle.Empty); Until(() => preview.HasImage, 5000);
+                        preview.Location = new Point(150, 120); Pump(180);
+                        CheckGlassCorners(preview, pinned ? "pinned-glass-corners.png" : "hover-glass-corners.png");
+                    }
+            }
+            Brand.SetTheme("dark");
+        }
+        private static void CheckGlassCorners(Form window, string name)
+        {
+            CaptureScreen(window, name);
+            using (var screenshot = new Bitmap(Path.Combine(output, name)))
+            {
+                Point[] points = { Point.Empty, new Point(screenshot.Width - 1, 0),
+                    new Point(0, screenshot.Height - 1), new Point(screenshot.Width - 1, screenshot.Height - 1) };
+                bool rounded = true;
+                foreach (Point point in points)
+                {
+                    Color pixel = screenshot.GetPixel(point.X, point.Y);
+                    rounded &= pixel.G > 160 && pixel.R < 30 && pixel.B < 30;
+                }
+                Check(rounded, "glass leaves the background visible outside all four rounded corners in " + name);
+                Color inside = screenshot.GetPixel(screenshot.Width / 2, 5);
+                Check(inside.G < 140 || inside.R > 30 || inside.B > 30, "rounded glass retains visible content inside its outline in " + name);
+            }
+        }
+
         private static void Preferences()
         {
             string path = Path.Combine(output, "preferences.ini");
@@ -515,6 +948,127 @@ namespace DesktopHover
                     if (image.GetPixel(x, y).ToArgb() == target.ToArgb()) count++;
             return count;
         }
+        private static void RefreshAndDetail()
+        {
+            string path = Path.Combine(output, "large-refresh.bmp");
+            WriteLargeImage(path, Color.Tomato);
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false });
+                window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                Until(() => window.HasImage && !window.IsImageLoading, 5000);
+                Check(Field<Bitmap>(window, "preview").Width <= 1600, "initial image stays bounded");
+                Call(window, "ChangeZoom", 8f);
+                Until(() => Field<Bitmap>(window, "preview").Width == 3000, 10000);
+                float zoom = Field<float>(window, "zoom");
+                Check(zoom == 8f, "detail replacement preserves zoom");
+                WriteLargeImage(path, Color.CornflowerBlue);
+                File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(2));
+                Until(() => window.HasImage && Field<Bitmap>(window, "preview").GetPixel(20, 20).B > 200, 5000);
+                Check(window.Visible && window.CurrentPath == path, "pinned content refreshes automatically after file changes");
+                DateTime stamp = File.GetLastWriteTimeUtc(path);
+                WriteLargeImage(path, Color.Tomato); File.SetLastWriteTimeUtc(path, stamp);
+                Field<ToolStripButton>(window, "refreshButton").PerformClick();
+                Until(() => window.HasImage && !window.IsImageLoading, 5000);
+                Check(Field<Bitmap>(window, "preview").GetPixel(20, 20).R > 240, "manual refresh bypasses cache even with unchanged timestamp and size");
+                WriteLargeImage(path, Color.CornflowerBlue); File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(4));
+                window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                Until(() => window.HasImage && !window.IsImageLoading, 5000);
+                Check(Field<Bitmap>(window, "preview").GetPixel(20, 20).B > 200, "repinning a changed file reloads its content");
+            }
+            string pdf = Path.Combine(output, "detail.pdf"); WritePdf(pdf);
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false });
+                window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 12000);
+                Call(window, "ChangeZoom", 8f);
+                Until(() => Field<Bitmap>(window, "preview").Width == 4096, 12000);
+                Check(Field<Bitmap>(window, "preview").GetPixel(50, 50).R > 200, "PDF zoom renders additional source detail");
+                Call(window, "Navigate", 1);
+                Until(() => !Field<bool>(window, "documentLoading") && Field<Bitmap>(window, "preview").Width == 4096, 12000);
+                Check(Field<Bitmap>(window, "preview").GetPixel(50, 50).B > 200, "high resolution PDF page change cannot show the old page");
+            }
+            string project = Path.Combine(output, "detail.aep"), sidecar = project + ".preview.bmp";
+            File.WriteAllText(project, "Preview-sidecar test project"); WriteLargeImage(sidecar, Color.Tomato);
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false });
+                window.ShowFile(project, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(window.HasImage, "Adobe image sidecar loads");
+                Call(window, "ChangeZoom", 8f);
+                Until(() => Field<Bitmap>(window, "preview").Width == 3000, 10000);
+                Check(Field<float>(window, "zoom") == 8f, "Adobe sidecar zoom loads source pixels without changing scale");
+                WriteLargeImage(sidecar, Color.CornflowerBlue); File.SetLastWriteTimeUtc(sidecar, DateTime.UtcNow.AddSeconds(2));
+                Until(() => window.HasImage && Field<Bitmap>(window, "preview").GetPixel(20, 20).B > 200, 7000);
+                Check(window.CurrentPath == project, "Adobe sidecar changes refresh the pinned project");
+            }
+        }
+        private static void WriteLargeImage(string path, Color color)
+        {
+            using (var bitmap = new Bitmap(3000, 3000))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap)) g.Clear(color);
+                bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Bmp);
+            }
+        }
+
+        private static void OfficeNavigation()
+        {
+            string sheetPath = Path.Combine(output, "many-sheets.xlsx"), wordPath = Path.Combine(output, "long-word.docx");
+            WriteOfficeFixture(sheetPath, true); WriteOfficeFixture(wordPath, false);
+            const string office = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            using (var file = File.Open(sheetPath, FileMode.Open, FileAccess.ReadWrite))
+            using (var zip = new ZipArchive(file, ZipArchiveMode.Update))
+            {
+                zip.GetEntry("xl/workbook.xml").Delete(); zip.GetEntry("xl/_rels/workbook.xml.rels").Delete();
+                OfficeEntry(zip, "xl/workbook.xml", "<workbook xmlns:r='" + office + "'><sheets><sheet name='First' r:id='sheet'/><sheet name='Second' r:id='second'/><sheet name='Hidden' state='hidden' r:id='second'/></sheets></workbook>");
+                OfficeEntry(zip, "xl/_rels/workbook.xml.rels", "<Relationships><Relationship Id='sheet' Type='" + office + "/worksheet' Target='worksheets/sheet1.xml'/><Relationship Id='second' Type='" + office + "/worksheet' Target='worksheets/sheet2.xml'/></Relationships>");
+                var rows = new StringBuilder("<worksheet><cols><col min='1' max='1' width='30'/><col min='2' max='2' width='10'/></cols><sheetData>");
+                for (int i = 1; i <= 120; i++) rows.Append("<row r='" + i + "'><c r='A" + i + "' t='inlineStr'><is><t>Second sheet row " + i + "</t></is></c><c r='B" + i + "'><v>100</v></c></row>");
+                rows.Append("</sheetData></worksheet>"); OfficeEntry(zip, "xl/worksheets/sheet2.xml", rows.ToString());
+            }
+            using (var file = File.Open(wordPath, FileMode.Open, FileAccess.ReadWrite))
+            using (var zip = new ZipArchive(file, ZipArchiveMode.Update))
+            {
+                zip.GetEntry("word/document.xml").Delete();
+                var paragraphs = new StringBuilder("<document><body>");
+                for (int i = 0; i < 140; i++) paragraphs.Append("<p><r><t>Paragraph " + i + " of the long document. This content must remain reachable by scrolling.</t></r></p>");
+                paragraphs.Append("</body></document>"); OfficeEntry(zip, "word/document.xml", paragraphs.ToString());
+            }
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false, Language = "lv" });
+                window.ShowFile(sheetPath, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                var picker = Field<ToolStripComboBox>(window, "sheetPicker");
+                Check(picker.Visible && picker.Items.Count == 2, "worksheet picker includes visible sheets");
+                picker.SelectedIndex = 1; Pump(160);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(picker.SelectedIndex == 1 && Field<OfficeViewOptions>(window, "officeView").SheetIndex == 1, "worksheet selection survives asynchronous render");
+                var scroll = Field<VScrollBar>(window, "officeScroll");
+                Check(scroll.Visible && scroll.Maximum > scroll.LargeChange * 3, "long worksheet exposes scrolling");
+                // First column uses 30 / (30 + 10 + 8.43) of the available width.
+                Bitmap rendered = Field<Bitmap>(window, "preview");
+                int boundary = (int)Math.Round(80 + (1600 - 80) * 30 / 48.43);
+                bool found = false;
+                for (int x = boundary - 2; x <= boundary + 2; x++)
+                    found |= rendered.GetPixel(x, 170).ToArgb() != rendered.GetPixel(boundary - 15, 170).ToArgb();
+                Check(found, "worksheet column widths follow the saved proportions");
+                scroll.Value = 2000; Pump(160); Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(Field<OfficeViewOptions>(window, "officeView").ScrollY == 2000, "worksheet scroll position is retained");
+                Snapshot(window, "worksheet-navigation.png");
+                window.ShowFile(wordPath, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(scroll.Visible && scroll.Maximum > 5000, "long Word document reports content beyond the first viewport");
+                scroll.Value = scroll.Maximum - scroll.LargeChange + 1; Pump(160);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(Field<OfficeViewOptions>(window, "officeView").ScrollY > 5000 && window.HasImage, "Word document can render its final section");
+                Snapshot(window, "word-scrolled.png");
+            }
+        }
+
         private static void WriteOfficeFixture(string path, bool sheet)
         {
             const string relationships = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -588,6 +1142,18 @@ namespace DesktopHover
                 Field<ToolStripButton>(window, "playbackButton").PerformClick();
                 Pump(100); double paused = window.PlaybackPosition.TotalMilliseconds;
                 Pump(250); Check(Math.Abs(window.PlaybackPosition.TotalMilliseconds - paused) < 100, "pause button stops media position");
+                var seek = Field<HoverSlider>(window, "mediaSeek");
+                Check(seek.Visible && seek.Enabled, "pinned audio exposes a seekable timeline");
+                seek.Value = 700; Pump(180);
+                Check(window.PlaybackPosition.TotalSeconds > 1.8 && window.PlaybackPosition.TotalSeconds < 2.4 && Field<bool>(window, "playbackPaused"), "seeking preserves pause and changes position");
+                Field<HoverSlider>(window, "mediaVolume").Value = 35;
+                var player = Field<System.Windows.Media.MediaPlayer>(Field<MediaPlayback>(window, "media"), "player");
+                Check(Math.Abs(player.Volume - .35) < .001 && !player.IsMuted, "pinned volume reaches the decoder");
+                Field<CheckBox>(window, "mediaMute").Checked = true;
+                Check(player.IsMuted, "mute silences the decoder");
+                Field<CheckBox>(window, "mediaMute").Checked = false;
+                Check(!player.IsMuted && Math.Abs(player.Volume - .35) < .001, "unmute restores the selected volume");
+                Snapshot(window, "audio-timeline.png");
             }
         }
         private static void VideoLoop(string path)

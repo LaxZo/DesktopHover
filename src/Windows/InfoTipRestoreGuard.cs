@@ -94,7 +94,12 @@ namespace DesktopHover
         {
             try { if (input != null) input.Dispose(); } catch { }
             input = null;
-            if (worker != null) { worker.Dispose(); worker = null; }
+            if (worker != null)
+            {
+                // EOF lets the guard restore Explorer controls before the EXE is replaced.
+                try { worker.WaitForExit(2000); } catch { }
+                worker.Dispose(); worker = null;
+            }
         }
 
         [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint command);

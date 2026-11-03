@@ -522,8 +522,8 @@ namespace DesktopHover
 
         private static Size Fit(int width, int height, Size maximum)
         {
-            double scale = Math.Min(1, Math.Min((double)Math.Max(1, Math.Min(1600, maximum.Width)) / width,
-                (double)Math.Max(1, Math.Min(1200, maximum.Height)) / height));
+            double scale = Math.Min(1, Math.Min((double)Math.Max(1, Math.Min(4096, maximum.Width)) / width,
+                (double)Math.Max(1, Math.Min(4096, maximum.Height)) / height));
             return new Size(Math.Max(1, (int)(width * scale)), Math.Max(1, (int)(height * scale)));
         }
 

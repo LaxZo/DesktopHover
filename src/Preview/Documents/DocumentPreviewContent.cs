@@ -5,6 +5,11 @@ using System.Threading;
 
 namespace DesktopHover
 {
+    internal sealed class OfficeViewOptions
+    {
+        internal int SheetIndex, ScrollY;
+        internal OfficeViewOptions Copy() { return new OfficeViewOptions { SheetIndex = SheetIndex, ScrollY = ScrollY }; }
+    }
     internal sealed class DocumentPreviewResult : IDisposable
     {
         internal Bitmap Image;
@@ -14,6 +19,8 @@ namespace DesktopHover
         internal int SlideCount;
         internal int PageCount;
         internal string DetailKey;
+        internal string[] SheetNames;
+        internal int SheetIndex, ContentHeight;
 
         internal DocumentPreviewResult(Bitmap image, string noteKey)
         {
@@ -57,17 +64,17 @@ namespace DesktopHover
             }
         }
 
-        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null, OfficePreviewPalette palette = null)
+        internal static DocumentPreviewResult Load(string path, Size maxSize, CancellationToken cancellation, Action<DocumentPreviewResult> progress = null, OfficePreviewPalette palette = null, OfficeViewOptions view = null)
         {
-            return LoadCore(path, maxSize, cancellation, true, progress, palette);
+            return LoadCore(path, maxSize, cancellation, true, progress, palette, view, false);
         }
 
-        internal static DocumentPreviewResult LoadStill(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null)
+        internal static DocumentPreviewResult LoadStill(string path, Size maxSize, CancellationToken cancellation, OfficePreviewPalette palette = null, OfficeViewOptions view = null, bool highResolution = false)
         {
-            return LoadCore(path, maxSize, cancellation, false, null, palette);
+            return LoadCore(path, maxSize, cancellation, false, null, palette, view, highResolution);
         }
 
-        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo, Action<DocumentPreviewResult> progress, OfficePreviewPalette palette)
+        private static DocumentPreviewResult LoadCore(string path, Size maxSize, CancellationToken cancellation, bool allowVideo, Action<DocumentPreviewResult> progress, OfficePreviewPalette palette, OfficeViewOptions view, bool highResolution)
         {
             string unavailableKey = "document_unavailable";
             try
@@ -83,7 +90,7 @@ namespace DesktopHover
                 FileInfo info = new FileInfo(path);
                 if (!info.Exists || (info.Attributes & (FileAttributes)(0x1000 | 0x40000 | 0x400000)) != 0)
                     return new DocumentPreviewResult(null, unavailableKey);
-                maxSize = new Size(Math.Max(1, Math.Min(1600, maxSize.Width)), Math.Max(1, Math.Min(1200, maxSize.Height)));
+                maxSize = new Size(Math.Max(1, Math.Min(highResolution ? 4096 : 1600, maxSize.Width)), Math.Max(1, Math.Min(highResolution ? 4096 : 1200, maxSize.Height)));
                 if (AdobeProjectFiles.IsSupported(path))
                 {
                     // An explicitly named export can preview even a large project without parsing it.
@@ -120,7 +127,7 @@ namespace DesktopHover
                     if (cancellation.IsCancellationRequested) { if (artwork != null) artwork.Dispose(); return null; }
                     if (artwork != null) return new DocumentPreviewResult(artwork, "document_pdf");
                 }
-                DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true, palette);
+                DocumentPreviewResult result = TryReader(path, maxSize, cancellation, true, palette, view);
                 if (result == null) result = TryReader(path, maxSize, cancellation, false);
                 if (result != null)
                 {
@@ -140,12 +147,12 @@ namespace DesktopHover
             catch { return new DocumentPreviewResult(null, unavailableKey); }
         }
 
-        private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office, OfficePreviewPalette palette = null)
+        private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office, OfficePreviewPalette palette = null, OfficeViewOptions view = null)
         {
             cancellation.ThrowIfCancellationRequested();
             try
             {
-                return office ? OfficePreviewReader.TryLoad(path, maxSize, cancellation, palette)
+                return office ? OfficePreviewReader.TryLoad(path, maxSize, cancellation, palette, view)
                     : AdobePreviewReader.TryLoad(path, maxSize, cancellation);
             }
             catch (OperationCanceledException) { throw; }

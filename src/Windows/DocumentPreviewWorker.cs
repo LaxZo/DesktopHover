@@ -24,7 +24,7 @@ namespace DesktopHover
         private const int ShellTimeoutMilliseconds = 4000;
         private const int PdfTimeoutMilliseconds = 8000;
         private const int PowerPointTimeoutMilliseconds = 60000;
-        private const int MaximumEdge = 1600;
+        private const int MaximumEdge = 4096;
         private const long MaximumOutputBytes = 16L * 1024L * 1024L;
         private const long MaximumPowerPointSlidesBytes = 64L * 1024L * 1024L;
         private const int MaximumPowerPointSlides = 200;
@@ -72,16 +72,22 @@ namespace DesktopHover
                 var slides = new List<byte[]>();
                 long totalBytes = 0;
                 int total = 0;
+                bool cancellationSent = false;
                 while (true)
                 {
                     bool exited = worker.WaitForExit(40);
-                    if (cancellation.IsCancellationRequested) return null;
+                    if (cancellation.IsCancellationRequested)
+                    {
+                        if (!cancellationSent)
+                        { File.WriteAllText(output + ".cancel", "cancel"); cancellationSent = true; }
+                        if (exited) return null;
+                    }
                     if (elapsed.ElapsedMilliseconds >= PowerPointTimeoutMilliseconds)
                     {
                         if (failure != null) failure("ppt_timeout");
                         return null;
                     }
-                    if (Directory.Exists(output))
+                    if (!cancellationSent && Directory.Exists(output))
                     {
                         string countFile = Path.Combine(output, "slides.count");
                         if (total == 0 && File.Exists(countFile))

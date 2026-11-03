@@ -72,7 +72,12 @@ namespace DesktopHover
         private int documentSlideTotal;
         private string documentDetail;
 
-        public string CurrentPath { get; private set; }
+        private string currentPath, contentStamp;
+        public string CurrentPath
+        {
+            get { return currentPath; }
+            private set { currentPath = value; contentStamp = PreviewFileStamp.Read(value); }
+        }
         internal DrawingSize DisplayedImageSize { get { return imageArea.Size; } }
         internal bool IsMediaPreview { get { return mediaKind != MediaKind.None || animatedGif != null; } }
         internal string MediaState { get { return mediaState; } }
@@ -90,6 +95,7 @@ namespace DesktopHover
             autoPlayMedia = settings.AutoPlayMedia;
             UiMotion.Enabled = settings.AnimationsEnabled;
             Brand.SetTheme(settings.Theme);
+            WindowBackdrop.Apply(this, settings.Theme);
             BackColor=Brand.Background;
             ForeColor=Brand.Text;
             maximumPreviewWidth=interactive ? Math.Max(640, settings.MaxWidth) : settings.MaxWidth;
@@ -99,9 +105,9 @@ namespace DesktopHover
             upscale=settings.Upscale;
             language=L10n.Normalize(settings.Language);
             UpdateLanguage();
-            if (media != null) media.SetVolume(volumePercent);
+            ApplyMediaVolume();
             if (slideshowTimer != null) slideshowTimer.Interval = slideIntervalSeconds * 1000;
-            if ((!interactive && resize) || !settings.Allows(mediaKind)) ClearPreview();
+            if ((!interactive && resize) || (CurrentPath != null && !settings.Allows(CurrentPath))) ClearPreview();
             else Invalidate();
             if (themeChanged && mediaKind == MediaKind.Document && OfficePreviewReader.SupportsTheming(CurrentPath))
             {
@@ -152,6 +158,7 @@ namespace DesktopHover
                 }
                 string previousDescription = description;
                 UpdateMediaDescription();
+                UpdateMediaControls();
                 if (description != previousDescription) Invalidate(descriptionArea);
             };
             InitializeInteractive();
@@ -185,6 +192,7 @@ namespace DesktopHover
         public bool ShowImage(string path, DrawingPoint cursor, Rectangle itemBounds)
         {
             if (IsDisposed || String.IsNullOrEmpty(path)) return false;
+            if (!previewSettings.Allows(path)) { ClearPreview(); return false; }
             if (String.Equals(CurrentPath, path, StringComparison.OrdinalIgnoreCase) &&
                 mediaKind == MediaKind.Image && (imageTask != null || preview != null)) return true;
             ClearPreview(false);
@@ -230,6 +238,7 @@ namespace DesktopHover
                 }
             }
             LayoutImage(); ShowPreview(); Invalidate();
+            QueueImageDetail();
             if (animatedGif != null && animatedGif.CanAdvance && !playbackPaused)
             {
                 animationTimer.Interval = animatedGif.FrameDelay; animationTimer.Start();
@@ -279,9 +288,9 @@ namespace DesktopHover
         internal bool ShowFile(string path, DrawingPoint cursor, Rectangle itemBounds)
         {
             MediaKind kind = MediaFiles.Kind(path);
-            if (!previewSettings.Allows(kind)) { ClearPreview(); return false; }
+            if (!previewSettings.Allows(path)) { ClearPreview(); return false; }
             if (interactive && File.Exists(path) && String.Equals(CurrentPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-            { ActivatePinned(); return true; }
+            { if (ContentChanged()) RefreshPinned(); ActivatePinned(); return true; }
             if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
             if (kind == MediaKind.Text) return ShowText(path, cursor, itemBounds);
             if (kind == MediaKind.Document) return ShowDocument(path, cursor, itemBounds);
@@ -329,11 +338,12 @@ namespace DesktopHover
             var token = documentCancellation.Token;
             var bounds = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
             var palette = OfficePreviewPalette.Capture();
+            OfficeViewOptions view = IsOfficeView ? officeView.Copy() : null;
             documentProgress = new DocumentProgress();
             DocumentProgress progress = documentProgress;
             documentLoading = true;
-            documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish, palette)
-                : DocumentPreviewContent.LoadStill(path, bounds, token, palette),
+            documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish, palette, view)
+                : DocumentPreviewContent.LoadStill(path, bounds, token, palette, view),
                 System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
             mediaTimer.Interval = 40; mediaTimer.Start();
         }
@@ -367,6 +377,7 @@ namespace DesktopHover
                 else if (result != null) ApplyDocumentResult(result, true);
             }
             LayoutDocument(); ShowPreview(); Invalidate();
+            QueueImageDetail();
         }
 
         private void ApplyDocumentResult(DocumentPreviewResult result, bool complete)
@@ -387,6 +398,7 @@ namespace DesktopHover
                 documentSlideTotal = complete ? documentSlides.Length : Math.Max(result.SlideCount, documentSlides.Length);
             }
             if (complete && hadSlides && result.Slides == null) documentSlideTotal = documentSlides.Length;
+            ApplyOfficeResult(result);
             LayoutDocument(); ShowPreview(); Invalidate();
             if (documentSlides != null && documentSlides.Length > 1 && !slideshowTimer.Enabled && !playbackPaused)
             {
@@ -409,6 +421,7 @@ namespace DesktopHover
 
         private void ShowDocumentSlide(int next)
         {
+            CancelImageDetail();
             try
             {
                 Bitmap replacement;
@@ -421,6 +434,7 @@ namespace DesktopHover
                 documentSlideIndex = next;
                 UpdateToolbar();
                 LayoutDocument();
+                QueueImageDetail();
                 if (!interactive) SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 Invalidate();
             }
@@ -710,7 +724,7 @@ namespace DesktopHover
 
         private void StartMediaSession(string path, bool requireVideo)
         {
-            var session = new MediaPlayback(Handle, volumePercent);
+            var session = new MediaPlayback(Handle, mediaMuted ? 0 : volumePercent);
             media = session;
             session.Opened += delegate
             {
@@ -777,6 +791,7 @@ namespace DesktopHover
                 return;
             }
             mediaState = "media_unavailable";
+            LayoutMedia(); UpdateToolbar();
             UpdateMediaDescription();
             Invalidate();
         }
@@ -849,6 +864,9 @@ namespace DesktopHover
 
         private void ClearPreview(bool hide)
         {
+            CancelImageDetail();
+            ClearOfficeView();
+            if (mediaControls != null) { mediaControls.Visible = false; draggingSeek = false; }
             if (entranceMotion != null) entranceMotion.Finish();
             CancelImageLoad();
             CancelDocumentLoad();
@@ -892,13 +910,14 @@ namespace DesktopHover
             if (animatedGif == null || !Visible) { animationTimer.Stop(); return; }
             try
             {
-                if (!animatedGif.Advance()) { animationTimer.Stop(); return; }
+                if (!animatedGif.Advance()) { animationTimer.Stop(); playbackPaused = true; UpdateToolbar(); return; }
                 animationTimer.Interval = animatedGif.FrameDelay;
                 Invalidate(interactive ? viewport : imageArea);
             }
             catch { ClearPreview(); }
         }
 
+        protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Clear(e.Graphics, this); }
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -1028,7 +1047,10 @@ namespace DesktopHover
         {
             if (disposing)
             {
+                if (refreshTimer != null) refreshTimer.Dispose();
                 ClearPreview();
+                if (officeTimer != null) officeTimer.Dispose();
+                if (detailTimer != null) detailTimer.Dispose();
                 if (entranceMotion != null) entranceMotion.Dispose();
                 contentTip.Dispose();
                 if (toolbarFont != null) toolbarFont.Dispose();

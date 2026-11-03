@@ -182,8 +182,8 @@ namespace DesktopHover
                     }
                 }
                 catch { orientation = 1; }
-                int maximumWidth = Math.Max(1, Math.Min(1600, maxSize.Width));
-                int maximumHeight = Math.Max(1, Math.Min(1200, maxSize.Height));
+                int maximumWidth = Math.Max(1, Math.Min(4096, maxSize.Width));
+                int maximumHeight = Math.Max(1, Math.Min(4096, maxSize.Height));
                 bool swapped = orientation >= 5 && orientation <= 8;
                 int rawMaximumWidth = swapped ? maximumHeight : maximumWidth;
                 int rawMaximumHeight = swapped ? maximumWidth : maximumHeight;

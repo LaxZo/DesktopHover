@@ -25,7 +25,7 @@ namespace DesktopHover
             pinnedHeader = new PinnedHeader();
             pinnedHeader.Paint += delegate(object sender, PaintEventArgs e)
             {
-                e.Graphics.Clear(Brand.Background);
+                WindowBackdrop.Clear(e.Graphics, pinnedHeader);
                 Brand.DrawLogo(e.Graphics, new Rectangle(Px(14), Px(10), Px(24), Px(24)));
                 UiDrawing.Text(e.Graphics, fileName ?? L10n.Text(language, "pinned_preview"), titleFont,
                     new Rectangle(Px(50), 0, Math.Max(1, pinnedHeader.Width - Px(204)), pinnedHeader.Height), Brand.Text,

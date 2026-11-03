@@ -11,6 +11,7 @@ namespace DesktopHover
     {
         internal static string StatusFile;
         internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_OpenSettings");
+        internal static readonly EventWaitHandle ExitEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_Exit");
         private static void WaitForTestImage(PreviewWindow window)
         {
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
@@ -20,6 +21,7 @@ namespace DesktopHover
         }
         [STAThread] static void Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--quit") { ExitEvent.Set(); return; }
             if (InfoTipRestoreGuard.TryRunWorker(args)) return;
             if (DocumentPreviewWorker.TryRunWorker(args)) return;
             try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
@@ -121,7 +123,7 @@ namespace DesktopHover
             hotkeys=new AppHotkeys(delegate { SetPaused(!paused); }, PinPreview);
             trayMenu=new TrayMenu(
                 delegate { settings.StartWithWindows=Startup.IsEnabled(); return settings.Clone(); },
-                delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); }, PinPreview, delegate { return !String.IsNullOrEmpty(lastPreviewPath); });
+                delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); }, PinPreview, delegate { return settings.Allows(lastPreviewPath); });
             trayMenu.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
             trayMenu.Opening+=delegate { Reset(); };
             trayMenu.Closed+=delegate { if(!stopping) Reset(); };
@@ -156,7 +158,7 @@ namespace DesktopHover
         private void PinPreview()
         {
             string path = preview.CurrentPath ?? lastPreviewPath;
-            if (String.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            if (String.IsNullOrEmpty(path) || !File.Exists(path) || !settings.Allows(path)) return;
             Reset();
             if (pinnedWindow == null || pinnedWindow.IsDisposed)
             {
@@ -208,6 +210,7 @@ namespace DesktopHover
         }
         private void Tick(object sender,EventArgs e)
         {
+            if (Program.ExitEvent.WaitOne(0)) { ExitThread(); return; }
             if(Program.OpenSettingsEvent.WaitOne(0)) ShowSettings();
             Native.POINT p; if(!Native.GetCursorPos(out p)) return;
             Point now=new Point(p.X,p.Y);
@@ -240,7 +243,7 @@ namespace DesktopHover
                     resultReady=false;
                     if(resultGeneration==generation)
                     {
-                        if(result!=null && settings.Allows(MediaFiles.Kind(result.Path)) && result.Bounds.Contains(now) && Native.IsShellRoot(result.Root))
+                        if(result!=null && settings.Allows(result.Path) && result.Bounds.Contains(now) && Native.IsShellRoot(result.Root))
                         {
                             if(root!=result.Root || surface!=result.Surface) { preview.ClearPreview(); shown=null; return; }
                             if(shown==null || !string.Equals(shown.Path,result.Path,StringComparison.OrdinalIgnoreCase))
@@ -283,9 +286,11 @@ namespace DesktopHover
         }
         protected override void ExitThreadCore()
         {
-            stopping=true; infoTips.Dispose(); request.Set(); timer.Stop(); tray.Visible=false; preview.Close();
+            stopping=true; timer.Stop();
             if(settingsWindow!=null) settingsWindow.Close();
             if(pinnedWindow!=null) pinnedWindow.Close();
+            preview.Close(); infoTips.Dispose(); request.Set(); tray.Visible=false;
+            PowerPointPreviewReader.FinishPendingOnExit();
             base.ExitThreadCore();
         }
         protected override void Dispose(bool disposing)

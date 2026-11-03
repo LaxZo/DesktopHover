@@ -28,6 +28,8 @@ namespace DesktopHover
         private static readonly LinkedList<CachedImage> cache = new LinkedList<CachedImage>();
         private const long MaximumCacheBytes = 48L * 1024 * 1024;
         private static long cacheBytes;
+        private static int generation;
+        internal static void Invalidate() { Interlocked.Increment(ref generation); }
         private sealed class CachedImage
         {
             internal string Path;
@@ -35,6 +37,7 @@ namespace DesktopHover
             internal Size Size;
             internal Bitmap Image;
             internal int Width, Height;
+            internal int Generation;
         }
 
         internal static ImagePreviewResult Load(string path, Size size, CancellationToken cancellation)
@@ -44,6 +47,7 @@ namespace DesktopHover
             try
             {
                 decoder.Wait(cancellation); entered = true;
+                int currentGeneration = Volatile.Read(ref generation);
                 path = Path.GetFullPath(path);
                 var info = new FileInfo(path);
                 if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
@@ -57,7 +61,8 @@ namespace DesktopHover
                     for (var node = cache.First; node != null; node = node.Next)
                     {
                         CachedImage entry = node.Value;
-                        if (!String.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase) || entry.Size != size ||
+                        if (entry.Generation != currentGeneration || !String.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase) ||
+                            entry.Size.Width < size.Width || entry.Size.Height < size.Height ||
                             entry.Length != info.Length || entry.Written != info.LastWriteTimeUtc.Ticks) continue;
                         result.Image = (Bitmap)entry.Image.Clone();
                         result.Width = entry.Width; result.Height = entry.Height; result.Bytes = entry.Length;
@@ -88,7 +93,7 @@ namespace DesktopHover
                         }
                         cache.AddFirst(new CachedImage { Path = path, Size = size, Length = info.Length,
                             Written = info.LastWriteTimeUtc.Ticks, Cost = cost, Width = result.Width,
-                            Height = result.Height, Image = (Bitmap)result.Image.Clone() });
+                            Height = result.Height, Generation = currentGeneration, Image = (Bitmap)result.Image.Clone() });
                         cacheBytes += cost;
                     }
                 }
