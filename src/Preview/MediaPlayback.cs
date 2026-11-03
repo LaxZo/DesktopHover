@@ -12,7 +12,7 @@ namespace DesktopHover
     /// <summary>One local-media hover session. All calls belong on the STA UI thread.</summary>
     internal sealed class MediaPlayback : IDisposable
     {
-        private const int WsChild = 0x40000000;
+        private const int WsPopup = unchecked((int)0x80000000);
         private const int WsDisabled = 0x08000000;
         private const int WsClipSiblings = 0x04000000;
         private const int WsExNoActivate = 0x08000000;
@@ -21,6 +21,7 @@ namespace DesktopHover
         private const int SwpShowWindow = 0x0040;
 
         private readonly IntPtr parentHwnd;
+        private readonly System.Windows.Forms.Form owner;
         private readonly MediaPlayer player;
         private HwndSource videoSource;
         private DrawingVisual videoVisual;
@@ -28,6 +29,7 @@ namespace DesktopHover
         private bool requested;
         private bool failed;
         private bool disposed;
+        private bool ownerUpdateQueued;
 
         internal event EventHandler Opened;
         internal event EventHandler Ended;
@@ -52,6 +54,13 @@ namespace DesktopHover
         internal MediaPlayback(IntPtr parentHwnd, int volumePercent = 100)
         {
             this.parentHwnd = parentHwnd;
+            owner = System.Windows.Forms.Control.FromHandle(parentHwnd) as System.Windows.Forms.Form;
+            if (owner != null)
+            {
+                owner.LocationChanged += OwnerChanged;
+                owner.SizeChanged += OwnerChanged;
+                owner.VisibleChanged += OwnerChanged;
+            }
             player = new MediaPlayer();
             volumePercent = Math.Max(0, Math.Min(100, volumePercent));
             player.Volume = volumePercent / 100.0;
@@ -122,11 +131,11 @@ namespace DesktopHover
                 {
                     var parameters = new HwndSourceParameters("Desktop Hover video");
                     parameters.ParentWindow = parentHwnd;
-                    parameters.WindowStyle = WsChild | WsDisabled | WsClipSiblings;
-                    // Keep the video surface opaque. WS_EX_TRANSPARENT changes paint ordering
-                    // and lets parent repaints flash through between WPF video frames.
-                    // Input still passes through via WS_DISABLED and the hit-test hook.
-                    parameters.ExtendedWindowStyle = WsExNoActivate;
+                    // An owned popup has its own opaque DWM surface. A WPF child
+                    // inherits the parent's acrylic composition and lifts video colors.
+                    // Ownership keeps it above the preview, without a taskbar entry.
+                    parameters.WindowStyle = WsPopup | WsDisabled | WsClipSiblings;
+                    parameters.ExtendedWindowStyle = WsExNoActivate | 0x80; // WS_EX_TOOLWINDOW
                     parameters.PositionX = bounds.X;
                     parameters.PositionY = bounds.Y;
                     parameters.Width = bounds.Width;
@@ -139,11 +148,36 @@ namespace DesktopHover
                     videoVisual = new DrawingVisual();
                     videoSource.RootVisual = videoVisual;
                 }
-                SetWindowPos(videoSource.Handle, IntPtr.Zero, bounds.X, bounds.Y,
-                    bounds.Width, bounds.Height, SwpNoActivate | SwpNoZOrder | SwpShowWindow);
+                PositionVideo();
                 DrawVideo();
             }
             catch { Fail(); }
+        }
+
+        private void OwnerChanged(object sender, EventArgs e)
+        {
+            PositionVideo();
+            if (disposed || ownerUpdateQueued) return;
+            ownerUpdateQueued = true;
+            // Native restore/move processing can reposition owned windows after
+            // WinForms' SizeChanged notification. Align once that has finished.
+            player.Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(delegate
+            {
+                ownerUpdateQueued = false;
+                if (disposed || failed) return;
+                try { PositionVideo(); DrawVideo(); }
+                catch { Fail(); }
+            }));
+        }
+
+        private void PositionVideo()
+        {
+            if (disposed || failed || videoSource == null || videoSource.IsDisposed) return;
+            if (owner == null || !owner.Visible || owner.WindowState == System.Windows.Forms.FormWindowState.Minimized)
+            { ShowWindow(videoSource.Handle, 0); return; }
+            System.Drawing.Point origin = owner.PointToScreen(videoBounds.Location);
+            SetWindowPos(videoSource.Handle, IntPtr.Zero, origin.X, origin.Y,
+                videoBounds.Width, videoBounds.Height, SwpNoActivate | SwpNoZOrder | SwpShowWindow);
         }
 
         private void DrawVideo()
@@ -241,6 +275,12 @@ namespace DesktopHover
         {
             if (disposed) return;
             disposed = true;
+            if (owner != null)
+            {
+                owner.LocationChanged -= OwnerChanged;
+                owner.SizeChanged -= OwnerChanged;
+                owner.VisibleChanged -= OwnerChanged;
+            }
             IsOpen = false;
             player.MediaOpened -= OnOpened;
             player.MediaEnded -= OnEnded;

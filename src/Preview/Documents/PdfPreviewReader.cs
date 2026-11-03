@@ -29,8 +29,8 @@ namespace DesktopHover
             StorageFile file = Wait(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
             PdfDocument document = Wait(PdfDocument.LoadFromFileAsync(file));
             pageCount = checked((int)document.PageCount);
-            if (pageIndex < 0 || pageIndex >= pageCount) throw new InvalidDataException("Invalid PDF page index.");
             if (document.PageCount == 0) throw new InvalidDataException("The PDF has no pages.");
+            pageIndex = Math.Max(0, Math.Min(pageIndex, pageCount - 1));
 
             // PdfDocument has no Close/Dispose API; the short-lived worker releases
             // its remaining native state and file handles when it exits.

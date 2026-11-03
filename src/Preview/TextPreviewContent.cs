@@ -36,8 +36,9 @@ namespace DesktopHover
             catch (ArgumentException) { return false; }
         }
 
-        internal static TextPreviewContent Load(string path)
+        internal static TextPreviewContent Load(string path, System.Threading.CancellationToken cancellation = default(System.Threading.CancellationToken))
         {
+            cancellation.ThrowIfCancellationRequested();
             if (!IsSupported(path)) throw new InvalidDataException("Unsupported text file.");
             path = Path.GetFullPath(path);
             // Hovering must never fetch network content or hydrate an online-only cloud file.
@@ -57,6 +58,7 @@ namespace DesktopHover
                 fileBytes = stream.Length;
                 while (count < bytes.Length)
                 {
+                    cancellation.ThrowIfCancellationRequested();
                     int read = stream.Read(bytes, count, bytes.Length - count);
                     if (read == 0) break;
                     count += read;
@@ -72,6 +74,7 @@ namespace DesktopHover
             int start = 0;
             while (start <= text.Length && lines.Count < MaximumLines)
             {
+                cancellation.ThrowIfCancellationRequested();
                 int end = start;
                 while (end < text.Length && text[end] != '\r' && text[end] != '\n') end++;
                 string line = NormalizeLine(text, start, end);

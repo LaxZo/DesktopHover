@@ -6,6 +6,8 @@ namespace DesktopHover
 {
     internal static class PreviewFileStamp
     {
+        internal static bool IsUnavailable(string stamp)
+        { return stamp != null && (stamp.StartsWith("missing|") || stamp.StartsWith("unavailable|")); }
         internal static string Read(string path)
         {
             if (String.IsNullOrEmpty(path)) return null;

@@ -17,6 +17,9 @@ namespace DesktopHover
         private static string output;
         [STAThread] private static int Main(string[] args)
         {
+#if !REGRESSION
+            throw new InvalidOperationException("Build tests with scripts/test.ps1 so application signals are isolated.");
+#endif
             if (InfoTipRestoreGuard.TryRunWorker(args)) return 0;
             if (DocumentPreviewWorker.TryRunWorker(args)) return Environment.ExitCode;
             Application.EnableVisualStyles();
@@ -64,6 +67,19 @@ namespace DesktopHover
                     RefreshAndDetail(); AnimatedImages(); SettingsLayout(); OfficeNavigation(); Playback(); Shutdown();
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "review")
+                {
+                    RefreshAndDetail(); OfficeNavigation(); RefreshStates(); GlassVideoColors(); Shutdown();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "video-colors")
+                {
+                    GlassVideoColors(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 2 && args[1] == "refresh-slides")
+                {
+                    RefreshSlides(args[2]); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 3 && args[1] == "powerpoint-priority")
                 {
                     PowerPointPriority(args[2], args[3]);
@@ -84,6 +100,8 @@ namespace DesktopHover
                 OfficeThemes();
                 OfficeNavigation();
                 RefreshAndDetail();
+                RefreshStates();
+                GlassVideoColors();
                 Playback();
                 VideoLoop(null);
                 Hotkeys();
@@ -318,6 +336,8 @@ namespace DesktopHover
         }
         private static void Shutdown()
         {
+            Check(Program.SignalPrefix == @"Local\DesktopHover_Test_" + Process.GetCurrentProcess().Id + "_",
+                "test instance uses process-specific signals separate from the real application");
             int saved = 0;
             using (var context = new HoverContext())
             {
@@ -853,13 +873,13 @@ namespace DesktopHover
                     "dragging clamps against the viewport without exposing empty edges");
                 window.Capture = false;
                 Check(!Field<bool>(window, "panning") && window.Cursor == Cursors.Default, "lost mouse capture ends image dragging");
-                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(60);
+                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(400);
                 Check(window.WindowState == FormWindowState.Maximized && window.Region == null &&
                     Screen.FromControl(window).WorkingArea.Contains(window.RectangleToScreen(window.ClientRectangle)), "maximize fills the work area and leaves the taskbar available");
-                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(30);
-                window.ActivatePinned(); Pump(30);
+                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(400);
+                window.ActivatePinned(); Pump(400);
                 Check(window.WindowState == FormWindowState.Maximized, "reopening a minimized preview restores its maximized state");
-                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(30);
+                Field<WindowCaptionButton>(window, "pinnedMaximize").PerformClick(); Pump(400);
                 Check(window.Bounds == retainedBounds && window.Region != null, "restore returns to the user chosen rounded window bounds: " + window.Bounds + " expected " + retainedBounds);
                 string pdf = Path.Combine(output, "two-pages.pdf"); WritePdf(pdf);
                 window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
@@ -880,6 +900,7 @@ namespace DesktopHover
                 for (int i = 1; i <= 200; i++) lines.AppendLine("Line " + i);
                 File.WriteAllText(text, lines.ToString());
                 window.ShowFile(text, new Point(800, 600), Rectangle.Empty);
+                Until(() => Field<TextPreviewContent>(window, "textPreview") != null, 5000);
                 Check(window.Bounds == retainedBounds && !Field<ToolStripButton>(window, "zoomInButton").Available,
                     "text uses the same window bounds and hides image zoom controls");
                 Call(window, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, center.X, center.Y, -60));
@@ -887,8 +908,8 @@ namespace DesktopHover
                 Call(window, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, center.X, center.Y, -60));
                 Check(Field<int>(window, "textOffset") > 0, "accumulated wheel input scrolls text");
                 Snapshot(window, "pinned-text.png");
-                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(30);
-                window.ActivatePinned(); Pump(30);
+                Field<WindowCaptionButton>(window, "pinnedMinimize").PerformClick(); Pump(400);
+                window.ActivatePinned(); Pump(400);
                 Check(window.Bounds == retainedBounds, "minimize and restore preserves normal window size");
             }
         }
@@ -966,15 +987,22 @@ namespace DesktopHover
                 File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(2));
                 Until(() => window.HasImage && Field<Bitmap>(window, "preview").GetPixel(20, 20).B > 200, 5000);
                 Check(window.Visible && window.CurrentPath == path, "pinned content refreshes automatically after file changes");
+                Check(Field<float>(window, "zoom") == zoom, "automatic refresh retains manual zoom");
                 DateTime stamp = File.GetLastWriteTimeUtc(path);
                 WriteLargeImage(path, Color.Tomato); File.SetLastWriteTimeUtc(path, stamp);
                 Field<ToolStripButton>(window, "refreshButton").PerformClick();
-                Until(() => window.HasImage && !window.IsImageLoading, 5000);
+                Until(() => !Field<bool>(window, "refreshRequested") && window.HasImage && !window.IsImageLoading, 5000);
                 Check(Field<Bitmap>(window, "preview").GetPixel(20, 20).R > 240, "manual refresh bypasses cache even with unchanged timestamp and size");
                 WriteLargeImage(path, Color.CornflowerBlue); File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(4));
                 window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
-                Until(() => window.HasImage && !window.IsImageLoading, 5000);
+                Until(() => !Field<bool>(window, "repinRequested") && window.HasImage && !window.IsImageLoading, 5000);
                 Check(Field<Bitmap>(window, "preview").GetPixel(20, 20).B > 200, "repinning a changed file reloads its content");
+                File.Delete(path);
+                Until(() => window.MediaState == "file_unavailable", 5000);
+                Check(window.Visible && !window.HasImage && window.CurrentPath == path, "deleted source clears stale pixels and keeps a recovery window");
+                WriteLargeImage(path, Color.Tomato);
+                Until(() => window.HasImage && !window.IsImageLoading, 7000);
+                Check(Field<float>(window, "zoom") == zoom, "recreated source restores the previous view automatically");
             }
             string pdf = Path.Combine(output, "detail.pdf"); WritePdf(pdf);
             using (var window = new PreviewWindow(true))
@@ -1013,6 +1041,130 @@ namespace DesktopHover
                 bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Bmp);
             }
         }
+
+        private static void RefreshStates()
+        {
+            string pdf = Path.Combine(output, "refresh-pages.pdf"), text = Path.Combine(output, "refresh-text.txt");
+            WritePdf(pdf);
+            var lines = new StringBuilder(); for (int i = 0; i < 180; i++) lines.AppendLine("Line " + i);
+            File.WriteAllText(text, lines.ToString());
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false, Language = "lv" });
+                window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 12000);
+                Call(window, "Navigate", 1);
+                Until(() => !Field<bool>(window, "documentLoading"), 12000);
+                Call(window, "ChangeZoom", 2f);
+                typeof(PreviewWindow).GetField("pan", Private).SetValue(window, new Point(70, 40));
+                RefreshAndWait(window);
+                Check(Field<int>(window, "pdfPageIndex") == 1 && Field<float>(window, "zoom") == 2 && Field<Point>(window, "pan") == new Point(70, 40),
+                    "F5 retains PDF page, zoom and pan");
+                Check(Field<Bitmap>(window, "preview").GetPixel(40, 40).B > 200, "refreshed PDF actually renders the retained blue page");
+                // Replace the source with a one-page PDF while the second page is selected.
+                File.WriteAllText(pdf, File.ReadAllText(pdf).Replace("/Kids [3 0 R 5 0 R] /Count 2", "/Kids [3 0 R      ] /Count 1"), Encoding.ASCII);
+                RefreshAndWait(window);
+                Check(Field<int>(window, "pdfPageIndex") == 0 && window.HasImage, "refresh clamps a removed PDF page to an available page");
+                window.ShowFile(text, new Point(300, 300), Rectangle.Empty);
+                Until(() => Field<TextPreviewContent>(window, "textPreview") != null, 5000);
+                typeof(PreviewWindow).GetField("textOffset", Private).SetValue(window, 90);
+                RefreshAndWait(window);
+                Check(Field<int>(window, "textOffset") == 90, "text refresh retains the scroll offset");
+                File.WriteAllText(text, "Shortened document"); RefreshAndWait(window);
+                Check(Field<int>(window, "textOffset") == 0, "shortened text clamps the old scroll offset");
+                File.Delete(text); RefreshAndWait(window);
+                Check(window.MediaState == "file_unavailable" && Field<string>(window, "description") == "Fails vairs nav pieejams",
+                    "manual refresh explains that a deleted file is unavailable");
+                // Hold an old metadata read while selecting another file.
+                var pending = new System.Threading.Tasks.TaskCompletionSource<string>();
+                typeof(PreviewWindow).GetField("stampTask", Private).SetValue(window, pending.Task);
+                typeof(PreviewWindow).GetField("stampRevision", Private).SetValue(window, Field<int>(window, "pathRevision"));
+                var elapsed = Stopwatch.StartNew();
+                window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
+                Check(elapsed.ElapsedMilliseconds < 1000, "a blocked metadata read does not block selecting another file");
+                pending.SetResult("missing|"); Call(window, "CheckFileChanges");
+                Until(() => !Field<bool>(window, "documentLoading"), 12000);
+                Check(window.CurrentPath == pdf && window.HasImage && window.MediaState != "file_unavailable", "late metadata from the old path cannot clear the new preview");
+            }
+        }
+
+        private static void RefreshSlides(string path)
+        {
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false, SlideIntervalSeconds = 10 });
+                window.ShowFile(Path.GetFullPath(path), new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 65000);
+                Check(Field<byte[][]>(window, "documentSlides") != null && Field<byte[][]>(window, "documentSlides").Length > 1,
+                    "PowerPoint fixture supplies multiple rendered slides");
+                Call(window, "Navigate", 1); Call(window, "ChangeZoom", 2f);
+                int slide = Field<int>(window, "documentSlideIndex");
+                int pixel = Field<Bitmap>(window, "preview").GetPixel(50, 50).ToArgb();
+                Call(window, "RefreshPinned");
+                Until(() => !Field<bool>(window, "refreshRequested") && !Field<bool>(window, "documentLoading"), 65000);
+                Check(Field<int>(window, "documentSlideIndex") == slide && Field<float>(window, "zoom") == 2,
+                    "F5 preserves PowerPoint slide and zoom across a fresh native export");
+                Check(Field<Bitmap>(window, "preview").GetPixel(50, 50).ToArgb() == pixel && Field<bool>(window, "playbackPaused"),
+                    "refreshed PowerPoint shows the same slide and stays paused");
+            }
+        }
+
+        private static void RefreshAndWait(PreviewWindow window)
+        {
+            Call(window, "RefreshPinned");
+            Until(() => !Field<bool>(window, "refreshRequested") && !Property<bool>(window, "IsPreviewLoading"), 16000);
+        }
+
+        private static T Property<T>(object target, string name)
+        { return (T)target.GetType().GetProperty(name, Private).GetValue(target, null); }
+
+        private static void GlassVideoColors()
+        {
+            string path = Path.Combine(output, "glass-colors.avi"); WriteVideo(path);
+            using (var background = new Form { FormBorderStyle = FormBorderStyle.None, Bounds = Screen.PrimaryScreen.WorkingArea,
+                BackColor = Color.Black, TopMost = true, ShowInTaskbar = false })
+            using (var window = new PreviewWindow(true))
+            {
+                background.Show(); window.Owner = background; window.TopMost = true;
+                var settings = new AppSettings { AnimationsEnabled = false, VolumePercent = 0, LoopVideo = true, Theme = "dark" };
+                window.Configure(settings); window.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                Until(() => window.MediaState == "media_playing", 15000);
+                Pump(180); Call(window, "TogglePlayback"); Pump(180);
+                Color solid = VideoPixel(window);
+                settings.Theme = "glass"; window.Configure(settings); Pump(300);
+                Check(VideoPixel(window).ToArgb() == solid.ToArgb(), "glass preserves the exact paused video color");
+                background.BackColor = Color.Lime; background.Refresh(); Pump(300);
+                Check(VideoPixel(window).ToArgb() == solid.ToArgb(), "desktop background does not tint video pixels");
+                window.Location = new Point(window.Left + 55, window.Top + 30); Pump(200);
+                Check(VideoPixel(window).ToArgb() == solid.ToArgb(), "opaque video surface follows the preview when moved");
+                window.ClientSize = new Size(760, 560); Pump(200);
+                Check(VideoPixel(window).ToArgb() == solid.ToArgb(), "opaque video surface follows resizing");
+                var media = Field<MediaPlayback>(window, "media");
+                var surface = Field<System.Windows.Interop.HwndSource>(media, "videoSource");
+                window.WindowState = FormWindowState.Minimized; Pump(400);
+                Check(!IsWindowVisible(surface.Handle), "minimizing hides the owned video surface");
+                window.ActivatePinned(); Pump(400);
+                Until(() => IsWindowVisible(surface.Handle) && VideoPixel(window).ToArgb() == solid.ToArgb(), 3000);
+                Check(IsWindowVisible(surface.Handle) && VideoPixel(window).ToArgb() == solid.ToArgb(), "restoring brings back the paused frame");
+                window.Hide(); Pump(150);
+                Check(!IsWindowVisible(surface.Handle), "hiding the preview hides its video surface");
+                window.Show(); Pump(200); CaptureScreen(window, "video-opaque-glass.png");
+                settings.Theme = "light"; window.Configure(settings); Pump(200);
+                Check(VideoPixel(window).ToArgb() == solid.ToArgb(), "switching from glass keeps the video opaque");
+                window.ClearPreview(); Check(surface.IsDisposed, "closing the preview disposes its video surface");
+            }
+        }
+
+        private static Color VideoPixel(PreviewWindow window)
+        {
+            Rectangle area = Field<Rectangle>(window, "imageArea");
+            Point point = window.PointToScreen(new Point(area.Left + area.Width / 2, area.Top + area.Height / 2));
+            using (var pixel = new Bitmap(1, 1))
+            using (Graphics graphics = Graphics.FromImage(pixel))
+            { graphics.CopyFromScreen(point, Point.Empty, pixel.Size); return pixel.GetPixel(0, 0); }
+        }
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr window);
 
         private static void OfficeNavigation()
         {
@@ -1058,6 +1210,13 @@ namespace DesktopHover
                 Check(found, "worksheet column widths follow the saved proportions");
                 scroll.Value = 2000; Pump(160); Until(() => !Field<bool>(window, "documentLoading"), 5000);
                 Check(Field<OfficeViewOptions>(window, "officeView").ScrollY == 2000, "worksheet scroll position is retained");
+                RefreshAndWait(window);
+                Check(picker.SelectedIndex == 1 && scroll.Value == 2000, "F5 retains worksheet selection and vertical scroll");
+                using (var locked = new FileStream(sheetPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                using (var cached = DocumentPreviewContent.LoadStill(sheetPath, new Size(1600, 1200), CancellationToken.None,
+                    OfficePreviewPalette.Capture(), new OfficeViewOptions { SheetIndex = 1, ScrollY = 3000 }))
+                    Check(cached != null && cached.Image != null && cached.SheetIndex == 1,
+                        "worksheet scroll renders from parsed cache without reopening the locked source");
                 Snapshot(window, "worksheet-navigation.png");
                 window.ShowFile(wordPath, new Point(300, 300), Rectangle.Empty);
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
@@ -1065,7 +1224,58 @@ namespace DesktopHover
                 scroll.Value = scroll.Maximum - scroll.LargeChange + 1; Pump(160);
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
                 Check(Field<OfficeViewOptions>(window, "officeView").ScrollY > 5000 && window.HasImage, "Word document can render its final section");
+                int wordOffset = scroll.Value; RefreshAndWait(window);
+                Check(scroll.Value == wordOffset, "F5 retains Word scroll position");
+                using (var locked = new FileStream(wordPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                using (var cached = DocumentPreviewContent.LoadStill(wordPath, new Size(1600, 1200), CancellationToken.None,
+                    OfficePreviewPalette.Capture(), new OfficeViewOptions { ScrollY = 5000 }))
+                    Check(cached != null && cached.Image != null && cached.ContentHeight > 5000,
+                        "Word scroll renders from parsed cache without reopening the locked source");
                 Snapshot(window, "word-scrolled.png");
+            }
+            using (var file = File.Open(sheetPath, FileMode.Open, FileAccess.ReadWrite))
+            using (var zip = new ZipArchive(file, ZipArchiveMode.Update))
+            {
+                zip.GetEntry("xl/worksheets/sheet2.xml").Delete();
+                OfficeEntry(zip, "xl/worksheets/sheet2.xml", "<worksheet><sheetData><row r='1'><c r='A1'><v>1</v></c><c r='AA1' t='inlineStr'><is><t>Column AA</t></is></c><c r='XFD1' t='inlineStr'><is><t>Last column</t></is></c></row><row r='5001'><c r='A5001'><v>42</v></c></row></sheetData></worksheet>");
+            }
+            using (var window = new PreviewWindow(true))
+            {
+                window.Configure(new AppSettings { AnimationsEnabled = false });
+                window.ShowFile(sheetPath, new Point(300, 300), Rectangle.Empty);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                var picker = Field<ToolStripComboBox>(window, "sheetPicker"); picker.SelectedIndex = 1; Pump(160);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                var horizontal = Field<HScrollBar>(window, "officeHorizontalScroll");
+                Check(horizontal.Visible && horizontal.Maximum > 1000000, "Excel exposes horizontal scrolling through column XFD");
+                horizontal.Value = horizontal.Maximum - horizontal.LargeChange + 1; Pump(160);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Bitmap rendered = Field<Bitmap>(window, "preview");
+                int marks = 0;
+                for (int y = 110; y < 150; y++) for (int x = 1410; x < 1580; x++)
+                    if (rendered.GetPixel(x, y).ToArgb() != Brand.EditorBackground.ToArgb()) marks++;
+                Check(marks > 50, "the final Excel column renders its cell text");
+                int offset = horizontal.Value; RefreshAndWait(window);
+                Check(picker.SelectedIndex == 1 && horizontal.Value == offset, "F5 retains horizontal position on the selected worksheet");
+                Check(Field<string>(window, "documentDetail") == "office_truncated", "rows beyond the supported limit show a shortened-preview notice");
+                Snapshot(window, "worksheet-horizontal.png");
+                // Reorder sheets and then remove the selected one to exercise name preservation and clamping.
+                using (var file = File.Open(sheetPath, FileMode.Open, FileAccess.ReadWrite))
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Update))
+                {
+                    zip.GetEntry("xl/workbook.xml").Delete();
+                    OfficeEntry(zip, "xl/workbook.xml", "<workbook xmlns:r='" + office + "'><sheets><sheet name='Second' r:id='second'/><sheet name='First' r:id='sheet'/></sheets></workbook>");
+                }
+                RefreshAndWait(window);
+                Check(picker.SelectedIndex == 0 && (string)picker.SelectedItem == "Second" && horizontal.Value == offset, "refresh preserves worksheet identity after reordering");
+                using (var file = File.Open(sheetPath, FileMode.Open, FileAccess.ReadWrite))
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Update))
+                {
+                    zip.GetEntry("xl/workbook.xml").Delete();
+                    OfficeEntry(zip, "xl/workbook.xml", "<workbook xmlns:r='" + office + "'><sheets><sheet name='First' r:id='sheet'/></sheets></workbook>");
+                }
+                RefreshAndWait(window);
+                Check(window.HasImage && horizontal.Value == 0 && !horizontal.Visible, "removing the selected worksheet clamps selection and scroll safely");
             }
         }
 

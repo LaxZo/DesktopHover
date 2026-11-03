@@ -7,8 +7,9 @@ namespace DesktopHover
 {
     internal sealed class OfficeViewOptions
     {
-        internal int SheetIndex, ScrollY;
-        internal OfficeViewOptions Copy() { return new OfficeViewOptions { SheetIndex = SheetIndex, ScrollY = ScrollY }; }
+        internal int SheetIndex, ScrollX, ScrollY;
+        internal string SheetName;
+        internal OfficeViewOptions Copy() { return new OfficeViewOptions { SheetIndex = SheetIndex, SheetName = SheetName, ScrollX = ScrollX, ScrollY = ScrollY }; }
     }
     internal sealed class DocumentPreviewResult : IDisposable
     {
@@ -20,7 +21,8 @@ namespace DesktopHover
         internal int PageCount;
         internal string DetailKey;
         internal string[] SheetNames;
-        internal int SheetIndex, ContentHeight;
+        internal long FileBytes;
+        internal int SheetIndex, ContentHeight, ContentWidth;
 
         internal DocumentPreviewResult(Bitmap image, string noteKey)
         {

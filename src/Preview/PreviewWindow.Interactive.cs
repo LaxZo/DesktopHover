@@ -72,27 +72,9 @@ namespace DesktopHover
             InitializeOfficeView();
             InitializeMediaControls();
             InitializePinnedChrome();
-            refreshTimer = new Timer { Interval = 750 };
-            refreshTimer.Tick += delegate
-            {
-                if (!Visible || IsPreviewLoading || CurrentPath == null || !System.IO.File.Exists(CurrentPath)) return;
-                string stamp = PreviewFileStamp.Read(CurrentPath);
-                if (stamp != contentStamp && stamp == observedChange) RefreshPinned();
-                observedChange = stamp;
-            };
+            refreshTimer = new Timer { Interval = 100 };
+            refreshTimer.Tick += delegate { CheckFileChanges(); };
             refreshTimer.Start();
-        }
-
-        private bool ContentChanged() { return CurrentPath != null && contentStamp != PreviewFileStamp.Read(CurrentPath); }
-
-        private void RefreshPinned()
-        {
-            if (!interactive || CurrentPath == null || IsDisposed || !System.IO.File.Exists(CurrentPath)) return;
-            string path = CurrentPath; Point cursor = mediaCursor; Rectangle item = mediaItemBounds;
-            PowerPointPreviewReader.Invalidate(path);
-            ImagePreviewLoader.Invalidate();
-            ClearPreview(false);
-            ShowFile(path, cursor, item);
         }
 
         private ToolStripButton AddAction(string text, string key, Action action)
@@ -177,7 +159,7 @@ namespace DesktopHover
         }
 
         private bool HasPlayback { get { return (documentSlides != null && documentSlides.Length > 1) || animatedGif != null || (media != null && media.IsOpen); } }
-        private bool IsPreviewLoading { get { return imageTask != null || documentLoading || mediaState == "media_loading" ||
+        private bool IsPreviewLoading { get { return textTask != null || imageTask != null || documentLoading || mediaState == "media_loading" ||
             mediaState == "preview_loading" || mediaState == "document_loading"; } }
 
         private void UpdateToolbar()
@@ -251,7 +233,9 @@ namespace DesktopHover
             {
                 int count;
                 Bitmap image = DocumentPreviewWorker.TryLoadPdfPage(path, size, token, index, out count);
-                return new DocumentPreviewResult(image, image == null ? "document_pdf_unavailable" : "document_pdf") { PageCount = count };
+                var result = new DocumentPreviewResult(image, image == null ? "document_pdf_unavailable" : "document_pdf") { PageCount = count };
+                try { result.FileBytes = new System.IO.FileInfo(path).Length; } catch { }
+                return result;
             }, System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
             LayoutDocument(); UpdateToolbar();
             mediaTimer.Interval = 40; mediaTimer.Start(); Invalidate();

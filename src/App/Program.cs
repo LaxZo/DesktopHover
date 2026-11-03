@@ -10,8 +10,13 @@ namespace DesktopHover
     internal static class Program
     {
         internal static string StatusFile;
-        internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_OpenSettings");
-        internal static readonly EventWaitHandle ExitEvent=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\DesktopHover_Exit");
+#if REGRESSION
+        internal static readonly string SignalPrefix = @"Local\DesktopHover_Test_" + System.Diagnostics.Process.GetCurrentProcess().Id + "_";
+#else
+        internal const string SignalPrefix = @"Local\DesktopHover_";
+#endif
+        internal static readonly EventWaitHandle OpenSettingsEvent=new EventWaitHandle(false,EventResetMode.AutoReset,SignalPrefix + "OpenSettings");
+        internal static readonly EventWaitHandle ExitEvent=new EventWaitHandle(false,EventResetMode.AutoReset,SignalPrefix + "Exit");
         private static void WaitForTestImage(PreviewWindow window)
         {
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
@@ -73,7 +78,7 @@ namespace DesktopHover
                 return;
             }
             bool created;
-            using(var mutex=new Mutex(true,@"Local\DesktopHover_Nauri",out created))
+            using(var mutex=new Mutex(true,SignalPrefix + "Nauri",out created))
             {
                 if(!created) { OpenSettingsEvent.Set(); return; }
                 using(var context=new HoverContext())

@@ -76,7 +76,7 @@ namespace DesktopHover
         public string CurrentPath
         {
             get { return currentPath; }
-            private set { currentPath = value; contentStamp = PreviewFileStamp.Read(value); }
+            private set { currentPath = value; contentStamp = observedChange = null; pathRevision++; nextStampCheck = DateTime.MinValue; refreshRequested = repinRequested = false; }
         }
         internal DrawingSize DisplayedImageSize { get { return imageArea.Size; } }
         internal bool IsMediaPreview { get { return mediaKind != MediaKind.None || animatedGif != null; } }
@@ -149,6 +149,7 @@ namespace DesktopHover
             mediaTimer.Tick += delegate
             {
                 if (imageTask != null) CompleteImageLoad();
+                if (textTask != null) CompleteTextLoad();
                 if (documentTask != null) CompleteDocumentLoad();
                 if (media == null) return;
                 if (mediaState == "media_loading" && DateTime.UtcNow >= mediaDeadline)
@@ -238,6 +239,7 @@ namespace DesktopHover
                 }
             }
             LayoutImage(); ShowPreview(); Invalidate();
+            RestoreLoadedView();
             QueueImageDetail();
             if (animatedGif != null && animatedGif.CanAdvance && !playbackPaused)
             {
@@ -289,8 +291,8 @@ namespace DesktopHover
         {
             MediaKind kind = MediaFiles.Kind(path);
             if (!previewSettings.Allows(path)) { ClearPreview(); return false; }
-            if (interactive && File.Exists(path) && String.Equals(CurrentPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-            { if (ContentChanged()) RefreshPinned(); ActivatePinned(); return true; }
+            if (interactive && !refreshing && String.Equals(CurrentPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+            { CheckRepinnedFile(); ActivatePinned(); return true; }
             if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
             if (kind == MediaKind.Text) return ShowText(path, cursor, itemBounds);
             if (kind == MediaKind.Document) return ShowDocument(path, cursor, itemBounds);
@@ -313,7 +315,7 @@ namespace DesktopHover
                 path = Path.GetFullPath(path);
                 CurrentPath = path;
                 fileName = Path.GetFileName(path);
-                sourceBytes = new FileInfo(path).Length;
+                sourceBytes = 0;
                 mediaKind = MediaKind.Document;
                 mediaState = "document_loading";
                 mediaCursor = cursor;
@@ -334,6 +336,8 @@ namespace DesktopHover
 
         private void StartDocumentLoad(string path, bool allowVideo)
         {
+            if (interactive && pdfPageIndex > 0 && String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
+            { LoadPdfPage(pdfPageIndex); return; }
             documentCancellation = new System.Threading.CancellationTokenSource();
             var token = documentCancellation.Token;
             var bounds = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
@@ -342,8 +346,13 @@ namespace DesktopHover
             documentProgress = new DocumentProgress();
             DocumentProgress progress = documentProgress;
             documentLoading = true;
-            documentTask = Task.Factory.StartNew(() => allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish, palette, view)
-                : DocumentPreviewContent.LoadStill(path, bounds, token, palette, view),
+            documentTask = Task.Factory.StartNew(delegate
+            {
+                var result = allowVideo ? DocumentPreviewContent.Load(path, bounds, token, progress.Publish, palette, view)
+                    : DocumentPreviewContent.LoadStill(path, bounds, token, palette, view);
+                if (result != null) { try { result.FileBytes = new FileInfo(path).Length; } catch { } }
+                return result;
+            },
                 System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
             mediaTimer.Interval = 40; mediaTimer.Start();
         }
@@ -368,6 +377,7 @@ namespace DesktopHover
             using (result)
             {
                 mediaState = result == null ? "document_unavailable" : result.NoteKey;
+                if (result != null && result.FileBytes > 0) sourceBytes = result.FileBytes;
                 if (result != null && !String.IsNullOrEmpty(result.MediaPath))
                 {
                     if (StartDocumentMedia(result.MediaPath, result.NoteKey)) return;
@@ -377,13 +387,15 @@ namespace DesktopHover
                 else if (result != null) ApplyDocumentResult(result, true);
             }
             LayoutDocument(); ShowPreview(); Invalidate();
+            RestoreLoadedView();
             QueueImageDetail();
         }
 
         private void ApplyDocumentResult(DocumentPreviewResult result, bool complete)
         {
             mediaState = result.NoteKey;
-            if (result.PageCount > 0) pdfPageCount = result.PageCount;
+            if (result.FileBytes > 0) sourceBytes = result.FileBytes;
+            if (result.PageCount > 0) { pdfPageCount = result.PageCount; pdfPageIndex = Math.Min(pdfPageIndex, pdfPageCount - 1); }
             documentDetail = result.DetailKey;
             bool hadSlides = documentSlides != null && documentSlides.Length > 0;
             if (!hadSlides)
@@ -398,6 +410,9 @@ namespace DesktopHover
                 documentSlideTotal = complete ? documentSlides.Length : Math.Max(result.SlideCount, documentSlides.Length);
             }
             if (complete && hadSlides && result.Slides == null) documentSlideTotal = documentSlides.Length;
+            if (reloadView != null && documentSlides != null && documentSlides.Length > 0 &&
+                (complete || reloadView.Slide < documentSlides.Length))
+                ShowDocumentSlide(Math.Min(reloadView.Slide, documentSlides.Length - 1));
             ApplyOfficeResult(result);
             LayoutDocument(); ShowPreview(); Invalidate();
             if (documentSlides != null && documentSlides.Length > 1 && !slideshowTimer.Enabled && !playbackPaused)
@@ -534,67 +549,66 @@ namespace DesktopHover
             ClearPreview(false);
             try
             {
-                path = Path.GetFullPath(path);
-                textPreview = TextPreviewContent.Load(path);
-                mediaKind = MediaKind.Text;
-                CurrentPath = path;
-                fileName = Path.GetFileName(path);
-                sourceBytes = textPreview.FileBytes;
+                CurrentPath = Path.GetFullPath(path); fileName = Path.GetFileName(path);
+                mediaKind = MediaKind.Text; mediaState = "preview_loading";
                 mediaCursor = cursor; mediaItemBounds = itemBounds;
                 scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor);
-                SetFonts();
-                UpdateLanguage();
-                AccessibleName = L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
-                Text = AccessibleName + " — Desktop Hover";
-
-                if (interactive)
-                {
-                    description = (textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview")) +
-                        " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
-                    if (textPreview.Truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
-                    LayoutInteractive(); ShowPreview(); Invalidate(); return true;
-                }
-
-                Rectangle workingArea = Screen.FromPoint(cursor).WorkingArea;
-                int padding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
-                int width = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
-                int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
-                    workingArea.Height - padding - footerPadding - footerHeight - Px(interactive ? 90 : 32)));
-                textLineHeight = Px(21);
-                int height = Math.Min(maximumHeight, Math.Max(Px(120),
-                    textPreview.Lines.Length * textLineHeight + Px(16)));
-                ClientSize = new DrawingSize(width + padding * 2, height + padding + footerPadding + footerHeight);
-                imageArea = new Rectangle(padding, padding, width, height);
-                int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
-                titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
-                    Math.Max(1, footerWidth - Px(22)), Px(19));
-                descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
-                textVisibleLines = Math.Max(0, (imageArea.Height - Px(16)) / textLineHeight);
-                bool truncated = textPreview.Truncated || textPreview.Lines.Length > textVisibleLines;
-                using (Graphics graphics = CreateGraphics())
-                using (StringFormat format = CodeFormat())
-                {
-                    string lastNumber = Math.Max(1, Math.Min(textVisibleLines, textPreview.Lines.Length)).ToString(CultureInfo.InvariantCulture);
-                    textGutterWidth = Math.Max(Px(38), (int)Math.Ceiling(graphics.MeasureString(lastNumber, codeFont, DrawingPoint.Empty, format).Width) + Px(20));
-                    int textWidth = Math.Max(0, width - textGutterWidth - Px(20));
-                    for (int i = 0; i < Math.Min(textVisibleLines, textPreview.Lines.Length); i++)
-                        if (graphics.MeasureString(textPreview.Lines[i].Text, codeFont, DrawingPoint.Empty, format).Width > textWidth)
-                            truncated = true;
-                }
-                string type = textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
-                description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
-                if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
-                PositionContent(cursor, itemBounds, workingArea);
-                ShowPreview();
-                SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
-                Invalidate();
+                SetFonts(); UpdateLanguage(); LayoutImage(); ShowPreview();
+                textCancellation = new System.Threading.CancellationTokenSource();
+                var token = textCancellation.Token; string source = CurrentPath;
+                textTask = Task.Factory.StartNew(() => TextPreviewContent.Load(source, token));
+                mediaTimer.Interval = 40; mediaTimer.Start();
                 return true;
             }
-            catch
+            catch { ClearPreview(); return false; }
+        }
+
+        private void LayoutText()
+        {
+            sourceBytes = textPreview.FileBytes;
+            AccessibleName = L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
+            Text = AccessibleName + " — Desktop Hover";
+            if (interactive)
             {
-                ClearPreview();
-                return false;
+                description = (textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview")) +
+                    " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+                if (textPreview.Truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
+                LayoutInteractive(); ShowPreview(); Invalidate(); return;
             }
+
+            Rectangle workingArea = Screen.FromPoint(mediaCursor).WorkingArea;
+            int padding = Px(3), footerPadding = Px(12), footerHeight = Px(48);
+            int width = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
+            int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
+                workingArea.Height - padding - footerPadding - footerHeight - Px(interactive ? 90 : 32)));
+            textLineHeight = Px(21);
+            int height = Math.Min(maximumHeight, Math.Max(Px(120),
+                textPreview.Lines.Length * textLineHeight + Px(16)));
+            ClientSize = new DrawingSize(width + padding * 2, height + padding + footerPadding + footerHeight);
+            imageArea = new Rectangle(padding, padding, width, height);
+            int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
+            titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
+                Math.Max(1, footerWidth - Px(22)), Px(19));
+            descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
+            textVisibleLines = Math.Max(0, (imageArea.Height - Px(16)) / textLineHeight);
+            bool truncated = textPreview.Truncated || textPreview.Lines.Length > textVisibleLines;
+            using (Graphics graphics = CreateGraphics())
+            using (StringFormat format = CodeFormat())
+            {
+                string lastNumber = Math.Max(1, Math.Min(textVisibleLines, textPreview.Lines.Length)).ToString(CultureInfo.InvariantCulture);
+                textGutterWidth = Math.Max(Px(38), (int)Math.Ceiling(graphics.MeasureString(lastNumber, codeFont, DrawingPoint.Empty, format).Width) + Px(20));
+                int textWidth = Math.Max(0, width - textGutterWidth - Px(20));
+                for (int i = 0; i < Math.Min(textVisibleLines, textPreview.Lines.Length); i++)
+                    if (graphics.MeasureString(textPreview.Lines[i].Text, codeFont, DrawingPoint.Empty, format).Width > textWidth)
+                        truncated = true;
+            }
+            string type = textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
+            description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+            if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
+            PositionContent(mediaCursor, mediaItemBounds, workingArea);
+            ShowPreview();
+            SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+            Invalidate();
         }
 
         private static StringFormat CodeFormat()
@@ -734,10 +748,11 @@ namespace DesktopHover
                 if (requireVideo && !session.HasVideo) { MediaFailed(session); return; }
                 try
                 {
-                    playbackPaused = !autoPlayMedia;
+                    playbackPaused = reloadView == null ? !autoPlayMedia : reloadView.Paused;
                     mediaState = playbackPaused ? "media_paused" : "media_playing";
                     LayoutMedia();
                     if (!playbackPaused) session.Play();
+                    RestoreLoadedView();
                     UpdateMediaDescription();
                     Invalidate();
                 }
@@ -869,6 +884,7 @@ namespace DesktopHover
             if (mediaControls != null) { mediaControls.Visible = false; draggingSeek = false; }
             if (entranceMotion != null) entranceMotion.Finish();
             CancelImageLoad();
+            CancelTextLoad();
             CancelDocumentLoad();
             if (mediaTimer != null) mediaTimer.Stop();
             if (slideshowTimer != null) slideshowTimer.Stop();
@@ -887,6 +903,7 @@ namespace DesktopHover
             fileName = null;
             description = null;
             ClearImage();
+            RestoreViewAfterClear();
         }
 
         private void ClearImage()
@@ -925,13 +942,13 @@ namespace DesktopHover
                 return;
 
             Graphics graphics = e.Graphics;
-            if (mediaKind == MediaKind.Text)
+            if (mediaKind == MediaKind.Text && textPreview != null)
             {
                 PaintText(graphics);
                 PaintFooter(graphics);
                 return;
             }
-            if ((mediaKind == MediaKind.Document || mediaKind == MediaKind.Image) && preview == null)
+            if ((mediaKind == MediaKind.Document || mediaKind == MediaKind.Image || mediaKind == MediaKind.Text) && preview == null)
             {
                 PaintDocumentCard(graphics);
                 PaintFooter(graphics);

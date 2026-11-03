@@ -6,7 +6,7 @@ $windowsMetadata = Join-Path $env:WINDIR 'System32\WinMetadata'
 New-Item -ItemType Directory -Path (Join-Path $workspace '.verification') -Force | Out-Null
 $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $workspace 'src') -Filter '*.cs' -Recurse -File | Sort-Object FullName | ForEach-Object FullName)
 $argsForCompiler = @(
-    '/nologo', '/target:exe', '/main:DesktopHover.Regression', '/platform:x64', '/optimize+', '/codepage:65001',
+    '/nologo', '/target:exe', '/main:DesktopHover.Regression', '/define:REGRESSION', '/platform:x64', '/optimize+', '/codepage:65001',
     "/out:$workspace\.verification\Regression.exe",
     "/resource:$workspace\assets\DesktopHover.ico,DesktopHover.ico",
     '/r:System.dll', '/r:System.Core.dll', '/r:Microsoft.CSharp.dll',

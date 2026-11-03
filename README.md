@@ -130,7 +130,7 @@ Open **Settings → Advanced settings** to choose allowed file extensions. **Che
 
 Pinned previews detect saved file changes, including matching Adobe preview exports. Use **Refresh / F5** to reload immediately. Unchanged files retain their current view when pinned again. Audio and video have a seek bar, volume control and mute button in the pinned window.
 
-Pinned Word OOXML documents scroll beyond the initial excerpt (up to 2,000 blocks); Excel OOXML workbooks offer visible worksheet selection, saved column-width proportions and scrolling through up to 5,000 rows in the first eight columns. These are simplified readers, without formula recalculation or full Office layout fidelity. Use the mouse wheel to scroll and **Ctrl+wheel** to zoom.
+Pinned Word OOXML documents scroll beyond the initial excerpt (up to 2,000 blocks); Excel OOXML workbooks offer visible worksheet selection, saved column-width proportions and scrolling through up to 5,000 rows and columns through XFD. These are simplified readers, without formula recalculation or full Office layout fidelity. Use the mouse wheel to scroll, **Shift+wheel** to scroll Excel horizontally and **Ctrl+wheel** to zoom.
 
 Zooming images, PDFs and supported design previews requests more source detail, up to 4,096 pixels per edge, while retaining the current zoom and pan. Embedded thumbnails can only show the detail saved in them. PowerPoint exports stop between slides when superseded; an individual Office open/export operation must finish before the next request starts. Larger cached slide images can also serve smaller previews.
 
@@ -222,12 +222,17 @@ Preview files support MP4/MOV/WebM/M4V/AVI/WMV video and PNG/JPG/JPEG/WebP/BMP i
 - Markdown, HTML and SVG are shown as source text, rather than rendered documents.
 - Document/project parsing is limited to **512 MiB** per file; Adobe preview files have the separate limits above. ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
 - PDFs show the first page on hover and support page navigation when pinned. Editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
-- Word and Excel content previews are excerpts, not exact print layouts. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Only the first visible worksheet's beginning (up to 8 columns/30 rows) is considered. In supported PowerPoint presentations, slides advance at the selected 1–10 second interval; animations and transitions are not played. If a full slide export is unavailable, the saved/Windows preview is used. Native export is limited to 60 seconds, 200 slides and 64 MiB of rendered PNGs.
+- Word and Excel content previews are excerpts, not exact print layouts. Pinned Word previews scroll through up to 2,000 content blocks. Excel hover previews show the first visible worksheet's beginning (up to 8 columns/30 rows); pinned previews let you switch visible worksheets and scroll vertically and horizontally, including columns through XFD. Pinned Excel reads up to 5,000 rows and 100,000 cells, subject to the package/XML limits. Shortened previews display a notice. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Recently read Office parts and parsed content are cached in memory for scrolling, with no source files held open.
+- In supported PowerPoint presentations, slides advance at the selected 1–10 second interval; animations and transitions are not played. If a full slide export is unavailable, the saved/Windows preview is used. Native export is limited to 60 seconds, 200 slides and 64 MiB of rendered PNGs.
 - Photoshop merged-image decoding is limited to **40 million pixels**, 8-bit RGB/grayscale and raw/RLE compression. Other color modes, depths and ZIP compression require a saved or Windows thumbnail. Layers are not reconstructed and color profiles are not applied. Adobe project recognition does not guarantee an embedded image exists. After Effects/Premiere timelines, Animate animations, 3D scenes and other proprietary projects need a saved preview or an exported preview file; full project rendering is not provided.
 - Saved previews and Windows thumbnails can reflect an earlier saved state. Their resolution depends on the source; saving the project with its preview enabled can help.
 - Animated GIFs play automatically while hovering, using their frame delays and repeat settings. Moving within the same file's icon keeps the animation playing; leaving the file stops it. Other animated or multi-frame image formats show a still frame.
 - Images over **100 MiB** or **100 million pixels** are skipped. GIFs also have a limit of **2,000 frames** and **100 million pixels summed across frame rectangles**. Missing or very short GIF delays (0–10 ms) use 100 ms.
 - Hover previews do not take keyboard focus. Pinned previews provide navigation and playback controls; neither mode edits the source file.
+
+Pinned previews detect saved file changes in the background. **Refresh / F5** also bypasses the preview caches and preserves zoom, pan, PDF page, PowerPoint slide, document scroll position and selected Excel worksheet where the updated content allows it. A removed page or sheet is clamped to an available one. If the file disappears, the viewer displays **File is no longer available** and recovers when the file returns. Use the horizontal scrollbar or **Shift + mouse wheel** to scroll wide Excel worksheets. Text loading runs in the background as well.
+
+The translucent theme uses a separate opaque video surface, keeping video colors unchanged while the surrounding window uses the blurred backdrop.
 
 ## Build from source
 
@@ -256,7 +261,7 @@ Run the regression checks in a Windows desktop session:
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
-The suite checks background loading and cancellation, GIF playback, settings scaling and saving, folder indexing, PDF navigation, media pause and shortcuts. Fixtures and screenshots go to the ignored `.verification` folder. `-BuildOnly` compiles the test harness without running it.
+The suite checks background loading and cancellation, refresh state, missing-file recovery, video colors, Office navigation and caching, GIF playback, settings scaling and saving, folder indexing, PDF navigation, media pause and shortcuts. Test builds use process-specific application signals, so the shutdown test cannot close the running portable app. Fixtures and screenshots go to the ignored `.verification` folder. `-BuildOnly` compiles the test harness without running it.
 
 ### Repository layout
 
