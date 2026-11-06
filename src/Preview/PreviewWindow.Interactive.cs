@@ -21,6 +21,7 @@ namespace DesktopHover
         private int pdfPageIndex, pdfPageCount, textOffset, wheelRemainder;
         private bool playbackPaused, panning, interactiveSized, arrangingInteractive, fitMode = true;
         private float zoom = 1;
+        private int documentReferenceWidth;
         private Point pan, panStart, mouseStart;
         private Rectangle viewport;
         private bool autoPlayMedia = true;
@@ -43,6 +44,17 @@ namespace DesktopHover
         {
             // An asynchronous result must not move, restore or reactivate a pinned window.
             if (!interactive || !Visible) entranceMotion.ShowAt(Location);
+            RaiseHoverPreview();
+        }
+
+        private void RaiseHoverPreview()
+        {
+            if (interactive || !Visible || !IsHandleCreated || IsDisposed) return;
+            // Form.TopMost can remain true after native z-order changes. Reassert the
+            // actual window order for every preview, including asynchronous image loads.
+            // Preserve the entrance animation's position and the foreground app's focus.
+            SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0,
+                SwpNoMove | SwpNoSize | SwpNoActivate);
         }
 
         private void InitializeInteractive()
@@ -193,7 +205,9 @@ namespace DesktopHover
             zoomOutButton.Enabled = canZoom && zoom > .1001f;
             zoomInButton.Enabled = canZoom && zoom < 15.999f;
             fitButton.Enabled = canZoom;
-            int sourcePixels = mediaKind == MediaKind.Image && sourceWidth > 0 ? sourceWidth : preview == null ? 1 : preview.Width;
+            if (preview != null && documentReferenceWidth == 0) documentReferenceWidth = preview.Width;
+            // Detail decoding improves pixels without changing the document's scale.
+            int sourcePixels = mediaKind == MediaKind.Image && sourceWidth > 0 ? sourceWidth : documentReferenceWidth;
             zoomLabel.Text = Math.Round(imageArea.Width * zoom * 100 / Math.Max(1, sourcePixels)) + "%";
             zoomLabel.ToolTipText = L10n.Text(language, "zoom_level");
             fitButton.Text = L10n.Text(language, "fit");

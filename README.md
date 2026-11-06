@@ -130,11 +130,11 @@ Open **Settings → Advanced settings** to choose allowed file extensions. **Che
 
 Pinned previews detect saved file changes, including matching Adobe preview exports. Use **Refresh / F5** to reload immediately. Unchanged files retain their current view when pinned again. Audio and video have a seek bar, volume control and mute button in the pinned window.
 
-Pinned Word OOXML documents scroll beyond the initial excerpt (up to 2,000 blocks); Excel OOXML workbooks offer visible worksheet selection, saved column-width proportions and scrolling through up to 5,000 rows and columns through XFD. These are simplified readers, without formula recalculation or full Office layout fidelity. Use the mouse wheel to scroll, **Shift+wheel** to scroll Excel horizontally and **Ctrl+wheel** to zoom.
+Pinned Word OOXML documents scroll beyond the initial excerpt (up to 2,000 blocks); Excel OOXML workbooks offer visible worksheet selection, saved column-width proportions and scrolling through up to 5,000 rows and columns through XFD. Saved number formats support dates, times, elapsed time, percentages, decimals and currencies, including custom formats. Unsupported formats such as fractions fall back to the saved numeric value. These are simplified readers, without formula recalculation or full Office layout fidelity. Use the mouse wheel to scroll, **Shift+wheel** to scroll Excel horizontally and **Ctrl+wheel** to zoom.
 
 Zooming images, PDFs and supported design previews requests more source detail, up to 4,096 pixels per edge, while retaining the current zoom and pan. Embedded thumbnails can only show the detail saved in them. PowerPoint exports stop between slides when superseded; an individual Office open/export operation must finish before the next request starts. Larger cached slide images can also serve smaller previews.
 
-While previews are enabled, DesktopHover temporarily deactivates Windows file infotips in the current Explorer or desktop file view, so they do not repeatedly appear over the preview. This also applies to unsupported files in that view. Leaving the view, pausing previews or quitting restores the controls; a small background helper restores them if the main process is forcibly stopped. Windows preferences and the Explorer Preview pane are unchanged. A first tooltip may briefly appear before its control is detected.
+Turn **Windows file tooltips** off in Settings to suppress Windows file descriptions in the current Explorer or desktop file view, including unsupported files. This setting also applies while previews are paused. Leaving the view, turning the setting on or quitting restores the controls according to Windows preferences. A small background helper restores them if the main process is forcibly stopped; if that helper fails, the app restarts it automatically when suppression is needed. Windows preferences and the Explorer Preview pane are unchanged.
 
 | Action | Result |
 | --- | --- |
@@ -319,6 +319,8 @@ The startup options register or remove the path of the executable you run. Use t
 </details>
 
 ## Troubleshooting
+
+The application version appears in the Settings header, tray tooltip and EXE properties. Error details are saved locally to `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, with two rotated copies and a 1 MiB limit per file. Include the version and relevant log entry when reporting a failure; entries can contain file paths from exceptions.
 
 | Problem | What to check |
 | --- | --- |

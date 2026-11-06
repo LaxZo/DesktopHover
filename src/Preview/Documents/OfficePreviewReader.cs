@@ -442,6 +442,7 @@ namespace DesktopHover
             {
                 var strings = new List<string>();
                 var numberFormats = new List<int>();
+                var customFormats = new Dictionary<int, string>();
                 foreach (Relation relation in relations.Values)
                 {
                     if (relation.Type.EndsWith("/sharedStrings", StringComparison.Ordinal))
@@ -457,6 +458,12 @@ namespace DesktopHover
                     if (relation.Type.EndsWith("/styles", StringComparison.Ordinal))
                     {
                         XmlDocument styles = package.Xml(relation.Target);
+                        if (styles != null) foreach (XmlNode nf in styles.SelectNodes("/*[local-name()='styleSheet']/*[local-name()='numFmts']/*[local-name()='numFmt']"))
+                        {
+                            if (customFormats.Count >= 10000) break;
+                            string code = Attr(nf, "formatCode");
+                            if (code.Length <= 512) customFormats[Int(Attr(nf, "numFmtId"), -1)] = code;
+                        }
                         if (styles != null) foreach (XmlNode xf in styles.SelectNodes("/*[local-name()='styleSheet']/*[local-name()='cellXfs']/*[local-name()='xf']"))
                         { if (numberFormats.Count >= 10000) break; numberFormats.Add(Int(Attr(xf, "numFmtId"), 0)); }
                     }
@@ -482,6 +489,7 @@ namespace DesktopHover
                         if (column >= (view == null ? 8 : 16384)) { truncated = true; continue; }
                         string type = Attr(cell, "t");
                         string value = TextOf(cell.SelectSingleNode("./*[local-name()='v']"));
+                        bool hasCachedValue = value.Length > 0;
                         if (type == "s")
                         {
                             int index = Int(value, -1);
@@ -492,9 +500,11 @@ namespace DesktopHover
                         else if (type == "" || type == "n")
                         {
                             int style = Int(Attr(cell, "s"), 0);
-                            value = FormatNumber(value, style >= 0 && style < numberFormats.Count ? numberFormats[style] : 0, date1904);
+                            int formatId = style >= 0 && style < numberFormats.Count ? numberFormats[style] : 0;
+                            string custom; customFormats.TryGetValue(formatId, out custom);
+                            value = SpreadsheetNumberFormat.Format(value, formatId, custom, date1904);
                         }
-                        if (value.Length == 0)
+                        if (value.Length == 0 && !hasCachedValue)
                         {
                             string formula = TextOf(cell.SelectSingleNode("./*[local-name()='f']"));
                             if (formula.Length > 0) value = "=" + formula;
@@ -550,9 +560,12 @@ namespace DesktopHover
                     using (var title = new SolidBrush(palette.TabText))
                         g.DrawString(Limit(Attr(selected, "name"), 100), bold, title, new RectangleF(12, 0, image.Width - 24, top), format);
                     g.FillRectangle(header, 0, top, image.Width, rowHeight);
-                    int rows = Math.Max(0, Math.Min(view == null ? 30 : 5000, (int)Math.Ceiling((image.Height - top - rowHeight) / rowHeight)));
-                    int firstRow = view == null ? 0 : Math.Max(0, Math.Min(rowCount - rows, (int)(view.ScrollY / rowHeight)));
                     contentHeight = Math.Max(maximum.Height, (int)Math.Ceiling(top + (rowCount + 1) * rowHeight));
+                    int scrollY = view == null ? 0 : Math.Max(0, Math.Min(view.ScrollY, contentHeight - image.Height));
+                    int firstRow = Math.Min(rowCount, (int)(scrollY / rowHeight));
+                    float rowOffset = scrollY - firstRow * rowHeight;
+                    int rows = Math.Max(0, Math.Min(rowCount - firstRow,
+                        (int)Math.Ceiling((image.Height - top - rowHeight + rowOffset) / rowHeight)));
                     g.FillRectangle(header, 0, top, gutter, image.Height - top);
                     GraphicsState gridState = g.Save();
                     g.SetClip(new RectangleF(gutter, top, image.Width - gutter, image.Height - top));
@@ -563,10 +576,12 @@ namespace DesktopHover
                         using (var centered = (StringFormat)format.Clone())
                         { centered.Alignment = StringAlignment.Center; g.DrawString(ColumnName(col), bold, muted, box, centered); }
                     }
+                    g.SetClip(new RectangleF(gutter, top + rowHeight,
+                        image.Width - gutter, Math.Max(0, image.Height - top - rowHeight)));
                     for (int row = 0; row < rows; row++)
                     {
                         package.Cancellation.ThrowIfCancellationRequested();
-                        float y = top + (row + 1) * rowHeight;
+                        float y = top + (row + 1) * rowHeight - rowOffset;
                         for (int col = 0; col < columns; col++)
                         {
                             string value;
@@ -575,14 +590,20 @@ namespace DesktopHover
                                 g.DrawString(value, font, ink, new RectangleF(positions[col] + 6, y, widths[col] - 12, rowHeight), format);
                         }
                     }
-                    for (int row = 0; row <= rows + 1; row++) g.DrawLine(pen, 0, top + row * rowHeight, image.Width, top + row * rowHeight);
-                    for (int col = 0; col <= columns; col++)
-                        if (positions[col] >= gutter && positions[col] <= image.Width) g.DrawLine(pen, positions[col], top, positions[col], image.Height);
+                    for (int row = 0; row <= rows; row++)
+                    { float y = top + (row + 1) * rowHeight - rowOffset; g.DrawLine(pen, gutter, y, image.Width, y); }
                     g.Restore(gridState);
+                    GraphicsState gutterState = g.Save();
+                    g.SetClip(new RectangleF(0, top + rowHeight, gutter, Math.Max(0, image.Height - top - rowHeight)));
                     for (int row = 0; row < rows; row++)
                         g.DrawString((firstRow + row + 1).ToString(CultureInfo.InvariantCulture), font, muted,
-                            new RectangleF(5, top + (row + 1) * rowHeight, gutter - 8, rowHeight), format);
-                    for (int row = 0; row <= rows + 1; row++) g.DrawLine(pen, 0, top + row * rowHeight, gutter, top + row * rowHeight);
+                            new RectangleF(5, top + (row + 1) * rowHeight - rowOffset, gutter - 8, rowHeight), format);
+                    for (int row = 0; row <= rows; row++)
+                    { float y = top + (row + 1) * rowHeight - rowOffset; g.DrawLine(pen, 0, y, gutter, y); }
+                    g.Restore(gutterState);
+                    for (int col = 0; col <= columns; col++)
+                        if (positions[col] >= gutter && positions[col] <= image.Width) g.DrawLine(pen, positions[col], top, positions[col], image.Height);
+                    g.DrawLine(pen, 0, top + rowHeight, image.Width, top + rowHeight);
                     g.DrawLine(pen, gutter, top, gutter, image.Height);
                 }
                 var names = new string[visibleSheets.Count];
@@ -591,25 +612,6 @@ namespace DesktopHover
                     ContentHeight = contentHeight, ContentWidth = contentWidth, DetailKey = contentTruncated ? "office_truncated" : null };
             }
             catch { image.Dispose(); throw; }
-        }
-
-        private static string FormatNumber(string value, int format, bool date1904)
-        {
-            double number;
-            if (!Double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number) || Double.IsNaN(number) || Double.IsInfinity(number)) return value;
-            if (format >= 14 && format <= 22 && number >= 0 && number < 2950000)
-            {
-                try
-                {
-                    DateTime date = DateTime.FromOADate(number + (date1904 ? 1462 : number < 60 ? 1 : 0));
-                    return date.ToString(format >= 18 && format <= 21 ? "HH:mm" : format == 22 ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                }
-                catch (ArgumentException) { return value; }
-            }
-            if (format == 9 || format == 10) return number.ToString(format == 9 ? "P0" : "P2", CultureInfo.InvariantCulture);
-            if (format == 1 || format == 2) return number.ToString(format == 1 ? "0" : "0.00", CultureInfo.InvariantCulture);
-            if (format == 3 || format == 4) return number.ToString(format == 3 ? "#,##0" : "#,##0.00", CultureInfo.InvariantCulture);
-            return value;
         }
 
         private static int ColumnIndex(string reference)

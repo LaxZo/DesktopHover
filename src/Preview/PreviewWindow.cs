@@ -21,11 +21,13 @@ namespace DesktopHover
         private const long MaximumFileBytes = 100L * 1024L * 1024L;
         private const long MaximumPixels = 100000000L;
         private const int WsExTransparent = 0x20;
+        private const int WsExTopMost = 0x8;
         private const int WsExToolWindow = 0x80;
         private const int WsExNoActivate = 0x08000000;
         private const int WsClipChildren = 0x02000000;
         private const int SwpNoActivate = 0x0010;
-        private const int SwpShowWindow = 0x0040;
+        private const int SwpNoSize = 0x0001;
+        private const int SwpNoMove = 0x0002;
 
         private Bitmap preview;
         private AnimatedGif animatedGif;
@@ -184,7 +186,7 @@ namespace DesktopHover
                 // The WPF video surface owns its pixels; parent paints must not cover it.
                 parameters.Style |= WsClipChildren;
                 if (interactive) { parameters.Style |= 0x000F0000; parameters.Style &= ~0x00C00000; }
-                if (!interactive) parameters.ExStyle |= WsExTransparent | WsExToolWindow | WsExNoActivate;
+                if (!interactive) parameters.ExStyle |= WsExTopMost | WsExTransparent | WsExToolWindow | WsExNoActivate;
                 parameters.ClassStyle |= 0x00020000; // CS_DROPSHADOW
                 return parameters;
             }
@@ -326,7 +328,6 @@ namespace DesktopHover
                 Text = AccessibleName + " — Desktop Hover";
                 LayoutDocument();
                 ShowPreview();
-                if (!interactive) SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
                 StartDocumentLoad(path, allowVideo);
                 Invalidate();
                 return true;
@@ -402,6 +403,7 @@ namespace DesktopHover
             {
                 if (preview != null) preview.Dispose();
                 preview = result.Image; result.Image = null;
+                documentReferenceWidth = preview == null ? 0 : preview.Width;
                 documentSlideIndex = 0;
             }
             if (result.Slides != null)
@@ -445,12 +447,13 @@ namespace DesktopHover
                     replacement = DocumentPreviewWorker.CopyImage(image, interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight));
                 Bitmap previous = preview;
                 preview = replacement;
+                documentReferenceWidth = replacement.Width;
                 if (previous != null) previous.Dispose();
                 documentSlideIndex = next;
                 UpdateToolbar();
                 LayoutDocument();
                 QueueImageDetail();
-                if (!interactive) SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+                RaiseHoverPreview();
                 Invalidate();
             }
             catch { slideshowTimer.Stop(); }
@@ -607,7 +610,6 @@ namespace DesktopHover
             if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
             PositionContent(mediaCursor, mediaItemBounds, workingArea);
             ShowPreview();
-            SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
             Invalidate();
         }
 
@@ -843,7 +845,7 @@ namespace DesktopHover
             PositionContent(mediaCursor, mediaItemBounds, workingArea);
             ShowPreview();
             if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
-            SetWindowPos(Handle, new IntPtr(-1), Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
+            RaiseHoverPreview();
             Invalidate();
         }
 
@@ -914,6 +916,7 @@ namespace DesktopHover
             documentSlideIndex = 0;
             Bitmap previous = preview;
             preview = null;
+            documentReferenceWidth = 0;
             if (animatedGif != null)
             {
                 animatedGif.Dispose();
@@ -1149,7 +1152,8 @@ namespace DesktopHover
             }
 
             double ratio = Math.Min(1.0, Math.Min(
-                (double)maximumWidth / sourceWidth, (double)maximumHeight / sourceHeight));
+                (double)maximumWidth / (orientation >= 5 && orientation <= 8 ? sourceHeight : sourceWidth),
+                (double)maximumHeight / (orientation >= 5 && orientation <= 8 ? sourceWidth : sourceHeight)));
             BitmapImage decoded = new BitmapImage();
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete))

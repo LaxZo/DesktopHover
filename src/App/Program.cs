@@ -29,6 +29,7 @@ namespace DesktopHover
             if (args.Length == 1 && args[0] == "--quit") { ExitEvent.Set(); return; }
             if (InfoTipRestoreGuard.TryRunWorker(args)) return;
             if (DocumentPreviewWorker.TryRunWorker(args)) return;
+            AppLog.Initialize();
             try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
             catch { Native.SetProcessDPIAware(); }
             Application.EnableVisualStyles();
@@ -135,8 +136,7 @@ namespace DesktopHover
             tray.ContextMenuStrip=trayMenu;
             infoTips=new ShellInfoTipSuppressor(delegate
             {
-                return !stopping && !paused && !trayMenu.Visible && !Native.ButtonsDown() &&
-                    (Native.GetAsyncKeyState(27)&0x8000)==0;
+                return !stopping && !settings.ShowWindowsInfoTips;
             });
             UpdateTrayText();
             tray.MouseClick+=delegate(object sender,MouseEventArgs e)
@@ -197,6 +197,7 @@ namespace DesktopHover
                 throw;
             }
             settings=updated.Clone();
+            if(settings.ShowWindowsInfoTips) infoTips.Clear();
             delay=settings.DelayMs;
             preview.Configure(settings);
             if(pinnedWindow!=null && !pinnedWindow.IsDisposed) pinnedWindow.Configure(settings);
@@ -206,11 +207,12 @@ namespace DesktopHover
         }
         private void UpdateTrayText()
         {
-            tray.Text="Desktop Hover — "+L10n.Text(settings.Language,paused?"tray_paused":"tray_active");
+            tray.Text="Desktop Hover "+AppInfo.Version+" — "+L10n.Text(settings.Language,paused?"tray_paused":"tray_active");
         }
         private void Reset()
         {
-            generation++; shown=null; infoTips.Clear(); preview.ClearPreview(); moved=DateTime.UtcNow;
+            // Moving between files resets our preview, not the folder's tooltip policy.
+            generation++; shown=null; preview.ClearPreview(); moved=DateTime.UtcNow;
             lastCheck=DateTime.MinValue;
         }
         private void Tick(object sender,EventArgs e)
@@ -219,14 +221,16 @@ namespace DesktopHover
             if(Program.OpenSettingsEvent.WaitOne(0)) ShowSettings();
             Native.POINT p; if(!Native.GetCursorPos(out p)) return;
             Point now=new Point(p.X,p.Y);
-            if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
-            { Reset(); last=now; return; }
             IntPtr surface=Native.WindowFromPoint(p);
             IntPtr root=Native.GetAncestor(surface,2);
             bool isShell=Native.IsShellRoot(root);
-            // A Windows infotip can cover the pointer even before our preview's delay expires.
-            // Dismiss it and let the next tick resolve the file through the exposed Explorer view.
-            if(!isShell && infoTips.DismissAtCursor(surface,now)) return;
+            // The Windows tooltip switch is independent of preview playback/pause.
+            // Track hidden controls before waiting for our own preview delay.
+            if(isShell) infoTips.Track(surface,root,now);
+            else if(infoTips.DismissAtCursor(surface,now)) return;
+            else infoTips.Clear();
+            if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
+            { Reset(); last=now; return; }
             if(!isShell) { Reset(); last=now; return; }
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
             if(motion)
@@ -236,7 +240,6 @@ namespace DesktopHover
                 last=now;
             }
             if(surface!=lastSurface) { Reset(); lastSurface=surface; }
-            infoTips.Track(surface,root,now);
             if(shown!=null)
             {
                 if(!shown.Bounds.Contains(now)) { Reset(); return; }
@@ -283,6 +286,7 @@ namespace DesktopHover
                 try { item=resolver.Resolve(point); }
                 catch(Exception error)
                 {
+                    AppLog.Write("Shell file lookup", error);
                     if(Program.StatusFile!=null) try { File.AppendAllText(Program.StatusFile,error.ToString()+"\r\n"); } catch { }
                 }
                 if(Program.StatusFile!=null) try { File.AppendAllText(Program.StatusFile,"Resolved "+(item==null?"NONE":item.Path)+"\r\n"+resolver.Diagnostic); } catch { }

@@ -31,6 +31,7 @@ namespace DesktopHover
                 e.Graphics.ScaleTransform(uiScale, uiScale);
                 Brand.DrawLogo(e.Graphics, new Rectangle(24, 12, 24, 24));
                 DrawText(e.Graphics, "Desktop Hover", titleFont, Brand.Text, new Rectangle(58, 10, 246, 28));
+                DrawText(e.Graphics, "v" + AppInfo.Version, smallFont, Brand.Muted, new Rectangle(206, 14, 100, 22));
             };
             captionHeader.MouseDown += delegate(object sender, MouseEventArgs e)
             {

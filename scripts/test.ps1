@@ -16,7 +16,7 @@ $argsForCompiler = @(
     "/r:$framework\WPF\UIAutomationClient.dll", "/r:$framework\WPF\UIAutomationTypes.dll",
     "/r:$framework\System.Runtime.dll", "/r:$framework\System.Runtime.WindowsRuntime.dll",
     "/r:$windowsMetadata\Windows.Data.winmd", "/r:$windowsMetadata\Windows.Foundation.winmd", "/r:$windowsMetadata\Windows.Storage.winmd"
-) + $sourceFiles + (Join-Path $workspace 'tests\Regression.cs')
+) + $sourceFiles + @(Get-ChildItem -LiteralPath (Join-Path $workspace 'tests') -Filter 'Regression*.cs' -File | Sort-Object FullName | ForEach-Object FullName)
 & "$framework\csc.exe" @argsForCompiler
 if ($LASTEXITCODE -ne 0) { throw 'Regression harness compilation failed.' }
 if ($BuildOnly) { return }

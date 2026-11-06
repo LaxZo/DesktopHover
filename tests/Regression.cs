@@ -10,7 +10,7 @@ using System.Windows.Forms;
 
 namespace DesktopHover
 {
-    internal static class Regression
+    internal static partial class Regression
     {
         private static int assertions;
         private static readonly BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -22,15 +22,27 @@ namespace DesktopHover
 #endif
             if (InfoTipRestoreGuard.TryRunWorker(args)) return 0;
             if (DocumentPreviewWorker.TryRunWorker(args)) return Environment.ExitCode;
+            // Report UI-thread failures to the test runner instead of opening a modal
+            // .NET dialog that hides the stack and leaves unattended tests hanging.
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             output = Path.GetFullPath(args.Length > 0 ? args[0] : ".verification/regression");
             Directory.CreateDirectory(output);
             try
             {
+                if (args.Length > 1 && args[1] == "review-fixes")
+                {
+                    ReviewFixes(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "settings")
                 {
                     SettingsLayout(); SettingsSaving(); FormatPreferences(); ThemePreferences(); GlassCorners();
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "infotips")
+                {
+                    InfoTipPreferences(); SettingsLayout();
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
                 if (args.Length > 1 && args[1] == "themes")
@@ -42,6 +54,10 @@ namespace DesktopHover
                 {
                     GlassCorners();
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "z-order")
+                {
+                    PreviewZOrder(); VideoZOrder(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
                 if (args.Length > 1 && args[1] == "video")
                 {
@@ -76,6 +92,10 @@ namespace DesktopHover
                 {
                     GlassVideoColors(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "video-z-order")
+                {
+                    VideoZOrder(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 2 && args[1] == "refresh-slides")
                 {
                     RefreshSlides(args[2]); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -85,10 +105,14 @@ namespace DesktopHover
                     PowerPointPriority(args[2], args[3]);
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                ReviewFixes();
                 Images();
+                PreviewZOrder();
+                VideoZOrder();
                 AnimatedImages();
                 SettingsLayout();
                 SettingsSaving();
+                InfoTipPreferences();
                 Shutdown();
                 TrayLayoutAndMotion();
                 FolderLookup();
@@ -110,6 +134,108 @@ namespace DesktopHover
             }
             catch (Exception error) { Console.WriteLine(error); return 1; }
         }
+        private static void PreviewZOrder()
+        {
+            string path = Path.Combine(output, "z-order.png"); WriteImage(path, Color.CornflowerBlue);
+            string textPath = Path.Combine(output, "z-order.txt"); File.WriteAllText(textPath, "Preview stays above the active application.");
+            var decoder = (SemaphoreSlim)typeof(ImagePreviewLoader).GetField("decoder", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            using (var application = new Form { Text = "Preview stacking test", StartPosition = FormStartPosition.Manual,
+                Bounds = new Rectangle(100, 100, 900, 700) })
+            using (var preview = new PreviewWindow())
+            {
+                // HoverContext creates the hidden handle before loading settings.
+                IntPtr hoverHandle = preview.Handle;
+                application.Show(); application.Activate(); Pump(30);
+                foreach (string theme in new[] { "dark", "light", "glass" })
+                foreach (bool animated in new[] { false, true })
+                {
+                    preview.Configure(new AppSettings { Theme = theme, AnimationsEnabled = animated });
+                    application.Activate(); IntPtr foreground = ForegroundWindow();
+                    decoder.Wait();
+                    try
+                    {
+                        // Native z-order can change without updating Form.TopMost.
+                        MoveWindowInStack(preview.Handle, new IntPtr(-2), 0, 0, 0, 0, 0x13);
+                        preview.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                        Check((ExtendedWindowStyle(preview.Handle, -20) & 8) != 0 && AboveWindow(preview.Handle, application.Handle),
+                            "loading preview is natively topmost: " + theme + ", animation=" + animated);
+                        Check(ForegroundWindow() == foreground, "showing hover preview keeps keyboard focus in the active app");
+                        MoveWindowInStack(preview.Handle, new IntPtr(-2), 0, 0, 0, 0, 0x13);
+                    }
+                    finally { decoder.Release(); }
+                    Until(() => preview.HasImage, 5000); Pump(200);
+                    Check(AboveWindow(preview.Handle, application.Handle) && (ExtendedWindowStyle(preview.Handle, -20) & 8) != 0,
+                        "asynchronous image completion restores native topmost state");
+                    application.BringToFront(); application.Activate(); Pump(20);
+                    Check(AboveWindow(preview.Handle, application.Handle), "activating another normal window does not cover the hover preview");
+                    Check((ExtendedWindowStyle(preview.Handle, -20) & (0x20 | 0x08000000)) == (0x20 | 0x08000000),
+                        "topmost preview remains click-through and non-activating");
+                    preview.ClearPreview();
+                    application.TopMost = true; application.Activate();
+                    preview.ShowFile(path, new Point(300, 300), Rectangle.Empty);
+                    Until(() => preview.HasImage, 5000); Pump(200);
+                    Check(AboveWindow(preview.Handle, application.Handle), "new preview rises above an already topmost application");
+                    application.TopMost = false; preview.ClearPreview();
+                    preview.ShowFile(textPath, new Point(300, 300), Rectangle.Empty);
+                    Until(() => Field<object>(preview, "textTask") == null, 5000); Pump(200);
+                    Check(AboveWindow(preview.Handle, application.Handle) && (ExtendedWindowStyle(preview.Handle, -20) & 8) != 0,
+                        "text preview keeps the same topmost behavior after reuse");
+                    typeof(Control).GetMethod("RecreateHandle", Private).Invoke(preview, null); Pump(30);
+                    Check(AboveWindow(preview.Handle, application.Handle) && (ExtendedWindowStyle(preview.Handle, -20) & 8) != 0,
+                        "recreating the hover handle preserves native topmost state");
+                    preview.ClearPreview();
+                }
+            }
+            using (var pinned = new PreviewWindow(true))
+            {
+                pinned.Configure(new AppSettings { AnimationsEnabled = false });
+                pinned.ShowFile(path, new Point(300, 300), Rectangle.Empty); Until(() => pinned.HasImage, 5000);
+                Check(!pinned.TopMost && (ExtendedWindowStyle(pinned.Handle, -20) & 8) == 0,
+                    "pinned viewer retains normal application window stacking");
+            }
+        }
+        private static bool AboveWindow(IntPtr first, IntPtr second)
+        {
+            for (IntPtr window = first; window != IntPtr.Zero; window = NextWindow(window, 2))
+                if (window == second) return first != second;
+            return false;
+        }
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static extern int ExtendedWindowStyle(IntPtr window, int index);
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindow")]
+        private static extern IntPtr NextWindow(IntPtr window, uint command);
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
+        private static extern IntPtr ForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowPos")]
+        private static extern bool MoveWindowInStack(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, int flags);
+
+        private static void VideoZOrder()
+        {
+            string videoPath = Path.Combine(output, "z-order.avi"); WriteVideo(videoPath);
+            string imagePath = Path.Combine(output, "after-video.png"); WriteImage(imagePath, Color.CornflowerBlue);
+            using (var application = new Form { Text = "Video stacking test", Bounds = new Rectangle(100, 100, 900, 700) })
+            using (var preview = new PreviewWindow())
+            {
+                application.Show(); application.Activate();
+                IntPtr foreground = ForegroundWindow();
+                foreach (string theme in new[] { "dark", "glass" })
+                {
+                    preview.Configure(new AppSettings { Theme = theme, AnimationsEnabled = true, LoopVideo = true, VolumePercent = 0 });
+                    preview.ShowFile(videoPath, new Point(300, 300), Rectangle.Empty);
+                    Until(() => preview.MediaState == "media_playing", 15000); Pump(250);
+                    var surface = Field<System.Windows.Interop.HwndSource>(Field<MediaPlayback>(preview, "media"), "videoSource");
+                    Check(AboveWindow(preview.Handle, application.Handle), "video owner stays above other applications: " + theme);
+                    Check(AboveWindow(surface.Handle, preview.Handle), "video surface stays above its owner: " + theme);
+                    Check(ForegroundWindow() == foreground, "video does not take focus from the active application");
+                    preview.ClearPreview();
+                    preview.ShowFile(imagePath, new Point(300, 300), Rectangle.Empty);
+                    Until(() => preview.HasImage, 5000); Pump(250);
+                    Check(AboveWindow(preview.Handle, application.Handle), "image remains above other applications after closing video");
+                    preview.ClearPreview();
+                }
+            }
+        }
+
         private static void Images()
         {
             string path = Path.Combine(output, "image.png");
@@ -318,6 +444,67 @@ namespace DesktopHover
                 Snapshot(window, "settings-150-percent.png");
             }
         }
+        private static void InfoTipPreferences()
+        {
+            string path = Path.Combine(output, "infotip-preferences.ini");
+            string missing = Path.Combine(output, "missing-infotip-" + Guid.NewGuid().ToString("N") + ".ini");
+            Check(!AppSettings.Load(missing).ShowWindowsInfoTips, "missing settings keep Windows file tooltips disabled");
+            File.WriteAllText(path, "language=lv\r\nanimations_enabled=false\r\n");
+            var settings = AppSettings.Load(path);
+            Check(!settings.ShowWindowsInfoTips, "older settings keep Windows file tooltips disabled");
+            foreach (bool show in new[] { true, false })
+            {
+                settings.ShowWindowsInfoTips = show; settings.Save(path);
+                Check(AppSettings.Load(path).ShowWindowsInfoTips == show, "Windows tooltip preference survives restart: " + show);
+            }
+            int saves = 0;
+            using (var window = new SettingsWindow(settings, false,
+                value => { saves++; settings = value.Clone(); value.Save(path); }, null))
+            {
+                window.ShowCentered(new Point(300, 300)); window.ClientSize = new Size(1000, 780); Pump(40);
+                var toggle = Field<HoverToggle>(window, "windowsInfoTipsToggle");
+                Check(toggle.Text == "Windows failu apraksti" && toggle.AccessibleName == toggle.Text && !toggle.Checked,
+                    "Windows tooltip switch is localized, accessible and initially off");
+                Check(window.SettingsViewport.ClientRectangle.Contains(toggle.Bounds), "Windows tooltip switch fits the wide layout");
+                toggle.PerformClick();
+                Check(saves == 1 && toggle.Checked && settings.ShowWindowsInfoTips && AppSettings.Load(path).ShowWindowsInfoTips,
+                    "enabling Windows file tooltips applies and saves immediately");
+                toggle.PerformClick();
+                Check(saves == 2 && !toggle.Checked && !settings.ShowWindowsInfoTips && !AppSettings.Load(path).ShowWindowsInfoTips,
+                    "disabling Windows file tooltips applies and saves immediately");
+                window.ClientSize = new Size(650, 600); Pump(40);
+                window.SettingsViewport.ScrollControlIntoView(toggle); Pump(30);
+                Check(window.SettingsViewport.ClientRectangle.Contains(toggle.Bounds) && !window.SettingsViewport.HorizontalScroll.Visible,
+                    "Windows tooltip switch remains reachable in a narrow window");
+            }
+            // Do not run the live timer or write the user's settings in this policy test.
+            using (var context = new HoverContext())
+            {
+                Field<System.Windows.Forms.Timer>(context, "timer").Stop();
+                typeof(HoverContext).GetField("settings", Private).SetValue(context, new AppSettings { ShowWindowsInfoTips = false });
+                typeof(HoverContext).GetField("paused", Private).SetValue(context, true);
+                var suppressor = Field<ShellInfoTipSuppressor>(context, "infoTips");
+                var canSuppress = Field<Func<bool>>(suppressor, "canSuppress");
+                Check(canSuppress(), "pausing previews does not reenable disabled Windows file tooltips");
+                Field<AppSettings>(context, "settings").ShowWindowsInfoTips = true;
+                Check(!canSuppress(), "enabling Windows file tooltips releases the suppression policy");
+                Field<AppSettings>(context, "settings").ShowWindowsInfoTips = false;
+                // Invalid handles are harmless: restoration rejects them before sending messages.
+                var leases = Field<System.Collections.Generic.Dictionary<IntPtr, InfoTipRestoreGuard.Lease>>(suppressor, "disabled");
+                IntPtr marker = new IntPtr(1);
+                leases.Add(marker, new InfoTipRestoreGuard.Lease { Window = marker });
+                typeof(ShellInfoTipSuppressor).GetField("view", Private).SetValue(suppressor, marker);
+                Call(context, "Reset");
+                Check(Field<IntPtr>(suppressor, "view") == marker && leases.ContainsKey(marker),
+                    "resetting a preview preserves the folder's tooltip suppression lease");
+                suppressor.Clear();
+                Check(Field<IntPtr>(suppressor, "view") == IntPtr.Zero && leases.Count == 0,
+                    "leaving the folder explicitly releases the tooltip scope");
+                typeof(HoverContext).GetField("stopping", Private).SetValue(context, true);
+                Check(!canSuppress(), "application shutdown stops tooltip suppression");
+            }
+        }
+
         private static void SettingsSaving()
         {
             int saves = 0; AppSettings applied = null;

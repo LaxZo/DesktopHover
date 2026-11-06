@@ -130,11 +130,11 @@ Atver **Iestatījumi → Papildu iestatījumi**, lai izvēlētos atļautos failu
 
 Piespraustais priekšskatījums fonā nosaka saglabātas faila izmaiņas, arī atbilstošajos Adobe priekšskatījumu eksporta failos. **Atjaunot / F5** pārlādē saturu, apejot kešatmiņu un saglabājot tālummaiņu, pārbīdi, PDF lapu, PowerPoint slaidu, ritināšanas pozīciju un Excel darblapu, ciktāl to ļauj jaunais saturs. Ja izvēlētā lapa vairs nepastāv, izvēle tiek pielāgota pieejamajām lapām. Ja fails pazūd, parādās **Fails vairs nav pieejams**; pēc faila atgriešanās priekšskatījums atjaunojas. Atkārtoti piespraužot nemainītu failu, saglabājas esošais skats. Teksts arī ielādējas fonā. Audio un video piespraustajā logā ir pārtīšanas josla, skaļuma regulēšana un skaņas izslēgšana. Caurspīdīgajā tēmā video rāda atsevišķa necaurspīdīga virsma, kas saglabā sākotnējās krāsas.
 
-Piespraustus Word OOXML dokumentus var ritināt tālāk par sākotnējo fragmentu (līdz 2000 satura blokiem). Excel OOXML failiem var izvēlēties redzamo darblapu, saglabājas kolonnu platumu proporcijas un var ritināt līdz 5000 rindām un kolonnai XFD. Tie ir vienkāršoti skatītāji bez formulu pārrēķina un pilnīgas Office maketa atveides. Peles ritenis ritina saturu, **Shift+ritenis** ritina Excel horizontāli, **Ctrl+ritenis** maina tālummaiņu.
+Piespraustus Word OOXML dokumentus var ritināt tālāk par sākotnējo fragmentu (līdz 2000 satura blokiem). Excel OOXML failiem var izvēlēties redzamo darblapu, saglabājas kolonnu platumu proporcijas un var ritināt līdz 5000 rindām un kolonnai XFD. Saglabātie skaitļu formāti atbalsta datumus, laiku, ilgumu, procentus, decimāldaļas un valūtas, arī pielāgotos formātos. Neatbalstītiem formātiem, piemēram, parastajām daļām, rāda saglabāto skaitlisko vērtību. Tie ir vienkāršoti skatītāji bez formulu pārrēķina un pilnīgas Office maketa atveides. Peles ritenis ritina saturu, **Shift+ritenis** ritina Excel horizontāli, **Ctrl+ritenis** maina tālummaiņu.
 
 Palielinot attēlus, PDF un atbalstītus dizaina priekšskatījumus, tiek pieprasīta lielāka avota izšķirtspēja — līdz 4096 pikseļiem katrā malā, saglabājot mērogu un attēla novietojumu. Iegultie sīktēli nevar sniegt vairāk detaļu, nekā tajos saglabāts. Pārslēdzot PowerPoint failu, iepriekšējais eksports apstājas starp slaidiem; atsevišķai Office atvēršanas/eksporta darbībai vispirms jāpabeidzas. Lielākus kešatmiņā esošus slaidu attēlus izmanto arī mazākiem priekšskatījumiem.
 
-Kamēr priekšskatījumi ir ieslēgti, DesktopHover uz laiku deaktivizē Windows failu informācijas lodziņus pašreizējā Explorer vai darbvirsmas failu skatā, lai tie atkārtoti neparādītos virs priekšskatījuma. Tas attiecas arī uz neatbalstītiem failiem šajā skatā. Aizejot no skata, iepauzējot priekšskatījumus vai aizverot lietotni, vadīklas tiek atjaunotas; neliels fona palīgprocess tās atjauno arī pēc galvenā procesa piespiedu apturēšanas. Windows iestatījumi un Explorer priekšskatījuma sānu panelis netiek mainīti. Pirmais lodziņš var īslaicīgi parādīties, pirms tā vadīkla ir noteikta.
+Izslēdz **Windows failu apraksti** iestatījumos, lai paslēptu Windows failu informācijas lodziņus pašreizējā Explorer vai darbvirsmas failu skatā, arī neatbalstītiem failiem. Šis iestatījums darbojas arī tad, kad priekšskatījumi ir iepauzēti. Aizejot no skata, ieslēdzot šo iestatījumu vai aizverot lietotni, vadīklas tiek atjaunotas atbilstoši Windows izvēlei. Neliels fona palīgprocess tās atjauno arī pēc galvenā procesa piespiedu apturēšanas; ja palīgprocess apstājas, lietotne to automātiski palaiž no jauna, kad lodziņi jāslēpj. Windows iestatījumi un Explorer priekšskatījuma sānu panelis netiek mainīti.
 
 | Darbība | Rezultāts |
 | --- | --- |
@@ -315,6 +315,8 @@ Automātiskās palaišanas parametri reģistrē vai noņem izpildītās kopijas 
 </details>
 
 ## Ja kaut kas nedarbojas
+
+Programmas versija ir redzama iestatījumu galvenē, teknes ikonas aprakstā un EXE faila rekvizītos. Kļūdu informācija tiek saglabāta lokāli failā `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, ar divām iepriekšējām kopijām un 1 MiB robežu katram failam. Ziņojot par kļūmi, norādi versiju un attiecīgo žurnāla ierakstu; kļūdu tekstā var būt failu ceļi.
 
 | Problēma | Ko pārbaudīt |
 | --- | --- |

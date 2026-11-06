@@ -32,7 +32,7 @@ namespace DesktopHover
         private readonly ContextMenuStrip languageMenu, themeMenu;
         private readonly ToolTip windowToolTip = new ToolTip();
         private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
-        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle, autoPlayToggle, loopVideoToggle;
+        private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle, autoPlayToggle, loopVideoToggle, windowsInfoTipsToggle;
         private readonly HoverToggle[] typeToggles = new HoverToggle[5];
         private static readonly string[] TypeKeys = { "type_images", "type_documents", "type_text", "type_audio", "type_video" };
         private bool paused, syncing;
@@ -271,6 +271,9 @@ namespace DesktopHover
             loopVideoToggle = AddToggle(828);
             loopVideoToggle.Name = "loop-video-toggle";
             loopVideoToggle.Click += delegate { this.settings.LoopVideo = !this.settings.LoopVideo; Apply(); };
+            windowsInfoTipsToggle = AddToggle(870);
+            windowsInfoTipsToggle.Name = "windows-infotips-toggle";
+            windowsInfoTipsToggle.Click += delegate { this.settings.ShowWindowsInfoTips = !this.settings.ShowWindowsInfoTips; Apply(); };
             for (int i = 0; i < typeToggles.Length; i++)
             {
                 int index = i;
@@ -381,6 +384,7 @@ namespace DesktopHover
             }
             catch (Exception error)
             {
+                AppLog.Write("Saving settings", error);
                 settings = lastApplied.Clone();
                 SyncControls();
                 MessageBox.Show(this, T("save_error") + "\r\n\r\n" + error.Message,
@@ -438,7 +442,7 @@ namespace DesktopHover
                 item.Text = T("theme_" + (string)item.Tag); item.Checked = (string)item.Tag == AppSettings.NormalizeTheme(settings.Theme);
                 item.BackColor = Brand.Surface; item.ForeColor = Brand.Text;
             }
-            Text = "Desktop Hover — " + T("settings");
+            Text = "Desktop Hover " + AppInfo.Version + " — " + T("settings");
             AccessibleName = Text;
             L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
             languagePicker.Text = language.ShortName;
@@ -487,6 +491,8 @@ namespace DesktopHover
             LocalizeToggle(autoPlayToggle, "autoplay", "autoplay_detail");
             loopVideoToggle.Checked = settings.LoopVideo;
             LocalizeToggle(loopVideoToggle, "loop_video", "loop_video_detail");
+            windowsInfoTipsToggle.Checked = settings.ShowWindowsInfoTips;
+            LocalizeToggle(windowsInfoTipsToggle, "windows_infotips", "windows_infotips_detail");
             bool[] enabledTypes = { settings.PreviewImages, settings.PreviewDocuments, settings.PreviewText, settings.PreviewAudio, settings.PreviewVideo };
             for (int i = 0; i < typeToggles.Length; i++)
             {
@@ -556,12 +562,14 @@ namespace DesktopHover
             bool right = wideLayout && rect.Y >= 616 && rect.Y < 1090;
             float origin = right ? 56 + columnWidth : 24;
             return Rectangle.Round(new RectangleF(origin + (rect.X - 24) * columnWidth / 376,
-                rect.Y + (rect.Y >= 840 ? 44 : 0) - (right ? 444 : 0), rect.Width * columnWidth / 376, rect.Height));
+                rect.Y + (rect.Y >= 840 ? 86 : 0) - (right ? 444 : 0), rect.Width * columnWidth / 376, rect.Height));
         }
 
         private Rectangle ControlBounds(Control control, Rectangle original)
         {
-            if (control == advancedButton) return Rectangle.Round(new RectangleF(24, wideLayout ? 708 : 1196, Math.Min(300, columnWidth), 32));
+            if (control == windowsInfoTipsToggle) return Rectangle.Round(new RectangleF(wideLayout ? 56 + columnWidth : 24,
+                wideLayout ? 426 : 870, columnWidth, 40));
+            if (control == advancedButton) return Rectangle.Round(new RectangleF(24, wideLayout ? 708 : 1238, Math.Min(300, columnWidth), 32));
             if (control == autosavedLabel) return Rectangle.Round(new RectangleF(24, footerY, canvasWidth - 280, 32));
             if (control == githubProject) return Rectangle.Round(new RectangleF(canvasWidth - 230, footerY, 40, 32));
             if (control == themeToggle) return Rectangle.Round(new RectangleF(canvasWidth - 182, footerY, 40, 32));
@@ -582,7 +590,7 @@ namespace DesktopHover
                 canvasWidth = Math.Max(424, (content.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / uiScale);
                 wideLayout = canvasWidth >= 860;
                 columnWidth = wideLayout ? (canvasWidth - 80) / 2 : canvasWidth - 48;
-                footerY = Math.Max(wideLayout ? 764 : 1250, content.ClientSize.Height / uiScale + 80 - 54);
+                footerY = Math.Max(wideLayout ? 764 : 1292, content.ClientSize.Height / uiScale + 80 - 54);
                 foreach (var item in designBounds)
                 {
                     Rectangle rect = ControlBounds(item.Key, item.Value);
@@ -676,7 +684,7 @@ namespace DesktopHover
 
             if (wideLayout)
             {
-                using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, columnWidth + 40, 139, columnWidth + 40, 692);
+                using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, columnWidth + 40, 139, columnWidth + 40, 734);
                 UiDrawing.Text(g, T("settings"), headingFont,
                     Rectangle.Round(new RectangleF(columnWidth + 56, 139, columnWidth, 25)), Brand.Text,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
@@ -712,7 +720,7 @@ namespace DesktopHover
         {
             if (rectangle.Y >= 139 && rectangle.Y < 1090) rectangle = MapContent(rectangle);
             else if (rectangle.Y >= 1090)
-                rectangle = Rectangle.Round(new RectangleF(24, wideLayout ? rectangle.Y - 444 : rectangle.Y + 44, columnWidth, rectangle.Height));
+                rectangle = Rectangle.Round(new RectangleF(24, wideLayout ? rectangle.Y - 444 : rectangle.Y + 86, columnWidth, rectangle.Height));
             UiDrawing.Text(g, text, font, rectangle, color,
                 alignment | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }

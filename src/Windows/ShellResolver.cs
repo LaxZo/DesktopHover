@@ -30,6 +30,15 @@ namespace DesktopHover
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
         internal static string Class(IntPtr h) { var b = new StringBuilder(256); GetClassName(h,b,256); return b.ToString(); }
+        internal static IntPtr ListViewToolTip(IntPtr list)
+        {
+            if (Class(list) != "SysListView32") return IntPtr.Zero;
+            IntPtr tip;
+            return SendMessageTimeout(list, 0x104E, IntPtr.Zero, IntPtr.Zero, 0x22, 50, out tip) == IntPtr.Zero
+                ? IntPtr.Zero : tip; // LVM_GETTOOLTIPS
+        }
+        [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(
+            IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
         internal static bool IsShellRoot(IntPtr root)
         {
             string c = Class(root);

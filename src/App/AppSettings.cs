@@ -17,6 +17,7 @@ namespace DesktopHover
         public bool AnimationsEnabled=true;
         public bool AutoPlayMedia=true;
         public bool LoopVideo=true;
+        public bool ShowWindowsInfoTips=false;
         public bool PreviewImages=true, PreviewDocuments=true, PreviewText=true, PreviewAudio=true, PreviewVideo=true;
         private HashSet<string> disabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal string DisabledExtensions
@@ -128,6 +129,7 @@ namespace DesktopHover
                         if(name=="animations_enabled" && bool.TryParse(value,out b)) settings.AnimationsEnabled=b;
                         if(name=="autoplay_media" && bool.TryParse(value,out b)) settings.AutoPlayMedia=b;
                         if(name=="loop_video" && bool.TryParse(value,out b)) settings.LoopVideo=b;
+                        if(name=="show_windows_infotips" && bool.TryParse(value,out b)) settings.ShowWindowsInfoTips=b;
                         if(name=="preview_images" && bool.TryParse(value,out b)) settings.PreviewImages=b;
                         if(name=="preview_documents" && bool.TryParse(value,out b)) settings.PreviewDocuments=b;
                         if(name=="preview_text" && bool.TryParse(value,out b)) settings.PreviewText=b;
@@ -157,6 +159,7 @@ namespace DesktopHover
                     MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent,Theme,SlideIntervalSeconds,AnimationsEnabled.ToString().ToLowerInvariant());
                 text += "autoplay_media=" + AutoPlayMedia.ToString().ToLowerInvariant() + "\r\n";
                 text += "loop_video=" + LoopVideo.ToString().ToLowerInvariant() + "\r\n";
+                text += "show_windows_infotips=" + ShowWindowsInfoTips.ToString().ToLowerInvariant() + "\r\n";
                 text += "preview_images=" + PreviewImages.ToString().ToLowerInvariant() + "\r\n";
                 text += "preview_documents=" + PreviewDocuments.ToString().ToLowerInvariant() + "\r\n";
                 text += "preview_text=" + PreviewText.ToString().ToLowerInvariant() + "\r\n";

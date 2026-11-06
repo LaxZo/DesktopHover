@@ -17,6 +17,7 @@ namespace DesktopHover
             names[name] = value;
         }
         internal string Find(string name) { string path; return names.TryGetValue(name, out path) ? path : null; }
+        internal bool Contains(string name) { return names.ContainsKey(name); }
     }
 
     // Accessed by the shell worker only. Watcher callbacks update just an atomic revision.
@@ -31,6 +32,7 @@ namespace DesktopHover
             internal int Revision, BuiltRevision;
             internal long Written;
             internal DateTime Built;
+            internal DateTime LastMissRebuild;
             internal volatile bool Reliable;
             internal void Changed(object sender, FileSystemEventArgs e) { Interlocked.Increment(ref Revision); }
             internal void Failed(object sender, ErrorEventArgs e) { Reliable = false; Interlocked.Increment(ref Revision); }
@@ -63,9 +65,20 @@ namespace DesktopHover
             }
             int revision = Interlocked.CompareExchange(ref entry.Revision, 0, 0);
             long written = Directory.GetLastWriteTimeUtc(directory).Ticks;
+            bool rebuilt = false;
             if (entry.Index == null || entry.BuiltRevision != revision || entry.Written != written ||
                 DateTime.UtcNow - entry.Built > TimeSpan.FromSeconds(entry.Reliable ? 60 : 1))
             {
+                entry.Index = build(); entry.BuiltRevision = revision; entry.Written = written; entry.Built = DateTime.UtcNow;
+                rebuilt = true;
+            }
+            // Explorer can change display names (e.g. hidden extensions) without a
+            // filesystem event. Retry unknown names, but not known unsupported or
+            // ambiguous items, and bound rescans of large folders on repeated misses.
+            if (!rebuilt && !entry.Index.Contains(name) &&
+                DateTime.UtcNow - entry.LastMissRebuild >= TimeSpan.FromSeconds(2))
+            {
+                entry.LastMissRebuild = DateTime.UtcNow;
                 entry.Index = build(); entry.BuiltRevision = revision; entry.Written = written; entry.Built = DateTime.UtcNow;
             }
             return entry.Index.Find(name);
