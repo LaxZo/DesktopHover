@@ -183,7 +183,8 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF (arī animēti), TIFF, ICO, WebP, HEIC/HEIF, AVIF un Adobe DNG (vajadzīgs saderīgs Windows RAW dekodētājs). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; atskaņošanai vajadzīgs saderīgs Windows kodeks. |
-| **Teksts un dati** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
+| **Teksts un dati** | TXT, LOG, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
+| **CSV un TSV** | Tabula ar numurētām rindām un kolonnu burtiem. Piespraustajā logā pārej uz citām kolonnām ar bultiņu taustiņiem vai Shift un peles ritenīti. Uzved peli uz šūnas, lai izlasītu tekstu, kas tajā neietilpst. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
 | **PDF** | Pirmā lapa pēc peles uzvešanas; lapu pāršķiršana piespraustajā logā. Izmanto Windows 10/11 iebūvēto PDF atbalstu bez Adobe lietotnes vai sīktēlu nodrošinātāja. |

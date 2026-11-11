@@ -32,6 +32,24 @@ namespace DesktopHover
             if (glass) window.Opacity = 1;
             backdrop.Refresh();
         }
+        internal static void ApplyCaption(Form window)
+        {
+            if (!window.IsHandleCreated || SystemInformation.HighContrast) return;
+            try
+            {
+                int dark = Brand.IsLight ? 0 : 1;
+                int caption = ColorTranslator.ToWin32(Brand.Background);
+                int text = ColorTranslator.ToWin32(Brand.Text);
+                int border = ColorTranslator.ToWin32(Brand.Border);
+                DwmSetWindowAttribute(window.Handle, 20, ref dark, sizeof(int));
+                DwmSetWindowAttribute(window.Handle, 35, ref caption, sizeof(int));
+                DwmSetWindowAttribute(window.Handle, 36, ref text, sizeof(int));
+                DwmSetWindowAttribute(window.Handle, 34, ref border, sizeof(int));
+            }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+
         internal static bool IsRequested(Form window)
         { WindowBackdrop backdrop; return windows.TryGetValue(window, out backdrop) && backdrop.requested; }
         internal static bool IsActive(Control control)

@@ -161,8 +161,8 @@ namespace DesktopHover
             try { applySettings(updated); }
             catch (Exception error)
             {
-                MessageBox.Show(L10n.Text(readSettings().Language, "save_error") + "\r\n\r\n" + error.Message,
-                    "Desktop Hover", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                AppNotice.Show(null, L10n.Text(readSettings().Language, "save_error") + "\r\n\r\n" + error.Message,
+                    "Desktop Hover", MessageBoxIcon.Warning);
             }
             RefreshState();
         }

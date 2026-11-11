@@ -97,6 +97,12 @@ namespace DesktopHover
             autoPlayMedia = settings.AutoPlayMedia;
             UiMotion.Enabled = settings.AnimationsEnabled;
             Brand.SetTheme(settings.Theme);
+            if (themeChanged && sheetPicker != null)
+            {
+                UiDrawing.RefreshPicker(sheetPicker);
+                UiDrawing.RefreshNativeTheme(officeScroll);
+                UiDrawing.RefreshNativeTheme(officeHorizontalScroll);
+            }
             WindowBackdrop.Apply(this, settings.Theme);
             BackColor=Brand.Background;
             ForeColor=Brand.Text;
@@ -570,12 +576,13 @@ namespace DesktopHover
         private void LayoutText()
         {
             sourceBytes = textPreview.FileBytes;
-            AccessibleName = L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
+            bool table = textPreview.TableRows != null;
+            string type = table || textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
+            AccessibleName = table ? type + " · " + L10n.Text(language, "text_preview") : L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
             Text = AccessibleName + " — Desktop Hover";
             if (interactive)
             {
-                description = (textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview")) +
-                    " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+                description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
                 if (textPreview.Truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
                 LayoutInteractive(); ShowPreview(); Invalidate(); return;
             }
@@ -585,18 +592,19 @@ namespace DesktopHover
             int width = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
             int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
                 workingArea.Height - padding - footerPadding - footerHeight - Px(interactive ? 90 : 32)));
-            textLineHeight = Px(21);
+            textLineHeight = Px(table ? 26 : 21);
             int height = Math.Min(maximumHeight, Math.Max(Px(120),
-                textPreview.Lines.Length * textLineHeight + Px(16)));
+                textPreview.RowCount * textLineHeight + (table ? textLineHeight : Px(16))));
             ClientSize = new DrawingSize(width + padding * 2, height + padding + footerPadding + footerHeight);
             imageArea = new Rectangle(padding, padding, width, height);
             int footerWidth = Math.Max(1, ClientSize.Width - footerPadding * 2);
             titleArea = new Rectangle(footerPadding + Px(22), imageArea.Bottom + Px(11),
                 Math.Max(1, footerWidth - Px(22)), Px(19));
             descriptionArea = new Rectangle(footerPadding, titleArea.Bottom + Px(1), footerWidth, Px(17));
-            textVisibleLines = Math.Max(0, (imageArea.Height - Px(16)) / textLineHeight);
-            bool truncated = textPreview.Truncated || textPreview.Lines.Length > textVisibleLines;
-            using (Graphics graphics = CreateGraphics())
+            textVisibleLines = Math.Max(0, (imageArea.Height - (table ? textLineHeight : Px(16))) / textLineHeight);
+            bool truncated = textPreview.Truncated || textPreview.RowCount > textVisibleLines;
+            if (table) { LayoutTable(); truncated |= textPreview.TableColumns > tableVisibleColumns; }
+            else using (Graphics graphics = CreateGraphics())
             using (StringFormat format = CodeFormat())
             {
                 string lastNumber = Math.Max(1, Math.Min(textVisibleLines, textPreview.Lines.Length)).ToString(CultureInfo.InvariantCulture);
@@ -606,7 +614,6 @@ namespace DesktopHover
                     if (graphics.MeasureString(textPreview.Lines[i].Text, codeFont, DrawingPoint.Empty, format).Width > textWidth)
                         truncated = true;
             }
-            string type = textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
             description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
             if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
             PositionContent(mediaCursor, mediaItemBounds, workingArea);
@@ -629,9 +636,10 @@ namespace DesktopHover
                 graphics.SetClip(imageArea, CombineMode.Intersect);
                 graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 using (var background = new SolidBrush(Brand.EditorBackground)) graphics.FillRectangle(background, imageArea);
+                if (textPreview.TableRows != null && textPreview.RowCount > 0) { PaintTable(graphics); return; }
                 using (var gutter = new SolidBrush(Brand.EditorGutter))
                     graphics.FillRectangle(gutter, imageArea.Left, imageArea.Top, textGutterWidth, imageArea.Height);
-                if (textPreview.Lines.Length == 0 ||
+                if (textPreview.RowCount == 0 ||
                     (textPreview.Lines.Length == 1 && textPreview.Lines[0].Text.Length == 0))
                 {
                     TextRenderer.DrawText(graphics, L10n.Text(language, "text_empty"), codeFont, imageArea,
@@ -899,7 +907,8 @@ namespace DesktopHover
             mediaState = null;
             documentMediaNoteKey = null;
             textPreview = null;
-            pdfPageIndex = pdfPageCount = textOffset = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
+            pdfPageIndex = pdfPageCount = textOffset = tableColumn = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
+            if (interactive && !String.IsNullOrEmpty(contentTip.GetToolTip(this))) contentTip.SetToolTip(this, null);
             if (interactive) StopPanning();
             if (!IsDisposed && (hide || !interactive))
                 Hide();

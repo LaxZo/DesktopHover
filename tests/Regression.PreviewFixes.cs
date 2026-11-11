@@ -137,9 +137,18 @@ namespace DesktopHover
                 window.FitToArea(work, 1);
                 Field<HoverButton>(window, "toggleShortcutButton").PerformClick();
                 var menu = Field<ContextMenuStrip>(window, "shortcutMenu");
-                ((ToolStripComboBox)menu.Items["modifiers"]).SelectedItem = "Ctrl+Shift";
-                ((ToolStripComboBox)menu.Items["key"]).SelectedItem = "F8";
+                var modifiers = (ShortcutField)menu.Items["modifiers"];
+                var key = (ShortcutField)menu.Items["key"];
+                Check(menu.ClientRectangle.Contains(modifiers.Bounds) && menu.ClientRectangle.Contains(key.Bounds), "both shortcut fields fit inside the popup");
+                modifiers.ShowDropDown(); modifiers.DropDownItems["Ctrl+Shift"].PerformClick();
+                key.ShowDropDown();
+                var lastKey = key.DropDownItems["F11"]; lastKey.Select();
+                Check(key.DropDown.ClientRectangle.Contains(lastKey.Bounds), "the last function key is reachable in the list");
+                key.DropDownItems["F8"].PerformClick();
+                Check(menu.Visible && !key.DropDown.Visible, "shortcut editor stays open after both choices");
+                Check(key.Value == Keys.F8 && settings.ToggleShortcut != (modifiers.Value | key.Value), "shortcut options wait for Save");
                 menu.Items["save-shortcut"].PerformClick();
+                Check(!menu.Visible, "saving closes the shortcut editor");
                 menu.Close();
                 Check(settings.ToggleShortcut == (Keys.Control | Keys.Shift | Keys.F8) &&
                     Field<HoverButton>(window, "toggleShortcutButton").Text.Contains("Ctrl+Shift+F8"), "shortcut picker applies and displays the selected combination");

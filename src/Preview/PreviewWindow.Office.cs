@@ -19,11 +19,13 @@ namespace DesktopHover
         {
             sheetPicker = new ToolStripComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AutoSize = false, Width = 130, Visible = false };
             toolbar.Items.Add(sheetPicker);
-            sheetPicker.ComboBox.FlatStyle = FlatStyle.Flat;
+            UiDrawing.StylePicker(sheetPicker);
             officeScroll = new VScrollBar { Visible = false, SmallChange = 80 };
             Controls.Add(officeScroll);
             officeHorizontalScroll = new HScrollBar { Visible = false, SmallChange = 80 };
             Controls.Add(officeHorizontalScroll);
+            UiDrawing.BindNativeTheme(officeScroll);
+            UiDrawing.BindNativeTheme(officeHorizontalScroll);
             officeTimer = new Timer { Interval = 120 };
             officeTimer.Tick += delegate
             {
@@ -82,7 +84,6 @@ namespace DesktopHover
                 }
                 sheetPicker.Visible = sheetPicker.Items.Count > 1;
                 sheetPicker.ToolTipText = sheetPicker.AccessibleName = L10n.Text(language, "worksheet");
-                sheetPicker.BackColor = Brand.Surface; sheetPicker.ForeColor = Brand.Text;
             }
             finally { updatingOffice = false; }
         }

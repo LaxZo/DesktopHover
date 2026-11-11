@@ -108,7 +108,7 @@ namespace DesktopHover
         private readonly object gate=new object();
         private readonly Thread worker;
         private volatile bool stopping;
-        private bool paused, busy;
+        private bool paused, busy, hoverSuspended;
         private Point last, requestedPoint;
         private IntPtr lastSurface;
         private int generation, requestGeneration, resultGeneration;
@@ -157,6 +157,7 @@ namespace DesktopHover
                 settingsWindow=new SettingsWindow(settings.Clone(),paused,ApplySettings,
                     SetPaused);
             }
+            settingsWindow.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
             settingsWindow.UpdatePaused(paused);
             settingsWindow.ShowCentered(Cursor.Position);
         }
@@ -204,7 +205,11 @@ namespace DesktopHover
             if(pinnedWindow!=null && !pinnedWindow.IsDisposed) pinnedWindow.Configure(settings);
             UpdateTrayText();
             if(preview.CurrentPath==null) Reset();
-            if(settingsWindow!=null && !settingsWindow.IsDisposed) settingsWindow.UpdateSettings(settings);
+            if(settingsWindow!=null && !settingsWindow.IsDisposed)
+            {
+                settingsWindow.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
+                settingsWindow.UpdateSettings(settings);
+            }
         }
         private void UpdateTrayText()
         {
@@ -213,7 +218,9 @@ namespace DesktopHover
         private void Reset()
         {
             // Moving between files resets our preview, not the folder's tooltip policy.
-            generation++; shown=null; preview.ClearPreview(); moved=DateTime.UtcNow;
+            generation++; shown=null;
+            if(preview.CurrentPath!=null || preview.Visible) preview.ClearPreview();
+            moved=DateTime.UtcNow;
             lastCheck=DateTime.MinValue;
         }
         private void Tick(object sender,EventArgs e)
@@ -230,9 +237,12 @@ namespace DesktopHover
             if(isShell) infoTips.Track(surface,root,now);
             else if(infoTips.DismissAtCursor(surface,now)) return;
             else infoTips.Clear();
-            if(paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
-            { Reset(); last=now; return; }
-            if(!isShell) { Reset(); last=now; return; }
+            if(!isShell || paused || trayMenu.Visible || Native.ButtonsDown() || (Native.GetAsyncKeyState(27)&0x8000)!=0)
+            {
+                if(!hoverSuspended) Reset();
+                hoverSuspended=true; last=now; return;
+            }
+            if(hoverSuspended) { hoverSuspended=false; moved=DateTime.UtcNow; }
             bool motion=Math.Abs(now.X-last.X)>3 || Math.Abs(now.Y-last.Y)>3;
             if(motion)
             {

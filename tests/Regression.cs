@@ -32,6 +32,14 @@ namespace DesktopHover
             AppLog.TestDirectory = Path.Combine(output, "application-logs");
             try
             {
+                if (args.Length > 1 && args[1] == "table-data")
+                {
+                    TabularPreviewData(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "table-ui")
+                {
+                    TableWindowAndHotkeys(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "preview-152")
                 {
                     PreviewFixes152(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -110,6 +118,8 @@ namespace DesktopHover
                     PowerPointPriority(args[2], args[3]);
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                TabularPreviewData();
+                TableWindowAndHotkeys();
                 ReviewFixes();
                 PreviewFixes152();
                 Images();
@@ -1675,7 +1685,7 @@ namespace DesktopHover
                 }
             }
         }
-        private static void Snapshot(Form window, string name)
+        private static void Snapshot(Control window, string name)
         {
             using (var image = new Bitmap(window.Width, window.Height))
             { window.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size)); image.Save(Path.Combine(output, name)); }

@@ -19,12 +19,15 @@ namespace DesktopHover
         internal TextSpan[] Spans;
     }
 
-    internal sealed class TextPreviewContent
+    internal sealed partial class TextPreviewContent
     {
         private const int MaximumBytes = 256 * 1024;
         private const int MaximumLines = 300;
         private const int MaximumColumns = 500;
         internal TextPreviewLine[] Lines;
+        internal string[][] TableRows;
+        internal int TableColumns;
+        internal int RowCount { get { return TableRows == null ? Lines.Length : TableRows.Length; } }
         internal string LanguageName, EncodingName;
         internal bool IsCode, Truncated;
         internal long FileBytes;
@@ -68,6 +71,14 @@ namespace DesktopHover
             string encodingName;
             string text = Decode(bytes, count, truncated, out encodingName);
             RejectBinary(text);
+            string extension = Path.GetExtension(path).ToLowerInvariant();
+            if (extension == ".csv" || extension == ".tsv")
+            {
+                var table = new TextPreviewContent { LanguageName = extension == ".csv" ? "CSV" : "TSV",
+                    EncodingName = encodingName, FileBytes = fileBytes, Truncated = truncated };
+                table.ReadTable(text, extension == ".tsv", cancellation);
+                return table;
+            }
             string language = LanguageFor(path);
             var lexer = new Lexer(language);
             var lines = new List<TextPreviewLine>();

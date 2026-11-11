@@ -328,6 +328,19 @@ namespace DesktopHover
 
         private static DocumentPreviewResult RenderWord(Package package, string part, XmlDocument document, Size maximum, OfficePreviewPalette palette, OfficeViewOptions view = null)
         {
+            DocumentPreviewResult page = RenderWordPage(package, part, document, maximum, palette, view);
+            if (page == null || view == null) return page;
+            int offset = Math.Max(0, Math.Min(view.ScrollY, page.ContentHeight - maximum.Height));
+            if (offset == view.ScrollY) return page;
+            // A refreshed document may have become shorter since the last layout.
+            page.Dispose();
+            OfficeViewOptions corrected = view.Copy();
+            corrected.ScrollY = offset;
+            return RenderWordPage(package, part, document, maximum, palette, corrected);
+        }
+
+        private static DocumentPreviewResult RenderWordPage(Package package, string part, XmlDocument document, Size maximum, OfficePreviewPalette palette, OfficeViewOptions view)
+        {
             XmlNode body = document.SelectSingleNode("/*[local-name()='document']/*[local-name()='body']");
             if (body == null) return null;
             Dictionary<string, Relation> relations = package.Relations(part);
@@ -496,6 +509,14 @@ namespace DesktopHover
                 bool date1904 = IsTrue(Attr(workbook.SelectSingleNode("/*[local-name()='workbook']/*[local-name()='workbookPr']"), "date1904"));
                 var values = new Dictionary<int, string>();
                 var hiddenRows = new HashSet<int>();
+                var columnWidths = ReadColumnWidths(worksheet, package.Cancellation);
+                int columnLimit = columnWidths.Length;
+                if (view == null)
+                {
+                    int visible = 0;
+                    for (int col = 0; col < columnWidths.Length; col++)
+                        if (columnWidths[col] > 0 && ++visible == 8) { columnLimit = col + 1; break; }
+                }
                 int previousRow = 0;
                 int highestColumn = 0, highestRow = 0, scanned = 0;
                 bool truncated = false;
@@ -516,7 +537,9 @@ namespace DesktopHover
                         int column = ColumnIndex(Attr(cell, "r"));
                         if (column < 0) column = nextColumn;
                         nextColumn = column + 1;
-                        if (column >= (view == null ? 8 : 16384)) { truncated = true; continue; }
+                        if (column >= columnWidths.Length) { truncated = true; continue; }
+                        if (columnWidths[column] == 0) continue;
+                        if (column >= columnLimit) { truncated = true; continue; }
                         string type = Attr(cell, "t");
                         string value = TextOf(cell.SelectSingleNode("./*[local-name()='v']"));
                         bool hasCachedValue = value.Length > 0;
@@ -548,11 +571,19 @@ namespace DesktopHover
                 }
                 var visibleRows = new List<int>(highestRow);
                 for (int i = 1; i <= highestRow; i++) if (!hiddenRows.Contains(i)) visibleRows.Add(i);
-                sheetContent = new SheetContent { Values = values, HighestColumn = highestColumn, VisibleRows = visibleRows.ToArray(), Truncated = truncated };
+                var visibleColumns = new List<int>();
+                var visibleWidths = new List<float>();
+                for (int col = 0; col < columnLimit && (col < highestColumn || visibleColumns.Count < 3); col++)
+                {
+                    if (columnWidths[col] == 0) continue;
+                    visibleColumns.Add(col); visibleWidths.Add(columnWidths[col]);
+                }
+                sheetContent = new SheetContent { Values = values, VisibleColumns = visibleColumns.ToArray(),
+                    ColumnWidths = visibleWidths.ToArray(), VisibleRows = visibleRows.ToArray(), Truncated = truncated };
                 package.CacheSheet(sheetKey, sheetContent);
             }
             var displayedValues = sheetContent.Values;
-            int columnCount = sheetContent.HighestColumn, rowCount = sheetContent.VisibleRows.Length;
+            int rowCount = sheetContent.VisibleRows.Length;
             bool contentTruncated = sheetContent.Truncated;
             int contentHeight = maximum.Height, contentWidth = maximum.Width;
             var image = new Bitmap(maximum.Width, maximum.Height);
@@ -571,16 +602,8 @@ namespace DesktopHover
                     Prepare(g, palette);
                     float unit = Math.Max(1, maximum.Width / 720F);
                     float rowHeight = Math.Max(24 * unit, font.Height + 10 * unit), gutter = 36 * unit, top = rowHeight;
-                    int columns = Math.Max(3, Math.Min(view == null ? 8 : 16384, columnCount));
-                    float[] widths = new float[columns], positions = new float[columns + 1];
-                    for (int col = 0; col < columns; col++) widths[col] = 8.43f;
-                    foreach (XmlNode col in worksheet.SelectNodes("/*[local-name()='worksheet']/*[local-name()='cols']/*[local-name()='col']"))
-                    {
-                        double width;
-                        if (!Double.TryParse(Attr(col, "width"), NumberStyles.Float, CultureInfo.InvariantCulture, out width) || Double.IsNaN(width) || Double.IsInfinity(width)) continue;
-                        for (int i = Math.Max(0, Int(Attr(col, "min"), 1) - 1); i < Math.Min(columns, Int(Attr(col, "max"), columns)); i++)
-                            widths[i] = IsTrue(Attr(col, "hidden")) ? 0 : (float)Math.Max(1, Math.Min(100, width));
-                    }
+                    int columns = sheetContent.VisibleColumns.Length;
+                    float[] widths = (float[])sheetContent.ColumnWidths.Clone(), positions = new float[columns + 1];
                     float firstWidth = 0, totalWidth = 0;
                     for (int col = 0; col < columns; col++) { totalWidth += widths[col]; if (col < 8) firstWidth += widths[col]; }
                     float widthScale = (maximum.Width - gutter) / (firstWidth > 0 ? firstWidth : 8 * 8.43f);
@@ -606,7 +629,7 @@ namespace DesktopHover
                         if (widths[col] < 1 || positions[col + 1] < gutter || positions[col] > image.Width) continue;
                         var box = new RectangleF(positions[col], top, widths[col], rowHeight);
                         using (var centered = (StringFormat)format.Clone())
-                        { centered.Alignment = StringAlignment.Center; g.DrawString(ColumnName(col), bold, muted, box, centered); }
+                        { centered.Alignment = StringAlignment.Center; g.DrawString(ColumnName(sheetContent.VisibleColumns[col]), bold, muted, box, centered); }
                     }
                     g.SetClip(new RectangleF(gutter, top + rowHeight,
                         image.Width - gutter, Math.Max(0, image.Height - top - rowHeight)));
@@ -618,7 +641,7 @@ namespace DesktopHover
                         {
                             string value;
                             if (widths[col] > 12 && positions[col + 1] >= gutter && positions[col] <= image.Width &&
-                                displayedValues.TryGetValue((sheetContent.VisibleRows[firstRow + row] - 1) * 16384 + col, out value))
+                                displayedValues.TryGetValue((sheetContent.VisibleRows[firstRow + row] - 1) * 16384 + sheetContent.VisibleColumns[col], out value))
                                 g.DrawString(value, font, ink, new RectangleF(positions[col] + 6, y, widths[col] - 12, rowHeight), format);
                         }
                     }
@@ -646,6 +669,26 @@ namespace DesktopHover
             catch { image.Dispose(); throw; }
         }
 
+        private static float[] ReadColumnWidths(XmlDocument worksheet, CancellationToken cancellation)
+        {
+            var widths = new float[16384];
+            for (int i = 0; i < widths.Length; i++) widths[i] = 8.43f;
+            foreach (XmlNode col in worksheet.SelectNodes("/*[local-name()='worksheet']/*[local-name()='cols']/*[local-name()='col']"))
+            {
+                cancellation.ThrowIfCancellationRequested();
+                int start = Math.Max(1, Int(Attr(col, "min"), 1)) - 1;
+                int end = Math.Min(widths.Length, Int(Attr(col, "max"), start + 1));
+                double width = 0;
+                if (!IsTrue(Attr(col, "hidden")))
+                {
+                    if (!Double.TryParse(Attr(col, "width"), NumberStyles.Float, CultureInfo.InvariantCulture, out width) || Double.IsNaN(width) || Double.IsInfinity(width)) continue;
+                    width = Math.Max(1, Math.Min(100, width));
+                }
+                for (int i = start; i < end; i++) widths[i] = (float)width;
+            }
+            return widths;
+        }
+
         private static int ColumnIndex(string reference)
         {
             int column = 0, count = 0;
@@ -658,7 +701,7 @@ namespace DesktopHover
             return column - 1;
         }
 
-        private static string ColumnName(int index)
+        internal static string ColumnName(int index)
         {
             string result = "";
             do { result = (char)('A' + index % 26) + result; index = index / 26 - 1; } while (index >= 0);

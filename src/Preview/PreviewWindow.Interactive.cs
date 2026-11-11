@@ -16,7 +16,7 @@ namespace DesktopHover
         private string observedChange;
         private ToolStripLabel pageLabel, zoomLabel, loadingLabel;
         private ToolStripSeparator zoomSeparator;
-        private readonly ToolTip contentTip = new ToolTip { ShowAlways = true };
+        private readonly ToolTip contentTip = UiDrawing.CreateToolTip();
         private Font toolbarFont;
         private int pdfPageIndex, pdfPageCount, textOffset, wheelRemainder;
         private bool playbackPaused, panning, interactiveSized, arrangingInteractive, fitMode = true;
@@ -157,10 +157,12 @@ namespace DesktopHover
                 descriptionArea = new Rectangle(padding, ClientSize.Height - Px(32), ClientSize.Width - padding * 2, Px(22));
                 if (textPreview != null)
                 {
-                    textLineHeight = Px(21);
-                    textVisibleLines = Math.Max(1, (viewport.Height - Px(16)) / textLineHeight);
-                    textOffset = Math.Max(0, Math.Min(textOffset, Math.Max(0, textPreview.Lines.Length - textVisibleLines)));
-                    using (Graphics g = CreateGraphics())
+                    bool table = textPreview.TableRows != null;
+                    textLineHeight = Px(table ? 26 : 21);
+                    textVisibleLines = Math.Max(1, (viewport.Height - (table ? textLineHeight : Px(16))) / textLineHeight);
+                    textOffset = Math.Max(0, Math.Min(textOffset, Math.Max(0, textPreview.RowCount - textVisibleLines)));
+                    if (table) LayoutTable();
+                    else using (Graphics g = CreateGraphics())
                         textGutterWidth = Math.Max(Px(38), TextRenderer.MeasureText(g, Math.Max(1, textPreview.Lines.Length).ToString(), codeFont).Width + Px(20));
                 }
                 if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
@@ -194,6 +196,13 @@ namespace DesktopHover
             previousButton.Enabled = pages && index > 0 && !documentLoading;
             nextButton.Enabled = pages && index + 1 < count && !documentLoading;
             pageLabel.Text = (index + 1) + " / " + (slides ? Math.Max(documentSlideTotal, count) : count);
+            if (HasTable && textPreview.TableColumns > tableVisibleColumns)
+            {
+                previousButton.Visible = nextButton.Visible = pageLabel.Visible = true;
+                previousButton.Enabled = tableColumn > 0;
+                nextButton.Enabled = tableColumn + tableVisibleColumns < textPreview.TableColumns;
+                pageLabel.Text = OfficePreviewReader.ColumnName(tableColumn) + "–" + OfficePreviewReader.ColumnName(tableColumn + tableVisibleColumns - 1);
+            }
             playbackButton.Visible = HasPlayback;
             playbackButton.Enabled = HasPlayback;
             playbackButton.Text = playbackPaused ? "▶" : "Ⅱ";
@@ -219,6 +228,7 @@ namespace DesktopHover
 
         private void Navigate(int delta)
         {
+            if (HasTable) { ScrollTableColumns(delta * tableVisibleColumns); return; }
             if (documentLoading) return;
             if (documentSlides != null && documentSlides.Length > 0)
             {
@@ -369,6 +379,18 @@ namespace DesktopHover
                     ((mediaSeek != null && (mediaSeek.Focused || mediaVolume.Focused || mediaMute.Focused)) ||
                      (sheetPicker != null && sheetPicker.ComboBox.Focused)))
                     return base.ProcessCmdKey(ref msg, keyData);
+                if (HasTable)
+                {
+                    switch (keyData)
+                    {
+                        case Keys.Left: ScrollTableColumns(-1); return true;
+                        case Keys.Right: ScrollTableColumns(1); return true;
+                        case Keys.Up: ScrollText(-1); return true;
+                        case Keys.Down: ScrollText(1); return true;
+                        case Keys.PageUp: ScrollText(-textVisibleLines); return true;
+                        case Keys.PageDown: ScrollText(textVisibleLines); return true;
+                    }
+                }
                 switch (keyData)
                 {
                     case Keys.F5: RefreshPinned(); return true;
@@ -394,10 +416,10 @@ namespace DesktopHover
             if (IsOfficeView && (ModifierKeys & Keys.Control) == 0) { ScrollOffice(steps); return; }
             if (mediaKind == MediaKind.Text && textPreview != null)
             {
+                if (HasTable && (ModifierKeys & Keys.Shift) != 0) { ScrollTableColumns(-steps); return; }
                 int lines = SystemInformation.MouseWheelScrollLines;
                 if (lines < 0) lines = textVisibleLines;
-                textOffset = Math.Max(0, Math.Min(Math.Max(0, textPreview.Lines.Length - textVisibleLines), textOffset - steps * lines));
-                Invalidate(viewport); return;
+                ScrollText(-steps * lines); return;
             }
             if ((ModifierKeys & Keys.Control) == 0 && (pdfPageCount > 1 || documentSlides != null)) Navigate(-steps);
             else ZoomAt((float)Math.Pow(1.25, steps), e.Location);
@@ -412,6 +434,7 @@ namespace DesktopHover
         }
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (interactive && HasTable) UpdateTableTip(e.Location);
             base.OnMouseMove(e);
             if (!panning) return;
             pan = new Point(panStart.X + e.X - mouseStart.X, panStart.Y + e.Y - mouseStart.Y);
@@ -470,8 +493,12 @@ namespace DesktopHover
                     }
                     else if (key == "refresh_preview")
                     {
-                        g.DrawArc(pen, -7, -7, 14, 14, 30, 290);
-                        g.DrawLines(pen, new[] { new PointF(2, -8), new PointF(7, -5), new PointF(7, -11) });
+                        for (int half = 0; half < 2; half++)
+                        {
+                            g.DrawBezier(pen, -7.5f, -2, -5.9f, -8.7f, 2, -9.3f, 7.1f, -3.1f);
+                            g.DrawLines(pen, new[] { new PointF(7.1f, -7.8f), new PointF(7.1f, -3.1f), new PointF(2.4f, -3.1f) });
+                            g.RotateTransform(180);
+                        }
                     }
                     else
                     {

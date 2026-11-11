@@ -17,7 +17,7 @@ namespace DesktopHover
             internal float Zoom;
             internal bool Fit, Paused;
             internal Point Pan;
-            internal int Page, Slide, TextOffset;
+            internal int Page, Slide, TextOffset, TableColumn;
             internal OfficeViewOptions Office;
             internal TimeSpan Position;
         }
@@ -26,7 +26,7 @@ namespace DesktopHover
         {
             return reloadView ?? new PinnedViewState { Zoom = zoom, Fit = fitMode, Pan = pan,
                 Paused = playbackPaused, Page = pdfPageIndex, Slide = documentSlideIndex,
-                TextOffset = textOffset, Office = officeView.Copy(), Position = PlaybackPosition };
+                TextOffset = textOffset, TableColumn = tableColumn, Office = officeView.Copy(), Position = PlaybackPosition };
         }
 
         // Only one metadata read can be in flight per window. Results from an old
@@ -120,7 +120,7 @@ namespace DesktopHover
         {
             if (reloadView == null) return;
             PinnedViewState view = reloadView; reloadView = null;
-            fitMode = view.Fit; zoom = view.Zoom; pan = view.Pan; textOffset = view.TextOffset;
+            fitMode = view.Fit; zoom = view.Zoom; pan = view.Pan; textOffset = view.TextOffset; tableColumn = view.TableColumn;
             playbackPaused = view.Paused;
             if (media != null && media.IsOpen)
             {

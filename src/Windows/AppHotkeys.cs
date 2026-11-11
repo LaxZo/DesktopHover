@@ -35,7 +35,6 @@ namespace DesktopHover
         internal void Apply(AppSettings settings, Action save)
         {
             bool changeToggle = settings.ToggleShortcut != toggleChord, changePin = settings.PinShortcut != pinChord;
-            if (!changeToggle && !changePin) { save(); return; }
             if (settings.ToggleShortcut == settings.PinShortcut || !Shortcut.Supported(settings.ToggleShortcut) || !Shortcut.Supported(settings.PinShortcut))
                 throw new InvalidOperationException(L10n.Text(settings.Language, "shortcut_conflict"));
             int nextToggle = toggleId == 1 ? 3 : 1, nextPin = pinId == 2 ? 4 : 2;
@@ -63,6 +62,10 @@ namespace DesktopHover
                 if (PinRegistered) UnregisterHotKey(Handle, pinId);
                 pinId = nextPin; pinChord = settings.PinShortcut; PinRegistered = true;
             }
+            // Retry unchanged shortcuts independently. A startup conflict must not
+            // block saving unrelated settings or recovering the other shortcut.
+            if (!ToggleRegistered) ToggleRegistered = Register(toggleId, toggleChord);
+            if (!PinRegistered) PinRegistered = Register(pinId, pinChord);
         }
         protected override void WndProc(ref Message message)
         {

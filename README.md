@@ -183,7 +183,8 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF (including animation), TIFF, ICO, WebP, HEIC/HEIF, AVIF and Adobe DNG (requires a compatible Windows RAW decoder). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; playback requires a compatible Windows codec. |
-| **Text & data** | TXT, LOG, CSV/TSV, Markdown, JSON, YAML, INI, TOML and other configuration files. |
+| **Text & data** | TXT, LOG, Markdown, JSON, YAML, INI, TOML and other configuration files. |
+| **CSV & TSV** | A table with numbered rows and lettered columns. In a pinned window, use the arrow keys or Shift + mouse wheel to reach more columns. Hover over a cell to read clipped text. |
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
 | **PDF** | First page on hover; page navigation in the pinned window. Uses the built-in Windows 10/11 PDF renderer without Adobe or a thumbnail provider. |

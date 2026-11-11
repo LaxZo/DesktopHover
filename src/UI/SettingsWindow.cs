@@ -28,11 +28,12 @@ namespace DesktopHover
         private readonly HoverButton languagePicker, themeToggle, githubProject, advancedButton;
         private readonly HoverButton logButton, toggleShortcutButton, pinShortcutButton;
         private ContextMenuStrip shortcutMenu;
+        private bool toggleRegistered = true, pinRegistered = true;
         private AdvancedSettingsWindow advancedWindow;
         private readonly Label autosavedLabel;
         private const string ProjectUrl = "https://github.com/LaxZo/DesktopHover";
         private readonly ContextMenuStrip languageMenu, themeMenu;
-        private readonly ToolTip windowToolTip = new ToolTip();
+        private readonly ToolTip windowToolTip = UiDrawing.CreateToolTip();
         private readonly HoverSlider widthSlider, volumeSlider, slideIntervalSlider;
         private readonly HoverToggle upscaleToggle, startupToggle, enabledToggle, animationsToggle, autoPlayToggle, loopVideoToggle, windowsInfoTipsToggle;
         private readonly HoverToggle[] typeToggles = new HoverToggle[5];
@@ -332,7 +333,7 @@ namespace DesktopHover
             string path = System.IO.Path.Combine(AppLog.DirectoryPath, AppLog.FileName);
             if (!System.IO.File.Exists(path))
             {
-                MessageBox.Show(this, T("empty_log"), T("open_log"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppNotice.Show(this, T("empty_log"), T("open_log"), MessageBoxIcon.Information);
                 return;
             }
             try
@@ -341,44 +342,50 @@ namespace DesktopHover
                 using (Process reader = Process.Start(new ProcessStartInfo(editor, "\"" + path + "\"") { UseShellExecute = false })) { }
             }
             catch (Win32Exception error)
-            { MessageBox.Show(this, error.Message, T("open_log"), MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            { AppNotice.Show(this, error.Message, T("open_log"), MessageBoxIcon.Warning); }
         }
 
         private void ShowShortcutMenu(bool forPin)
         {
             FlushSettings();
             if (shortcutMenu != null) shortcutMenu.Dispose();
-            var menu = new ContextMenuStrip { Name = "shortcut-menu", Font = scaledBodyFont ?? bodyFont,
-                BackColor = Brand.Surface, ForeColor = Brand.Text, ShowImageMargin = false, Renderer = new HoverMenuRenderer() };
+            var menu = new ContextMenuStrip { Name = "shortcut-menu", Font = scaledBodyFont ?? bodyFont };
+            ShortcutField.StyleMenu(menu, uiScale, false);
             shortcutMenu = menu;
             Keys current = forPin ? settings.PinShortcut : settings.ToggleShortcut;
-            var modifiers = new ToolStripComboBox { Name = "modifiers", AccessibleName = T("shortcut_modifiers"),
-                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
-            var key = new ToolStripComboBox { Name = "key", AccessibleName = T("shortcut_key"),
-                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
-            foreach (Keys chord in Shortcut.Modifiers) modifiers.Items.Add(Shortcut.Format(chord));
-            modifiers.SelectedIndex = Array.IndexOf(Shortcut.Modifiers, current & Keys.Modifiers);
+            var modifiers = new ShortcutField(T("shortcut_modifiers"), current & Keys.Modifiers, menu.Font, scaledSmallFont ?? smallFont, uiScale) { Name = "modifiers" };
+            var key = new ShortcutField(T("shortcut_key"), current & Keys.KeyCode, menu.Font, scaledSmallFont ?? smallFont, uiScale, true) { Name = "key" };
+            foreach (Keys chord in Shortcut.Modifiers) modifiers.AddChoice(chord);
             foreach (Keys first in new[] { Keys.A, Keys.D0, Keys.F1 })
             {
                 Keys last = first == Keys.A ? Keys.Z : first == Keys.D0 ? Keys.D9 : Keys.F11;
-                for (int code = (int)first; code <= (int)last; code++) key.Items.Add(Shortcut.Format((Keys)code));
+                for (int code = (int)first; code <= (int)last; code++) key.AddChoice((Keys)code);
             }
-            key.SelectedItem = Shortcut.Format(current & Keys.KeyCode);
-            foreach (var box in new[] { modifiers, key })
-            {
-                box.ComboBox.BackColor = Brand.Surface;
-                box.ComboBox.ForeColor = Brand.Text;
-                menu.Items.Add(new ToolStripLabel(box.AccessibleName) { ForeColor = Brand.Muted });
-                menu.Items.Add(box);
-            }
+            menu.Items.Add(modifiers);
+            menu.Items.Add(key);
+            menu.Items.Add(new ToolStripSeparator());
             var save = new ToolStripMenuItem(T("save_shortcut")) { Name = "save-shortcut", ForeColor = Brand.Text };
             save.Click += delegate
             {
-                Keys selected = Shortcut.Parse(modifiers.Text + "+" + key.Text, current);
+                Keys selected = modifiers.Value | key.Value;
                 if (forPin) settings.PinShortcut = selected; else settings.ToggleShortcut = selected;
-                Apply();
+                if (Apply())
+                {
+                    bool registered = forPin ? pinRegistered : toggleRegistered;
+                    autosavedLabel.Text = (registered ? "✓ " : "") + Shortcut.Format(selected) +
+                        (registered ? "" : " · " + T("shortcut_conflict"));
+                    autosavedLabel.ForeColor = registered ? Brand.Text : Brand.Paused;
+                    windowToolTip.SetToolTip(autosavedLabel, autosavedLabel.Text);
+                }
             };
             menu.Items.Add(save);
+            int rowWidth = Math.Max(Math.Max(modifiers.Width, key.Width), TextRenderer.MeasureText(save.Text, menu.Font).Width + (int)(32 * uiScale));
+            modifiers.Width = key.Width = rowWidth;
+            save.AutoSize = false; save.Size = new Size(rowWidth, (int)Math.Round(29 * uiScale));
+            int menuHeight = menu.Padding.Vertical;
+            foreach (ToolStripItem item in menu.Items) menuHeight += item.Height + item.Margin.Vertical;
+            menu.AutoSize = false;
+            menu.Size = new Size(rowWidth + menu.Padding.Horizontal, menuHeight);
             Control anchor = forPin ? pinShortcutButton : toggleShortcutButton;
             menu.Show(anchor, new Point(0, anchor.Height));
         }
@@ -406,8 +413,8 @@ namespace DesktopHover
 
         private void ShowProjectLinkError()
         {
-            MessageBox.Show(this, T("project_link_error") + "\r\n\r\n" + ProjectUrl,
-                "Desktop Hover", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AppNotice.Show(this, T("project_link_error") + "\r\n\r\n" + ProjectUrl,
+                "Desktop Hover", MessageBoxIcon.Information);
         }
 
         private HoverToggle AddToggle(int y)
@@ -438,7 +445,7 @@ namespace DesktopHover
             FlushSettings(); base.OnFormClosing(e);
         }
 
-        private void Apply()
+        private bool Apply()
         {
             saveTimer.Stop(); pendingSave = false;
             SyncControls();
@@ -446,15 +453,31 @@ namespace DesktopHover
             {
                 if (changed != null) changed(settings.Clone());
                 lastApplied = settings.Clone();
+                return true;
             }
             catch (Exception error)
             {
                 AppLog.Write("Saving settings", error);
                 settings = lastApplied.Clone();
                 SyncControls();
-                MessageBox.Show(this, T("save_error") + "\r\n\r\n" + error.Message,
-                    "Desktop Hover", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                AppNotice.Show(this, T("save_error") + "\r\n\r\n" + error.Message,
+                    "Desktop Hover", MessageBoxIcon.Warning);
+                return false;
             }
+        }
+
+        internal void SetHotkeyState(bool toggleActive, bool pinActive)
+        {
+            toggleRegistered = toggleActive; pinRegistered = pinActive;
+        }
+
+        private void UpdateShortcutButton(HoverButton button, string key, Keys chord, bool active)
+        {
+            string label = String.Format(T(key), Shortcut.Format(chord));
+            button.Text = active ? label : "!  " + label;
+            button.AccessibleName = label;
+            button.AccessibleDescription = active ? "" : T("shortcut_conflict");
+            windowToolTip.SetToolTip(button, active ? label : label + "\r\n" + button.AccessibleDescription);
         }
 
         // Also permits the owner to restore values if persistence was unsuccessful.
@@ -481,7 +504,7 @@ namespace DesktopHover
             WindowBackdrop.Apply(this, settings.Theme);
             BackColor = Brand.Background;
             ForeColor = Brand.Text;
-            ApplyTitleBarTheme();
+            WindowBackdrop.ApplyCaption(this);
             UpdateChrome();
             foreach (Control control in content == null ? Controls : content.Controls)
             {
@@ -496,8 +519,8 @@ namespace DesktopHover
             githubProject.AccessibleName = T("project_link");
             advancedButton.Text = advancedButton.AccessibleName = T("advanced_settings");
             logButton.Text = logButton.AccessibleName = T("open_log");
-            toggleShortcutButton.Text = toggleShortcutButton.AccessibleName = String.Format(T("shortcut_toggle"), Shortcut.Format(settings.ToggleShortcut));
-            pinShortcutButton.Text = pinShortcutButton.AccessibleName = String.Format(T("shortcut_pin"), Shortcut.Format(settings.PinShortcut));
+            UpdateShortcutButton(toggleShortcutButton, "shortcut_toggle", settings.ToggleShortcut, toggleRegistered);
+            UpdateShortcutButton(pinShortcutButton, "shortcut_pin", settings.PinShortcut, pinRegistered);
             githubProject.AccessibleDescription = ProjectUrl;
             windowToolTip.SetToolTip(githubProject, githubProject.AccessibleName + "\r\n" + ProjectUrl);
             themeToggle.Selected = themeMenu.Visible;
@@ -697,30 +720,10 @@ namespace DesktopHover
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            ApplyTitleBarTheme();
+            WindowBackdrop.ApplyCaption(this);
             ApplyWindowShape();
         }
 
-        private void ApplyTitleBarTheme()
-        {
-            if (!IsHandleCreated) return;
-            try
-            {
-                int dark = Brand.IsLight ? 0 : 1;
-                int caption = ColorTranslator.ToWin32(Brand.Background);
-                int text = ColorTranslator.ToWin32(Brand.Text);
-                int border = ColorTranslator.ToWin32(Brand.Border);
-                // Native chrome is drawn by DWM, independently of the form's BackColor.
-                // Explicit colors also follow the app when Windows uses a different theme.
-                DwmSetWindowAttribute(Handle, 20, ref dark, sizeof(int)); // USE_IMMERSIVE_DARK_MODE
-                DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int)); // CAPTION_COLOR
-                DwmSetWindowAttribute(Handle, 36, ref text, sizeof(int)); // TEXT_COLOR
-                DwmSetWindowAttribute(Handle, 34, ref border, sizeof(int)); // BORDER_COLOR
-            }
-            catch (DllNotFoundException) { }
-            catch (EntryPointNotFoundException) { }
-            // Older Windows versions ignore unsupported DWM attributes.
-        }
         protected override void OnResizeBegin(EventArgs e) { windowMotion.Finish(); base.OnResizeBegin(e); }
         protected override void OnResizeEnd(EventArgs e)
         {
@@ -831,7 +834,6 @@ namespace DesktopHover
         }
 
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
-        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     }
 
