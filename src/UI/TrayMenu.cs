@@ -16,6 +16,7 @@ namespace DesktopHover
         private readonly Font menuFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         private readonly ToolStripMenuItem open, enabled, size, delay, volume, theme, darkTheme, lightTheme, glassTheme, upscale, startup, animations, quit;
         private readonly ToolStripMenuItem[] sizes = new ToolStripMenuItem[4];
+        private readonly ToolStripMenuItem windowsAccent;
         private readonly ToolStripMenuItem[] delays = new ToolStripMenuItem[5];
         private readonly ToolStripMenuItem[] volumes = new ToolStripMenuItem[5];
         private static readonly int[] Widths = { 480, 720, 1080, 1440 };
@@ -104,6 +105,11 @@ namespace DesktopHover
             {
                 Change(delegate(AppSettings value) { value.Theme = "glass"; });
             });
+            theme.DropDownItems.Add(new ToolStripSeparator());
+            windowsAccent = AddItem(theme.DropDownItems, "use-windows-accent", delegate
+            {
+                Change(delegate(AppSettings value) { value.UseWindowsAccent = !value.UseWindowsAccent; });
+            });
             upscale = AddItem(Items, "upscale", delegate { Change(delegate(AppSettings value) { value.Upscale = !value.Upscale; }); });
             startup = AddItem(Items, "startup", delegate { Change(delegate(AppSettings value) { value.StartWithWindows = !value.StartWithWindows; }); });
             animations = AddItem(Items, "animations", delegate { Change(delegate(AppSettings value) { value.AnimationsEnabled = !value.AnimationsEnabled; }); });
@@ -171,7 +177,7 @@ namespace DesktopHover
         {
             AppSettings current = readSettings();
             UiMotion.Enabled = current.AnimationsEnabled;
-            Brand.SetTheme(current.Theme);
+            Brand.SetTheme(current.Theme, current.UseWindowsAccent);
             RefreshColors(this);
             string language = current.Language;
             open.Text = L10n.Text(language, "settings");
@@ -194,6 +200,8 @@ namespace DesktopHover
             lightTheme.Checked = Brand.IsLight;
             glassTheme.Text = L10n.Text(language, "theme_glass");
             glassTheme.Checked = Brand.IsGlass;
+            windowsAccent.Text = L10n.Text(language, "use_windows_accent");
+            windowsAccent.Checked = current.UseWindowsAccent;
             upscale.Text = L10n.Text(language, "upscale");
             upscale.Checked = current.Upscale;
             startup.Text = L10n.Text(language, "startup");

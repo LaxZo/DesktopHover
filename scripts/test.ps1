@@ -15,6 +15,8 @@ $argsForCompiler = @(
     "/r:$framework\WPF\WindowsBase.dll", "/r:$framework\WPF\PresentationCore.dll",
     "/r:$framework\WPF\UIAutomationClient.dll", "/r:$framework\WPF\UIAutomationTypes.dll",
     "/r:$framework\System.Runtime.dll", "/r:$framework\System.Runtime.WindowsRuntime.dll",
+    "/r:$windowsMetadata\Windows.UI.winmd",
+    "/r:$framework\System.Runtime.InteropServices.WindowsRuntime.dll",
     "/r:$windowsMetadata\Windows.Data.winmd", "/r:$windowsMetadata\Windows.Foundation.winmd", "/r:$windowsMetadata\Windows.Storage.winmd"
 ) + $sourceFiles + @(Get-ChildItem -LiteralPath (Join-Path $workspace 'tests') -Filter 'Regression*.cs' -File | Sort-Object FullName | ForEach-Object FullName)
 & "$framework\csc.exe" @argsForCompiler

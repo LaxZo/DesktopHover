@@ -104,12 +104,16 @@ namespace DesktopHover
                 item.Click += delegate { this.settings.Theme = selectedTheme; Apply(); };
                 themeMenu.Items.Add(item);
             }
+            themeMenu.Items.Add(new ToolStripSeparator());
+            var accentOption = new ToolStripMenuItem { Name = "use-windows-accent", AutoSize = false };
+            accentOption.Click += delegate { this.settings.UseWindowsAccent = !this.settings.UseWindowsAccent; Apply(); };
+            themeMenu.Items.Add(accentOption);
             themeMenu.Opened += delegate
             {
                 themeToggle.Selected = true;
                 using (GraphicsPath path = Brand.RoundRect(new RectangleF(0, 0, themeMenu.Width, themeMenu.Height), 9))
                 { Region previous = themeMenu.Region; themeMenu.Region = new Region(path); if (previous != null) previous.Dispose(); }
-                foreach (ToolStripMenuItem item in themeMenu.Items) if (item.Checked) { item.Select(); break; }
+                themeMenu.Items["theme-" + AppSettings.NormalizeTheme(this.settings.Theme)].Select();
             };
             themeMenu.Closed += delegate { themeToggle.Selected = false; };
             themeToggle.Click += delegate { ShowThemeMenu(); };
@@ -495,12 +499,18 @@ namespace DesktopHover
             SyncControls();
         }
 
+        internal void RefreshColors()
+        {
+            SyncControls();
+            if (shortcutMenu != null && shortcutMenu.Visible) shortcutMenu.Invalidate(true);
+        }
+
         private void SyncControls()
         {
             syncing = true;
             UiMotion.Enabled = settings.AnimationsEnabled;
             settings.Language = L10n.Normalize(settings.Language);
-            Brand.SetTheme(settings.Theme);
+            Brand.SetTheme(settings.Theme, settings.UseWindowsAccent);
             WindowBackdrop.Apply(this, settings.Theme);
             BackColor = Brand.Background;
             ForeColor = Brand.Text;
@@ -528,11 +538,16 @@ namespace DesktopHover
             themeToggle.AccessibleDescription = T("theme") + ": " + T("theme_" + AppSettings.NormalizeTheme(settings.Theme));
             windowToolTip.SetToolTip(themeToggle, themeToggle.AccessibleDescription);
             themeMenu.BackColor = Brand.Surface; themeMenu.ForeColor = Brand.Text;
-            foreach (ToolStripMenuItem item in themeMenu.Items)
+            foreach (ToolStripItem entry in themeMenu.Items)
             {
-                item.Text = T("theme_" + (string)item.Tag); item.Checked = (string)item.Tag == AppSettings.NormalizeTheme(settings.Theme);
+                var item = entry as ToolStripMenuItem;
+                if (item == null) continue;
+                bool accent = item.Name == "use-windows-accent";
+                item.Text = T(accent ? "use_windows_accent" : "theme_" + (string)item.Tag);
+                item.Checked = accent ? settings.UseWindowsAccent : (string)item.Tag == AppSettings.NormalizeTheme(settings.Theme);
                 item.BackColor = Brand.Surface; item.ForeColor = Brand.Text;
             }
+            SizeThemeItems();
             Text = "Desktop Hover " + AppInfo.Version + " — " + T("settings");
             AccessibleName = Text;
             L10n.LanguageOption language = L10n.Languages[L10n.LanguageIndex(settings.Language)];
@@ -646,13 +661,20 @@ namespace DesktopHover
             scaledSmallFont = new Font(smallFont.FontFamily, smallFont.Size * uiScale, smallFont.Style, GraphicsUnit.Pixel);
             scaledBodyFont = new Font(bodyFont.FontFamily, bodyFont.Size * uiScale, bodyFont.Style, GraphicsUnit.Pixel);
             autosavedLabel.Font = scaledSmallFont; languageMenu.Font = themeMenu.Font = scaledBodyFont;
-            foreach (ToolStripItem item in themeMenu.Items) item.Size = new Size((int)Math.Round(240 * uiScale), (int)Math.Round(34 * uiScale));
+            SizeThemeItems();
             if (oldSmall != null) oldSmall.Dispose(); if (oldBody != null) oldBody.Dispose();
             PositionChrome();
         }
 
         // Keep the original single-column coordinates as the source for controls and text.
         // The same mapping makes every resized hit target match its painted section.
+        private void SizeThemeItems()
+        {
+            int width = Math.Max((int)Math.Round(240 * uiScale), TextRenderer.MeasureText(T("use_windows_accent"), themeMenu.Font).Width + (int)(48 * uiScale));
+            foreach (ToolStripItem item in themeMenu.Items)
+                if (item is ToolStripMenuItem) item.Size = new Size(width, (int)Math.Round(34 * uiScale));
+        }
+
         private Rectangle MapContent(Rectangle rect)
         {
             bool right = wideLayout && rect.Y >= 616 && rect.Y < 1090;
@@ -1212,9 +1234,9 @@ namespace DesktopHover
                     TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
             float trackTop = (LogicalHeight - 24) / 2f;
             SettingsWindow.FillRound(g, new RectangleF(LogicalWidth - 43, trackTop, 42, 24), 12,
-                UiMotion.Blend(Brand.ToggleOff, Brand.Accent, checkMotion.Value));
+                UiMotion.Blend(Brand.ToggleOff, Brand.AccentFill, checkMotion.Value));
             using (var brush = new SolidBrush(UiMotion.Blend(Brand.ToggleThumb,
-                Brand.IsLight ? Brand.ToggleThumb : Brand.Background, checkMotion.Value)))
+                Brand.AccentMark(Brand.IsLight ? Brand.ToggleThumb : Brand.Background), checkMotion.Value)))
                 g.FillEllipse(brush, LogicalWidth - 40 + 18 * (float)checkMotion.Value, trackTop + 3, 18, 18);
         }
 
@@ -1355,9 +1377,9 @@ namespace DesktopHover
             double shownValue = Math.Max(Minimum, Math.Min(Maximum, valueMotion.Value));
             float x = 10 + (LogicalWidth - 20) * (float)(shownValue - Minimum) / Math.Max(1, Maximum - Minimum);
             SettingsWindow.FillRound(g, new RectangleF(10, 12, LogicalWidth - 20, 5), 2.5f, Brand.Border);
-            if (x > 10) SettingsWindow.FillRound(g, new RectangleF(10, 12, x - 10, 5), 2.5f, Brand.Accent);
+            if (x > 10) SettingsWindow.FillRound(g, new RectangleF(10, 12, x - 10, 5), 2.5f, Brand.AccentFill);
             float radius = 7 + (float)hoverMotion.Value * 1.5f;
-            using (var brush = new SolidBrush(UiMotion.Blend(Brand.Accent, Brand.AccentHover, hoverMotion.Value)))
+            using (var brush = new SolidBrush(UiMotion.Blend(Brand.AccentFill, Brand.AccentHover, hoverMotion.Value)))
                 g.FillEllipse(brush, x - radius, 14.5f - radius, radius * 2, radius * 2);
         }
 

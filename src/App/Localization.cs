@@ -41,6 +41,7 @@ namespace DesktopHover
 
         private static readonly Dictionary<string, string[]> Strings = new Dictionary<string, string[]>
         {
+            { "use_windows_accent", new[] { "Use Windows accent color", "Использовать цвет акцента Windows", "Izmantot Windows akcenta krāsu", "使用 Windows 强调色", "Windows-Akzentfarbe verwenden", "Usar el color de énfasis de Windows", "Utiliser la couleur d’accentuation de Windows", "Usar a cor de destaque do Windows", "Usa il colore principale di Windows", "Windows のアクセント カラーを使う", "Windows 강조 색 사용", "Використовувати колір акценту Windows" } },
             { "open_log", new[] { "Open error log", "Открыть журнал ошибок", "Atvērt kļūdu žurnālu", "打开错误日志", "Fehlerprotokoll öffnen", "Abrir registro de errores", "Ouvrir le journal des erreurs", "Abrir log de erros", "Apri registro errori", "エラーログを開く", "오류 로그 열기", "Відкрити журнал помилок" } },
             { "empty_log", new[] { "No errors have been logged yet.", "Ошибок пока не зарегистрировано.", "Žurnālā vēl nav kļūdu ierakstu.", "尚无错误记录。", "Es wurden noch keine Fehler protokolliert.", "Todavía no hay errores registrados.", "Aucune erreur enregistrée.", "Nenhum erro registrado.", "Nessun errore registrato.", "エラーはまだ記録されていません。", "아직 기록된 오류가 없습니다.", "Помилок ще не зареєстровано." } },
             { "shortcut_modifiers", new[] { "Modifier keys", "Клавиши-модификаторы", "Modifikācijas taustiņi", "修饰键", "Zusatztasten", "Teclas modificadoras", "Touches de modification", "Teclas modificadoras", "Tasti modificatori", "修飾キー", "보조 키", "Клавіші-модифікатори" } },

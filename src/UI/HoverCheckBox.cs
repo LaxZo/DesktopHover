@@ -58,11 +58,11 @@ namespace DesktopHover
             var box = new RectangleF(12 * s, (Height - 18 * s) / 2, 18 * s, 18 * s);
             Color ink = Enabled ? Brand.Accent : Brand.Muted;
             using (GraphicsPath outline = Brand.RoundRect(box, 5 * s))
-            using (var fill = new SolidBrush(UiMotion.Blend(surface, Enabled ? Brand.Accent : Brand.ToggleOff, selected)))
+            using (var fill = new SolidBrush(UiMotion.Blend(surface, Enabled ? Brand.AccentFill : Brand.ToggleOff, selected)))
             using (var pen = new Pen(UiMotion.Blend(Brand.Muted, ink, selected), 1.2f * s))
             { g.FillPath(fill, outline); g.DrawPath(pen, outline); }
             if (selected > .01)
-                using (var tick = new Pen(Color.FromArgb((int)(255 * selected), Enabled ? Color.White : Brand.Muted), 1.8f * s)
+                using (var tick = new Pen(Color.FromArgb((int)(255 * selected), Enabled ? Brand.AccentMark(Color.White) : Brand.Muted), 1.8f * s)
                     { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                     g.DrawLines(tick, new[] { new PointF(box.Left + 4 * s, box.Top + 9 * s),
                         new PointF(box.Left + 7.5f * s, box.Top + 12.5f * s), new PointF(box.Left + 14 * s, box.Top + 5.5f * s) });

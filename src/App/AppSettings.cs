@@ -19,6 +19,7 @@ namespace DesktopHover
         public bool AutoPlayMedia=true;
         public bool LoopVideo=true;
         public bool ShowWindowsInfoTips=false;
+        public bool UseWindowsAccent;
         internal Keys ToggleShortcut = Shortcut.ToggleDefault, PinShortcut = Shortcut.PinDefault;
         public bool PreviewImages=true, PreviewDocuments=true, PreviewText=true, PreviewAudio=true, PreviewVideo=true;
         private HashSet<string> disabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -140,6 +141,7 @@ namespace DesktopHover
                         if(name=="disabled_extensions") settings.DisabledExtensions=value;
                         if(name=="language") settings.Language=value;
                         if(name=="theme") settings.Theme=value;
+                        if(name=="use_windows_accent" && bool.TryParse(value,out b)) settings.UseWindowsAccent=b;
                         if(name=="shortcut_toggle") settings.ToggleShortcut=Shortcut.Parse(value, Shortcut.ToggleDefault);
                         if(name=="shortcut_pin") settings.PinShortcut=Shortcut.Parse(value, Shortcut.PinDefault);
                     }
@@ -164,6 +166,7 @@ namespace DesktopHover
                     "# Desktop Hover\r\nwidth={0}\r\nheight={1}\r\ndelay_ms={2}\r\nupscale={3}\r\nlanguage={4}\r\nvolume_percent={5}\r\ntheme={6}\r\nslide_interval_seconds={7}\r\nanimations_enabled={8}\r\n",
                     MaxWidth,MaxHeight,DelayMs,Upscale.ToString().ToLowerInvariant(),Language,VolumePercent,Theme,SlideIntervalSeconds,AnimationsEnabled.ToString().ToLowerInvariant());
                 text += "autoplay_media=" + AutoPlayMedia.ToString().ToLowerInvariant() + "\r\n";
+                text += "use_windows_accent=" + UseWindowsAccent.ToString().ToLowerInvariant() + "\r\n";
                 text += "loop_video=" + LoopVideo.ToString().ToLowerInvariant() + "\r\n";
                 text += "show_windows_infotips=" + ShowWindowsInfoTips.ToString().ToLowerInvariant() + "\r\n";
                 text += "shortcut_toggle=" + Shortcut.Format(ToggleShortcut) + "\r\nshortcut_pin=" + Shortcut.Format(PinShortcut) + "\r\n";

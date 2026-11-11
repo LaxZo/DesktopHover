@@ -167,7 +167,7 @@ The pinned viewer uses the app’s theme and rounded window controls. Resize or 
 | Autoplay audio and video | Start playback on hover, or open paused and play from a pinned window. |
 | Loop videos | Restart videos after playback ends. Enabled by default; available in Settings and the tray menu. Pausing or leaving a hover preview stops playback. Audio is not looped. |
 | Enabled file types | Independently enable images/GIFs, documents/design projects, text/code, audio and video. |
-| Appearance | Dark, light or translucent. Menus and code previews use matching readable colors. |
+| Appearance | Dark, light or translucent. In the Theme menu, enable **Use Windows accent color** to follow your system color, or turn it off to restore the pink accent. |
 | Animations | Enable or disable interface motion in Settings or the tray menu. Enabled by default. |
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
 | Start with Windows | Run automatically after you sign in. |

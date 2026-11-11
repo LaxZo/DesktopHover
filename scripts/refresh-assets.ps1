@@ -15,6 +15,8 @@ $compilerArgs = @(
     "/r:$framework\WPF\WindowsBase.dll", "/r:$framework\WPF\PresentationCore.dll",
     "/r:$framework\WPF\UIAutomationClient.dll", "/r:$framework\WPF\UIAutomationTypes.dll",
     "/r:$framework\System.Runtime.dll", "/r:$framework\System.Runtime.WindowsRuntime.dll",
+    "/r:$metadata\Windows.UI.winmd",
+    "/r:$framework\System.Runtime.InteropServices.WindowsRuntime.dll",
     "/r:$metadata\Windows.Data.winmd", "/r:$metadata\Windows.Foundation.winmd", "/r:$metadata\Windows.Storage.winmd"
 ) + $sourceFiles + (Join-Path $PSScriptRoot 'assets\DocumentationAssets.cs')
 & "$framework\csc.exe" @compilerArgs

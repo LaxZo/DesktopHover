@@ -69,6 +69,7 @@ namespace DesktopHover
         private int documentSlideIndex;
         private int slideIntervalSeconds=3;
         private AppSettings previewSettings = new AppSettings();
+        private DrawingColor appliedWindowsAccent;
         private DocumentProgress documentProgress;
         private bool documentLoading;
         private int documentSlideTotal;
@@ -96,7 +97,9 @@ namespace DesktopHover
             previewSettings = settings.Clone();
             autoPlayMedia = settings.AutoPlayMedia;
             UiMotion.Enabled = settings.AnimationsEnabled;
-            Brand.SetTheme(settings.Theme);
+            Brand.SetTheme(settings.Theme, settings.UseWindowsAccent);
+            themeChanged |= appliedWindowsAccent != Brand.WindowsAccentColor;
+            appliedWindowsAccent = Brand.WindowsAccentColor;
             if (themeChanged && sheetPicker != null)
             {
                 UiDrawing.RefreshPicker(sheetPicker);

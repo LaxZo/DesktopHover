@@ -32,6 +32,10 @@ namespace DesktopHover
             AppLog.TestDirectory = Path.Combine(output, "application-logs");
             try
             {
+                if (args.Length > 1 && args[1] == "windows-accent")
+                {
+                    WindowsAccentPreferences(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "table-data")
                 {
                     TabularPreviewData(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -134,6 +138,7 @@ namespace DesktopHover
                 FolderLookup();
                 Preferences();
                 FormatPreferences();
+                WindowsAccentPreferences();
                 ThemePreferences();
                 GlassCorners();
                 PinnedViewer();
@@ -805,7 +810,7 @@ namespace DesktopHover
             {
                 var choices = (ToolStripMenuItem)tray.Items["theme"];
                 tray.RefreshState();
-                Check(choices.DropDownItems.Count == 3 && ((ToolStripMenuItem)choices.DropDownItems["theme-glass"]).Checked &&
+                Check(choices.DropDownItems.ContainsKey("use-windows-accent") && ((ToolStripMenuItem)choices.DropDownItems["theme-glass"]).Checked &&
                     !((ToolStripMenuItem)choices.DropDownItems["theme-dark"]).Checked, "tray theme menu marks only the translucent choice");
                 choices.DropDownItems["theme-light"].PerformClick();
                 Check(settings.Theme == "light" && !((ToolStripMenuItem)choices.DropDownItems["theme-glass"]).Checked,
@@ -827,7 +832,7 @@ namespace DesktopHover
                 var button = Field<HoverButton>(window, "themeToggle");
                 var menu = Field<ContextMenuStrip>(window, "themeMenu");
                 button.PerformClick(); Pump(50);
-                Check(menu.Visible && menu.Items.Count == 3 && menu.Items[2].Text == "Caurspīdīga", "theme button opens three localized choices");
+                Check(menu.Visible && menu.Items["use-windows-accent"].Text == "Izmantot Windows akcenta krāsu" && menu.Items[2].Text == "Caurspīdīga", "theme button opens the localized theme and accent choices");
                 CaptureScreen(window, "theme-menu.png");
                 menu.Items[1].PerformClick(); menu.Close(); Pump(100);
                 Check(settings.Theme == "light" && Brand.IsLight && !WindowBackdrop.IsActive(window), "light theme stays solid");

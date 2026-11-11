@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Windows.UI.ViewManagement;
 
 namespace DesktopHover
 {
@@ -103,6 +104,7 @@ namespace DesktopHover
         private PreviewWindow pinnedWindow;
         private string lastPreviewPath;
         private readonly AppHotkeys hotkeys;
+        private UISettings accentSource;
         private readonly System.Windows.Forms.Timer timer;
         private readonly AutoResetEvent request=new AutoResetEvent(false);
         private readonly object gate=new object();
@@ -147,6 +149,7 @@ namespace DesktopHover
             timer=new System.Windows.Forms.Timer {Interval=75};
             timer.Tick+=Tick;
             timer.Start();
+            WatchWindowsAccent(settings.UseWindowsAccent);
         }
         private void ShowSettings()
         {
@@ -198,6 +201,7 @@ namespace DesktopHover
                 throw;
             }
             settings=updated.Clone();
+            WatchWindowsAccent(settings.UseWindowsAccent);
             trayMenu.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
             if(settings.ShowWindowsInfoTips) infoTips.Clear();
             delay=settings.DelayMs;
@@ -211,6 +215,36 @@ namespace DesktopHover
                 settingsWindow.UpdateSettings(settings);
             }
         }
+        private void WatchWindowsAccent(bool enabled)
+        {
+            UISettings next = enabled ? WindowsAccent.Source : null;
+            if (next == accentSource) return;
+            if (accentSource != null) accentSource.ColorValuesChanged -= WindowsColorsChanged;
+            accentSource = null;
+            if (next != null)
+            {
+                next.ColorValuesChanged += WindowsColorsChanged;
+                accentSource = next;
+            }
+        }
+
+        private void WindowsColorsChanged(UISettings sender, object args)
+        {
+            // WinRT can raise this event on a worker thread while the app is closing.
+            if (stopping) return;
+            try { preview.BeginInvoke((Action)RefreshWindowsAccent); }
+            catch (InvalidOperationException) { if (!stopping && !preview.IsDisposed) throw; }
+        }
+
+        private void RefreshWindowsAccent()
+        {
+            if (stopping || !settings.UseWindowsAccent) return;
+            preview.Configure(settings);
+            if (pinnedWindow != null && !pinnedWindow.IsDisposed) pinnedWindow.Configure(settings);
+            if (settingsWindow != null && !settingsWindow.IsDisposed) settingsWindow.RefreshColors();
+            trayMenu.RefreshState();
+        }
+
         private void UpdateTrayText()
         {
             tray.Text="Desktop Hover "+AppInfo.Version+" — "+L10n.Text(settings.Language,paused?"tray_paused":"tray_active");
@@ -306,7 +340,7 @@ namespace DesktopHover
         }
         protected override void ExitThreadCore()
         {
-            stopping=true; timer.Stop();
+            stopping=true; WatchWindowsAccent(false); timer.Stop();
             if(settingsWindow!=null) settingsWindow.Close();
             if(pinnedWindow!=null) pinnedWindow.Close();
             preview.Close(); infoTips.Dispose(); request.Set(); tray.Visible=false;
@@ -317,7 +351,7 @@ namespace DesktopHover
         {
             if(disposing)
             {
-                stopping=true; infoTips.Dispose(); request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
+                stopping=true; WatchWindowsAccent(false); infoTips.Dispose(); request.Set(); timer.Dispose(); tray.Dispose(); trayMenu.Dispose(); trayIcon.Dispose(); preview.Dispose();
                 if(settingsWindow!=null) settingsWindow.Dispose();
                 if(pinnedWindow!=null) pinnedWindow.Dispose();
                 hotkeys.Dispose();

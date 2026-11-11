@@ -13,6 +13,7 @@ namespace DesktopHover
         private static readonly ConditionalWeakTable<Form, WindowBackdrop> windows = new ConditionalWeakTable<Form, WindowBackdrop>();
         private readonly Form window;
         private bool requested, active, applying, configured;
+        private int acrylicTint;
 
         private WindowBackdrop(Form window)
         {
@@ -26,7 +27,9 @@ namespace DesktopHover
         {
             WindowBackdrop backdrop = windows.GetValue(window, form => new WindowBackdrop(form));
             bool glass = AppSettings.NormalizeTheme(theme) == "glass";
-            if (backdrop.configured && backdrop.requested == glass) return;
+            int tint = unchecked((int)0xB8000000) | ColorTranslator.ToWin32(Brand.AcrylicTint);
+            if (backdrop.configured && backdrop.requested == glass && (!glass || backdrop.acrylicTint == tint)) return;
+            backdrop.acrylicTint = tint;
             backdrop.configured = true; backdrop.requested = glass;
             // Layered-window fades obscure the DWM material; contents stay opaque.
             if (glass) window.Opacity = 1;
@@ -85,12 +88,12 @@ namespace DesktopHover
                 {
                     int dark = 1;
                     DwmSetWindowAttribute(Handle, 20, ref dark, 4);
-                    // WCA_ACCENT_POLICY: Acrylic with a dark plum tint (~72% opacity).
+                    // WCA_ACCENT_POLICY: Acrylic with the current tint (~72% opacity).
                     // This is the same native accent mechanism used by translucent
                     // window customizers, with a solid fallback if it is unavailable.
                     var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
                     if (DwmExtendFrameIntoClientArea(Handle, ref margins) == 0)
-                        active = SetAccent(4, unchecked((int)0xB8100B10));
+                        active = SetAccent(4, acrylicTint);
                 }
                 if (!active)
                 {

@@ -167,7 +167,7 @@ Piespraustais skatītājs izmanto lietotnes tēmu un noapaļotu logu. Tā izmēr
 | Automātiska mediju atskaņošana | Sākt audio/video pēc peles uzvešanas vai atvērt pauzē un atskaņot piespraustajā logā. |
 | Atkārtot video | Pēc beigām automātiski sākt video no jauna. Sākotnēji ieslēgts; pieejams iestatījumos un teknes izvēlnē. Pauze vai peles aizvirzīšana no parastā priekšskatījuma aptur atskaņošanu. Audio netiek atkārtots. |
 | Ieslēgtie failu tipi | Atsevišķi ieslēdz attēlus/GIF, dokumentus/dizaina projektus, tekstu/kodu, audio un video. |
-| Izskats | Tumšā, gaišā vai caurspīdīgā tēma. Izvēlnēm un koda priekšskatījumiem pieskaņotas salasāmas krāsas. |
+| Izskats | Tumšā, gaišā vai caurspīdīgā tēma. Izvēlnē **Tēma** ieslēdz **Izmantot Windows akcenta krāsu**, lai lietotne sekotu sistēmas krāsai. Izslēdz šo opciju, lai atjaunotu rozā akcentu. |
 | Animācijas | Ieslēgt vai izslēgt saskarnes kustību iestatījumos vai teknes izvēlnē. Sākotnēji ieslēgtas. |
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
 | Palaišana kopā ar Windows | Automātiska palaišana pēc pierakstīšanās. |
