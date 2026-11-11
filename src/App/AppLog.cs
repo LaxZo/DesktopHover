@@ -13,8 +13,28 @@ namespace DesktopHover
         private static readonly object gate = new object();
         private static int initialized;
         internal const int MaximumBytes = 1024 * 1024;
+#if REGRESSION
+        internal static string TestDirectory;
+#endif
         internal static string DirectoryPath
-        { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopHover", "logs"); } }
+        {
+            get
+            {
+#if REGRESSION
+                if (TestDirectory != null) return TestDirectory;
+#endif
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopHover", "logs");
+            }
+        }
+        internal const string FileName = "desktop-hover.log";
+
+        internal static void PreviewError(string operation, string path, Exception error)
+        {
+            if (error == null || error is OperationCanceledException) return;
+            string extension = null;
+            try { extension = Path.GetExtension(path); } catch (ArgumentException) { }
+            Write(String.IsNullOrEmpty(extension) ? operation : operation + " (" + extension + ")", error);
+        }
 
         internal static void Initialize()
         {
@@ -48,7 +68,7 @@ namespace DesktopHover
                 {
                     directory = directory ?? DirectoryPath;
                     Directory.CreateDirectory(directory);
-                    string path = Path.Combine(directory, "desktop-hover.log");
+                    string path = Path.Combine(directory, FileName);
                     if (File.Exists(path) && new FileInfo(path).Length + bytes.Length > MaximumBytes)
                     {
                         string first = path + ".1", second = path + ".2";

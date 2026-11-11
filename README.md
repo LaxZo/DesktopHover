@@ -150,6 +150,8 @@ Turn **Windows file tooltips** off in Settings to suppress Windows file descript
 | **Ctrl+Alt+H** | Enable or pause hover previews. |
 | **Ctrl+Alt+P**, or **Pin last preview** in the tray menu | Open the last preview in an independent window that stays open when the pointer moves away. |
 
+In Settings, select either shortcut, choose its modifier keys and key, then select **Save shortcut**. If the combination is already in use, the previous binding stays active.
+
 In the pinned window, use the toolbar or **Left/Right** to browse PDF pages and slides, **Space** to play/pause, **+ / −** or **Ctrl+wheel** to zoom, and **0** to fit the image. Drag a zoomed image to pan. The mouse wheel scrolls text and browses pages/slides. **Escape** closes the pinned window. If another app already owns a global shortcut, use the tray menu instead.
 
 The pinned viewer uses the app’s theme and rounded window controls. Resize or maximize it freely; loading and switching files keep your window size and position. Wheel zoom follows the pointer, the toolbar shows the image’s actual scale, and double-clicking the image fits it to the window. Pinning the same file again brings its existing view forward without resetting zoom, page or playback.
@@ -320,7 +322,7 @@ The startup options register or remove the path of the executable you run. Use t
 
 ## Troubleshooting
 
-The application version appears in the Settings header, tray tooltip and EXE properties. Error details are saved locally to `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, with two rotated copies and a 1 MiB limit per file. Include the version and relevant log entry when reporting a failure; entries can contain file paths from exceptions.
+The application version appears in the Settings header, tray tooltip and EXE properties. Error details are saved locally to `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, with two rotated copies and a 1 MiB limit per file. Include the version and relevant log entry when reporting a failure; entries can contain file paths from exceptions. Choose **Open error log** in Settings to read it.
 
 | Problem | What to check |
 | --- | --- |

@@ -154,6 +154,24 @@ namespace DesktopHover
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == 0x02E0 && layoutReady && m.LParam != IntPtr.Zero) // WM_DPICHANGED
+            {
+                var rect = (WindowRectangle)Marshal.PtrToStructure(m.LParam, typeof(WindowRectangle));
+                Rectangle suggested = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+                Rectangle work = Screen.FromRectangle(suggested).WorkingArea;
+                ApplyMonitorScale((m.WParam.ToInt64() & 0xffff) / 96f, work);
+                if (WindowState == FormWindowState.Normal)
+                {
+                    suggested.Width = Math.Min(work.Width, Math.Max(MinimumSize.Width, suggested.Width));
+                    suggested.Height = Math.Min(work.Height, Math.Max(MinimumSize.Height, suggested.Height));
+                    suggested.X = Math.Max(work.Left, Math.Min(work.Right - suggested.Width, suggested.X));
+                    suggested.Y = Math.Max(work.Top, Math.Min(work.Bottom - suggested.Height, suggested.Y));
+                    Bounds = suggested;
+                }
+                ArrangeSettings();
+                m.Result = IntPtr.Zero;
+                return;
+            }
             if (m.Msg == 0x0085) { m.Result = IntPtr.Zero; return; } // No legacy WM_NCPAINT over the custom header.
             if (m.Msg == 0x0086) { m.Result = new IntPtr(1); return; } // WM_NCACTIVATE
             // Keep the native resizable/minimize/maximize window styles, but draw our own caption.

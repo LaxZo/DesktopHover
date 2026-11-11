@@ -30,7 +30,8 @@ namespace DesktopHover
         private sealed class SheetContent
         {
             internal Dictionary<int, string> Values;
-            internal int HighestColumn, HighestRow;
+            internal int HighestColumn;
+            internal int[] VisibleRows;
             internal bool Truncated;
         }
 

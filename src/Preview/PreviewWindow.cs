@@ -156,6 +156,7 @@ namespace DesktopHover
                 if (media == null) return;
                 if (mediaState == "media_loading" && DateTime.UtcNow >= mediaDeadline)
                 {
+                    AppLog.PreviewError("Opening media", CurrentPath, new TimeoutException("No response from the media decoder within 15 seconds."));
                     MediaFailed(media);
                     return;
                 }
@@ -374,7 +375,7 @@ namespace DesktopHover
             mediaTimer.Stop(); mediaTimer.Interval = 200;
             DocumentPreviewResult result = null;
             try { result = completed.GetAwaiter().GetResult(); }
-            catch { }
+            catch (Exception error) { AppLog.PreviewError("Document preview", CurrentPath, error); }
             using (result)
             {
                 mediaState = result == null ? "document_unavailable" : result.NoteKey;
@@ -699,8 +700,9 @@ namespace DesktopHover
                 StartMediaSession(path, false);
                 return true;
             }
-            catch
+            catch (Exception error)
             {
+                AppLog.PreviewError("Opening media", path, error);
                 ClearPreview();
                 return false;
             }
@@ -758,7 +760,7 @@ namespace DesktopHover
                     UpdateMediaDescription();
                     Invalidate();
                 }
-                catch { MediaFailed(session); }
+                catch (Exception error) { AppLog.PreviewError("Starting playback", path, error); MediaFailed(session); }
             };
             session.Ended += delegate
             {

@@ -26,6 +26,8 @@ namespace DesktopHover
         private readonly HoverButton[] presets = new HoverButton[4];
         private readonly HoverButton[] delays = new HoverButton[5];
         private readonly HoverButton languagePicker, themeToggle, githubProject, advancedButton;
+        private readonly HoverButton logButton, toggleShortcutButton, pinShortcutButton;
+        private ContextMenuStrip shortcutMenu;
         private AdvancedSettingsWindow advancedWindow;
         private readonly Label autosavedLabel;
         private const string ProjectUrl = "https://github.com/LaxZo/DesktopHover";
@@ -297,6 +299,13 @@ namespace DesktopHover
             advancedButton = new HoverButton { Name = "advanced-settings", Compact = true };
             advancedButton.Click += delegate { ShowAdvancedSettings(); };
             Controls.Add(advancedButton);
+            logButton = new HoverButton { Name = "open-error-log", Compact = true };
+            logButton.Click += delegate { OpenLog(); };
+            toggleShortcutButton = new HoverButton { Name = "change-toggle-shortcut", Compact = true };
+            pinShortcutButton = new HoverButton { Name = "change-pin-shortcut", Compact = true };
+            toggleShortcutButton.Click += delegate { ShowShortcutMenu(false); };
+            pinShortcutButton.Click += delegate { ShowShortcutMenu(true); };
+            Controls.AddRange(new Control[] { logButton, toggleShortcutButton, pinShortcutButton });
             Controls.Add(languagePicker);
             SyncControls();
             windowMotion = new WindowMotion(this, true, true);
@@ -316,6 +325,62 @@ namespace DesktopHover
                 delegate { settings.DisabledExtensions = ""; Apply(); }, uiScale);
             advancedWindow.FormClosed += delegate { advancedWindow = null; };
             advancedWindow.ShowFor(this);
+        }
+
+        private void OpenLog()
+        {
+            string path = System.IO.Path.Combine(AppLog.DirectoryPath, AppLog.FileName);
+            if (!System.IO.File.Exists(path))
+            {
+                MessageBox.Show(this, T("empty_log"), T("open_log"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            try
+            {
+                string editor = System.IO.Path.Combine(Environment.SystemDirectory, "notepad.exe");
+                using (Process reader = Process.Start(new ProcessStartInfo(editor, "\"" + path + "\"") { UseShellExecute = false })) { }
+            }
+            catch (Win32Exception error)
+            { MessageBox.Show(this, error.Message, T("open_log"), MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        }
+
+        private void ShowShortcutMenu(bool forPin)
+        {
+            FlushSettings();
+            if (shortcutMenu != null) shortcutMenu.Dispose();
+            var menu = new ContextMenuStrip { Name = "shortcut-menu", Font = scaledBodyFont ?? bodyFont,
+                BackColor = Brand.Surface, ForeColor = Brand.Text, ShowImageMargin = false, Renderer = new HoverMenuRenderer() };
+            shortcutMenu = menu;
+            Keys current = forPin ? settings.PinShortcut : settings.ToggleShortcut;
+            var modifiers = new ToolStripComboBox { Name = "modifiers", AccessibleName = T("shortcut_modifiers"),
+                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+            var key = new ToolStripComboBox { Name = "key", AccessibleName = T("shortcut_key"),
+                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+            foreach (Keys chord in Shortcut.Modifiers) modifiers.Items.Add(Shortcut.Format(chord));
+            modifiers.SelectedIndex = Array.IndexOf(Shortcut.Modifiers, current & Keys.Modifiers);
+            foreach (Keys first in new[] { Keys.A, Keys.D0, Keys.F1 })
+            {
+                Keys last = first == Keys.A ? Keys.Z : first == Keys.D0 ? Keys.D9 : Keys.F11;
+                for (int code = (int)first; code <= (int)last; code++) key.Items.Add(Shortcut.Format((Keys)code));
+            }
+            key.SelectedItem = Shortcut.Format(current & Keys.KeyCode);
+            foreach (var box in new[] { modifiers, key })
+            {
+                box.ComboBox.BackColor = Brand.Surface;
+                box.ComboBox.ForeColor = Brand.Text;
+                menu.Items.Add(new ToolStripLabel(box.AccessibleName) { ForeColor = Brand.Muted });
+                menu.Items.Add(box);
+            }
+            var save = new ToolStripMenuItem(T("save_shortcut")) { Name = "save-shortcut", ForeColor = Brand.Text };
+            save.Click += delegate
+            {
+                Keys selected = Shortcut.Parse(modifiers.Text + "+" + key.Text, current);
+                if (forPin) settings.PinShortcut = selected; else settings.ToggleShortcut = selected;
+                Apply();
+            };
+            menu.Items.Add(save);
+            Control anchor = forPin ? pinShortcutButton : toggleShortcutButton;
+            menu.Show(anchor, new Point(0, anchor.Height));
         }
 
         private void ShowLanguageMenu()
@@ -430,6 +495,9 @@ namespace DesktopHover
             windowToolTip.SetToolTip(autosavedLabel, autosavedLabel.Text);
             githubProject.AccessibleName = T("project_link");
             advancedButton.Text = advancedButton.AccessibleName = T("advanced_settings");
+            logButton.Text = logButton.AccessibleName = T("open_log");
+            toggleShortcutButton.Text = toggleShortcutButton.AccessibleName = String.Format(T("shortcut_toggle"), Shortcut.Format(settings.ToggleShortcut));
+            pinShortcutButton.Text = pinShortcutButton.AccessibleName = String.Format(T("shortcut_pin"), Shortcut.Format(settings.PinShortcut));
             githubProject.AccessibleDescription = ProjectUrl;
             windowToolTip.SetToolTip(githubProject, githubProject.AccessibleName + "\r\n" + ProjectUrl);
             themeToggle.Selected = themeMenu.Visible;
@@ -533,9 +601,7 @@ namespace DesktopHover
         internal void FitToArea(Rectangle area, float dpiScale)
         {
             initiallySized = true;
-            SetUiScale(dpiScale);
-            MinimumSize = new Size(Math.Min((int)Math.Round(520 * uiScale), area.Width - 32),
-                Math.Min((int)Math.Round(440 * uiScale), area.Height - 32));
+            ApplyMonitorScale(dpiScale, area);
             Size desired = SizeFromClientSize(new Size((int)Math.Round(1000 * uiScale), (int)Math.Round(780 * uiScale)));
             Size = new Size(Math.Min(desired.Width, area.Width - 32), Math.Min(desired.Height, area.Height - 32));
             ArrangeSettings();
@@ -543,7 +609,14 @@ namespace DesktopHover
 
         private void SetUiScale(float value)
         {
+            ApplyMonitorScale(value, Screen.FromControl(this).WorkingArea);
+        }
+
+        private void ApplyMonitorScale(float value, Rectangle area)
+        {
             value = Math.Max(.75f, value);
+            MinimumSize = new Size(Math.Min((int)Math.Round(520 * value), Math.Max(1, area.Width - 32)),
+                Math.Min((int)Math.Round(440 * value), Math.Max(1, area.Height - 32)));
             if (scaledSmallFont != null && Math.Abs(uiScale - value) < .01f) return;
             uiScale = value;
             Font oldSmall = scaledSmallFont, oldBody = scaledBodyFont;
@@ -569,7 +642,14 @@ namespace DesktopHover
         {
             if (control == windowsInfoTipsToggle) return Rectangle.Round(new RectangleF(wideLayout ? 56 + columnWidth : 24,
                 wideLayout ? 426 : 870, columnWidth, 40));
-            if (control == advancedButton) return Rectangle.Round(new RectangleF(24, wideLayout ? 708 : 1238, Math.Min(300, columnWidth), 32));
+            if (control == advancedButton || control == logButton)
+            {
+                float half = (columnWidth - 8) / 2;
+                return Rectangle.Round(new RectangleF(control == advancedButton ? 24 : 32 + half,
+                    wideLayout ? 708 : 1238, half, 32));
+            }
+            if (control == toggleShortcutButton || control == pinShortcutButton)
+                return Rectangle.Round(new RectangleF(24, (wideLayout ? 644 : 1174) + (control == pinShortcutButton ? 31 : 0), columnWidth, 28));
             if (control == autosavedLabel) return Rectangle.Round(new RectangleF(24, footerY, canvasWidth - 280, 32));
             if (control == githubProject) return Rectangle.Round(new RectangleF(canvasWidth - 230, footerY, 40, 32));
             if (control == themeToggle) return Rectangle.Round(new RectangleF(canvasWidth - 182, footerY, 40, 32));
@@ -587,7 +667,7 @@ namespace DesktopHover
             {
                 content.AutoScrollPosition = Point.Empty;
                 // Reserve a scrollbar gutter so adding a scrollbar never creates horizontal scrolling.
-                canvasWidth = Math.Max(424, (content.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / uiScale);
+                canvasWidth = Math.Max(280, (content.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / uiScale);
                 wideLayout = canvasWidth >= 860;
                 columnWidth = wideLayout ? (canvasWidth - 80) / 2 : canvasWidth - 48;
                 footerY = Math.Max(wideLayout ? 764 : 1292, content.ClientSize.Height / uiScale + 80 - 54);
@@ -706,8 +786,6 @@ namespace DesktopHover
                 Font, Brand.Accent, new Rectangle(302, 530, 98, 24), TextFormatFlags.Right);
             DrawText(g, T("slide_interval_detail"), smallFont, Brand.Muted, new Rectangle(24, 590, 376, 20));
             DrawText(g, T("file_types"), headingFont, Brand.Text, new Rectangle(24, 840, 376, 25));
-            DrawText(g, T("shortcut_toggle"), smallFont, Brand.Muted, new Rectangle(24, 1092, 376, 22));
-            DrawText(g, T("shortcut_pin"), smallFont, Brand.Muted, new Rectangle(24, 1116, 376, 22));
             using (var pen = new Pen(Brand.Border)) g.DrawLine(pen, 24, footerY - 12, canvasWidth - 24, footerY - 12);
         }
 
@@ -736,6 +814,7 @@ namespace DesktopHover
             if (disposing)
             {
                 FlushSettings(); saveTimer.Dispose();
+                if (shortcutMenu != null) shortcutMenu.Dispose();
                 if (advancedWindow != null) advancedWindow.Dispose();
                 if (windowMotion != null) windowMotion.Dispose();
                 languageMenu.Dispose(); themeMenu.Dispose();

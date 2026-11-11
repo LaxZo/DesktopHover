@@ -115,10 +115,11 @@ namespace DesktopHover
 
         internal void SetHotkeyState(bool toggleRegistered, bool pinRegistered)
         {
-            enabled.ShortcutKeyDisplayString = toggleRegistered ? "Ctrl+Alt+H" : "";
-            pin.ShortcutKeyDisplayString = pinRegistered ? "Ctrl+Alt+P" : "";
-            if (!toggleRegistered) enabled.ToolTipText = L10n.Text(readSettings().Language, "hotkey_unavailable");
-            if (!pinRegistered) pin.ToolTipText = L10n.Text(readSettings().Language, "hotkey_unavailable");
+            AppSettings settings = readSettings();
+            enabled.ShortcutKeyDisplayString = toggleRegistered ? Shortcut.Format(settings.ToggleShortcut) : "";
+            pin.ShortcutKeyDisplayString = pinRegistered ? Shortcut.Format(settings.PinShortcut) : "";
+            enabled.ToolTipText = toggleRegistered ? "" : L10n.Text(settings.Language, "hotkey_unavailable");
+            pin.ToolTipText = pinRegistered ? "" : L10n.Text(settings.Language, "hotkey_unavailable");
             ShowItemToolTips = true;
         }
 

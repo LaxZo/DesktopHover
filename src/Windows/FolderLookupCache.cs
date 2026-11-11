@@ -8,16 +8,31 @@ namespace DesktopHover
     internal sealed class FolderNameIndex
     {
         private readonly Dictionary<string, string> names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         internal void Add(string name, string path, bool supported)
+        { AddName(names, name, path, supported); }
+
+        internal void AddItem(string display, string path, bool supported)
+        {
+            Add(display, path, supported);
+            AddName(aliases, Path.GetFileName(path), path, supported);
+        }
+
+        private static void AddName(Dictionary<string, string> map, string name, string path, bool supported)
         {
             if (String.IsNullOrEmpty(name)) return;
             string old;
             string value = supported ? path : null;
-            if (names.TryGetValue(name, out old) && !String.Equals(old, value, StringComparison.OrdinalIgnoreCase)) value = null;
-            names[name] = value;
+            if (map.TryGetValue(name, out old) && !String.Equals(old, value, StringComparison.OrdinalIgnoreCase)) value = null;
+            map[name] = value;
         }
-        internal string Find(string name) { string path; return names.TryGetValue(name, out path) ? path : null; }
-        internal bool Contains(string name) { return names.ContainsKey(name); }
+        internal string Find(string name)
+        {
+            string path;
+            if (names.TryGetValue(name, out path)) return path;
+            return aliases.TryGetValue(name, out path) ? path : null;
+        }
+        internal bool Contains(string name) { return names.ContainsKey(name) || aliases.ContainsKey(name); }
     }
 
     // Accessed by the shell worker only. Watcher callbacks update just an atomic revision.
@@ -33,12 +48,13 @@ namespace DesktopHover
             internal long Written;
             internal DateTime Built;
             internal DateTime LastMissRebuild;
+            internal bool ShowExtensions;
             internal volatile bool Reliable;
             internal void Changed(object sender, FileSystemEventArgs e) { Interlocked.Increment(ref Revision); }
             internal void Failed(object sender, ErrorEventArgs e) { Reliable = false; Interlocked.Increment(ref Revision); }
             public void Dispose() { if (Watcher != null) Watcher.Dispose(); }
         }
-        internal string Resolve(string directory, string name, Func<FolderNameIndex> build)
+        internal string Resolve(string directory, string name, Func<FolderNameIndex> build, bool showExtensions = true)
         {
             // Virtual/search folders may merge multiple locations; never reuse their name map.
             if (!String.IsNullOrEmpty(directory) && directory.StartsWith(@"\\", StringComparison.Ordinal)) return null;
@@ -66,10 +82,11 @@ namespace DesktopHover
             int revision = Interlocked.CompareExchange(ref entry.Revision, 0, 0);
             long written = Directory.GetLastWriteTimeUtc(directory).Ticks;
             bool rebuilt = false;
-            if (entry.Index == null || entry.BuiltRevision != revision || entry.Written != written ||
+            if (entry.Index == null || entry.ShowExtensions != showExtensions || entry.BuiltRevision != revision || entry.Written != written ||
                 DateTime.UtcNow - entry.Built > TimeSpan.FromSeconds(entry.Reliable ? 60 : 1))
             {
                 entry.Index = build(); entry.BuiltRevision = revision; entry.Written = written; entry.Built = DateTime.UtcNow;
+                entry.ShowExtensions = showExtensions;
                 rebuilt = true;
             }
             // Explorer can change display names (e.g. hidden extensions) without a

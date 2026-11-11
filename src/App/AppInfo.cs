@@ -10,6 +10,6 @@ namespace DesktopHover
 {
     internal static class AppInfo
     {
-        internal const string Version = "1.5.1";
+        internal const string Version = "1.5.2";
     }
 }

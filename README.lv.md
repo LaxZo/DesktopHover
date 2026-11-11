@@ -150,6 +150,8 @@ Izslēdz **Windows failu apraksti** iestatījumos, lai paslēptu Windows failu i
 | **Ctrl+Alt+H** | Ieslēdz vai aptur priekšskatījumus pēc peles uzvešanas. |
 | **Ctrl+Alt+P** vai **Piespraust pēdējo priekšskatījumu** teknes izvēlnē | Atver pēdējo priekšskatījumu atsevišķā logā, kas paliek atvērts arī pēc peles aizvirzīšanas. |
 
+Iestatījumos nospied uz attiecīgās saīsnes, izvēlies taustiņu kombināciju un nospied **Saglabāt saīsni**. Ja kombinācija jau ir aizņemta, iepriekšējā saīsne paliek spēkā.
+
 Piespraustajā logā ar rīkjoslu vai **kreisās/labās bultiņas** taustiņiem pāršķir PDF lapas un slaidus, ar **atstarpi** atskaņo vai aptur, ar **+ / −** vai **Ctrl+peles riteni** maini tālummaiņu, bet ar **0** ievieto visu attēlu logā. Palielinātu attēlu var pārvietot velkot. Peles ritenis ritina tekstu vai pāršķir lapas/slaidus. **Escape** aizver piesprausto logu. Ja globālo saīsni izmanto cita lietotne, izmanto teknes izvēlni.
 
 Piespraustais skatītājs izmanto lietotnes tēmu un noapaļotu logu. Tā izmēru var mainīt vai maksimizēt; failu ielāde un pārslēgšana saglabā loga izmēru un novietojumu. Tālummaiņa ar peles riteni seko kursoram, rīkjoslā redzams faktiskais attēla mērogs, bet dubultklikšķis ievieto visu attēlu logā. Atkārtoti piespraužot to pašu failu, esošais logs tiek izvirzīts priekšplānā, saglabājot tālummaiņu, lapu un atskaņošanu.
@@ -316,7 +318,7 @@ Automātiskās palaišanas parametri reģistrē vai noņem izpildītās kopijas 
 
 ## Ja kaut kas nedarbojas
 
-Programmas versija ir redzama iestatījumu galvenē, teknes ikonas aprakstā un EXE faila rekvizītos. Kļūdu informācija tiek saglabāta lokāli failā `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, ar divām iepriekšējām kopijām un 1 MiB robežu katram failam. Ziņojot par kļūmi, norādi versiju un attiecīgo žurnāla ierakstu; kļūdu tekstā var būt failu ceļi.
+Programmas versija ir redzama iestatījumu galvenē, teknes ikonas aprakstā un EXE faila rekvizītos. Kļūdu informācija tiek saglabāta lokāli failā `%LOCALAPPDATA%\DesktopHover\logs\desktop-hover.log`, ar divām iepriekšējām kopijām un 1 MiB robežu katram failam. Ziņojot par kļūmi, norādi versiju un attiecīgo žurnāla ierakstu; kļūdu tekstā var būt failu ceļi. Lai to izlasītu, iestatījumos izvēlies **Atvērt kļūdu žurnālu**.
 
 | Problēma | Ko pārbaudīt |
 | --- | --- |

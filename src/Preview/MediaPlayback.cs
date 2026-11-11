@@ -27,6 +27,7 @@ namespace DesktopHover
         private DrawingVisual videoVisual;
         private Rectangle videoBounds;
         private bool requested;
+        private string mediaPath;
         private bool failed;
         private bool disposed;
         private bool ownerUpdateQueued;
@@ -73,6 +74,7 @@ namespace DesktopHover
         internal void Open(string localPath)
         {
             if (disposed) throw new ObjectDisposedException("MediaPlayback");
+            mediaPath = localPath;
             if (requested) throw new InvalidOperationException("A media session can only be opened once.");
             requested = true;
             try
@@ -82,7 +84,7 @@ namespace DesktopHover
                 // The file is intentionally opened by Windows' decoder, never as a remote URL.
                 player.Open(new Uri(fullPath, UriKind.Absolute));
             }
-            catch { Fail(); }
+            catch (Exception error) { Fail(error); }
         }
 
         internal void SetVolume(int percent)
@@ -102,7 +104,7 @@ namespace DesktopHover
                 player.Position = TimeSpan.FromTicks(Math.Max(0, Math.Min(Duration.Ticks, position.Ticks)));
                 HasEnded = false;
             }
-            catch { Fail(); }
+            catch (Exception error) { Fail(error); }
         }
 
         internal void Play()
@@ -113,7 +115,7 @@ namespace DesktopHover
                 if (HasEnded) { player.Position = TimeSpan.Zero; HasEnded = false; }
                 player.Play();
             }
-            catch { Fail(); }
+            catch (Exception error) { Fail(error); }
         }
 
         internal void SetVideoBounds(Rectangle bounds)
@@ -151,7 +153,7 @@ namespace DesktopHover
                 PositionVideo();
                 DrawVideo();
             }
-            catch { Fail(); }
+            catch (Exception error) { Fail(error); }
         }
 
         private void OwnerChanged(object sender, EventArgs e)
@@ -166,7 +168,7 @@ namespace DesktopHover
                 ownerUpdateQueued = false;
                 if (disposed || failed) return;
                 try { PositionVideo(); DrawVideo(); }
-                catch { Fail(); }
+                catch (Exception error) { Fail(error); }
             }));
         }
 
@@ -217,7 +219,7 @@ namespace DesktopHover
                 {
                     if (disposed || failed) return;
                     try { DrawVideo(); }
-                    catch { Fail(); }
+                    catch (Exception error) { Fail(error); }
                 }));
             }
             return IntPtr.Zero;
@@ -234,7 +236,7 @@ namespace DesktopHover
                 Duration = player.NaturalDuration.HasTimeSpan ? player.NaturalDuration.TimeSpan : TimeSpan.Zero;
                 IsOpen = true;
             }
-            catch { Fail(); return; }
+            catch (Exception error) { Fail(error); return; }
             EventHandler handler = Opened;
             if (handler != null) handler(this, EventArgs.Empty);
         }
@@ -249,13 +251,14 @@ namespace DesktopHover
 
         private void OnFailed(object sender, ExceptionEventArgs args)
         {
-            Fail();
+            Fail(args.ErrorException);
         }
 
-        private void Fail()
+        private void Fail(Exception error)
         {
             if (disposed || failed) return;
             failed = true;
+            AppLog.PreviewError("Media playback", mediaPath, error);
             IsOpen = false;
             StopAndClose();
             if (videoSource != null && !videoSource.IsDisposed) ShowWindow(videoSource.Handle, 0);

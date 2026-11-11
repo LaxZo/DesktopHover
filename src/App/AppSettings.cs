@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Windows.Forms;
 
 namespace DesktopHover
 {
@@ -18,6 +19,7 @@ namespace DesktopHover
         public bool AutoPlayMedia=true;
         public bool LoopVideo=true;
         public bool ShowWindowsInfoTips=false;
+        internal Keys ToggleShortcut = Shortcut.ToggleDefault, PinShortcut = Shortcut.PinDefault;
         public bool PreviewImages=true, PreviewDocuments=true, PreviewText=true, PreviewAudio=true, PreviewVideo=true;
         private HashSet<string> disabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal string DisabledExtensions
@@ -138,10 +140,14 @@ namespace DesktopHover
                         if(name=="disabled_extensions") settings.DisabledExtensions=value;
                         if(name=="language") settings.Language=value;
                         if(name=="theme") settings.Theme=value;
+                        if(name=="shortcut_toggle") settings.ToggleShortcut=Shortcut.Parse(value, Shortcut.ToggleDefault);
+                        if(name=="shortcut_pin") settings.PinShortcut=Shortcut.Parse(value, Shortcut.PinDefault);
                     }
             }
             catch(IOException) { }
             catch(UnauthorizedAccessException) { }
+            if (settings.ToggleShortcut == settings.PinShortcut)
+            { settings.ToggleShortcut = Shortcut.ToggleDefault; settings.PinShortcut = Shortcut.PinDefault; }
             settings.Validate();
             return settings;
         }
@@ -160,6 +166,7 @@ namespace DesktopHover
                 text += "autoplay_media=" + AutoPlayMedia.ToString().ToLowerInvariant() + "\r\n";
                 text += "loop_video=" + LoopVideo.ToString().ToLowerInvariant() + "\r\n";
                 text += "show_windows_infotips=" + ShowWindowsInfoTips.ToString().ToLowerInvariant() + "\r\n";
+                text += "shortcut_toggle=" + Shortcut.Format(ToggleShortcut) + "\r\nshortcut_pin=" + Shortcut.Format(PinShortcut) + "\r\n";
                 text += "preview_images=" + PreviewImages.ToString().ToLowerInvariant() + "\r\n";
                 text += "preview_documents=" + PreviewDocuments.ToString().ToLowerInvariant() + "\r\n";
                 text += "preview_text=" + PreviewText.ToString().ToLowerInvariant() + "\r\n";

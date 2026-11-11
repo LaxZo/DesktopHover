@@ -29,8 +29,13 @@ namespace DesktopHover
             Application.SetCompatibleTextRenderingDefault(false);
             output = Path.GetFullPath(args.Length > 0 ? args[0] : ".verification/regression");
             Directory.CreateDirectory(output);
+            AppLog.TestDirectory = Path.Combine(output, "application-logs");
             try
             {
+                if (args.Length > 1 && args[1] == "preview-152")
+                {
+                    PreviewFixes152(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "review-fixes")
                 {
                     ReviewFixes(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -106,6 +111,7 @@ namespace DesktopHover
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
                 ReviewFixes();
+                PreviewFixes152();
                 Images();
                 PreviewZOrder();
                 VideoZOrder();

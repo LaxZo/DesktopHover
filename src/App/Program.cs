@@ -126,7 +126,7 @@ namespace DesktopHover
             preview.Configure(settings);
             trayIcon=Brand.CreateIcon();
             tray=new NotifyIcon {Icon=trayIcon,Visible=true};
-            hotkeys=new AppHotkeys(delegate { SetPaused(!paused); }, PinPreview);
+            hotkeys=new AppHotkeys(delegate { SetPaused(!paused); }, PinPreview, settings);
             trayMenu=new TrayMenu(
                 delegate { settings.StartWithWindows=Startup.IsEnabled(); return settings.Clone(); },
                 delegate { return paused; }, ApplySettings, SetPaused, ShowSettings, delegate { ExitThread(); }, PinPreview, delegate { return settings.Allows(lastPreviewPath); });
@@ -189,7 +189,7 @@ namespace DesktopHover
             try
             {
                 if(previousStartup!=updated.StartWithWindows) Startup.SetEnabled(updated.StartWithWindows);
-                updated.Save();
+                hotkeys.Apply(updated, updated.Save);
             }
             catch
             {
@@ -197,6 +197,7 @@ namespace DesktopHover
                 throw;
             }
             settings=updated.Clone();
+            trayMenu.SetHotkeyState(hotkeys.ToggleRegistered, hotkeys.PinRegistered);
             if(settings.ShowWindowsInfoTips) infoTips.Clear();
             delay=settings.DelayMs;
             preview.Configure(settings);

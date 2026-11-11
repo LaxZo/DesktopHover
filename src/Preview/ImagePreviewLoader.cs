@@ -101,7 +101,13 @@ namespace DesktopHover
                 return result;
             }
             catch (OperationCanceledException) { result.Dispose(); throw; }
-            catch { result.Dispose(); result.ErrorKey = "image_unavailable"; return result; }
+            catch (Exception error)
+            {
+                result.Dispose();
+                AppLog.PreviewError("Image preview", path, error);
+                result.ErrorKey = "image_unavailable";
+                return result;
+            }
             finally { if (entered) decoder.Release(); }
         }
     }

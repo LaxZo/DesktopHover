@@ -69,6 +69,7 @@ namespace DesktopHover
     internal sealed class ShellResolver : IDisposable
     {
         private object shell;
+        [DllImport("shell32.dll")] private static extern void SHGetSettings(out uint settings, uint mask);
         private readonly FolderLookupCache folderCache = new FolderLookupCache();
         internal string Diagnostic="";
         internal static bool Supported(string path)
@@ -169,6 +170,9 @@ namespace DesktopHover
             try { self = ((dynamic)folder).Self; directory = (string)((dynamic)self).Path; }
             catch (COMException) { }
             finally { Release(self); }
+            const uint showExtensions = 2; // SSF_SHOWEXTENSIONS and SHELLFLAGSTATE.fShowExtensions
+            uint flags;
+            SHGetSettings(out flags, showExtensions);
             return folderCache.Resolve(directory, name, delegate
             {
                 var index = new FolderNameIndex();
@@ -185,15 +189,14 @@ namespace DesktopHover
                             item = ((dynamic)items).Item(i);
                             string display = ((dynamic)item).Name, path = ((dynamic)item).Path;
                             bool valid = (bool)((dynamic)item).IsFileSystem && !(bool)((dynamic)item).IsFolder && Supported(path);
-                            index.Add(display, path, valid);
-                            index.Add(System.IO.Path.GetFileName(path), path, valid);
+                            index.AddItem(display, path, valid);
                         }
                         finally { Release(item); }
                     }
                 }
                 finally { Release(items); }
                 return index;
-            });
+            }, (flags & showExtensions) != 0);
         }
         private static void Release(object o) { if(o!=null && Marshal.IsComObject(o)) Marshal.ReleaseComObject(o); }
         public void Dispose() { folderCache.Dispose(); Release(shell); shell=null; }

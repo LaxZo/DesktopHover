@@ -113,7 +113,7 @@ namespace DesktopHover
                 }
             }
             catch (OperationCanceledException) { throw; }
-            catch { return null; }
+            catch (Exception error) { AppLog.PreviewError("Office preview", path, error); return null; }
         }
 
         private sealed class Relation
@@ -180,7 +180,7 @@ namespace DesktopHover
 
             internal void CacheSheet(string key, SheetContent sheet)
             {
-                long bytes = sheet.Values.Count * 64L;
+                long bytes = sheet.Values.Count * 64L + sheet.VisibleRows.Length * 4L;
                 foreach (string value in sheet.Values.Values) bytes += value.Length * 2L;
                 if (data.Reserve(bytes)) data.Sheets[key] = sheet;
             }
@@ -393,14 +393,39 @@ namespace DesktopHover
                                 XmlNodeList cells = row.SelectNodes("./*[local-name()='tc']");
                                 int columns = Math.Min(8, cells.Count);
                                 if (columns == 0) continue;
-                                float cellWidth = width / columns, rowHeight = regular.Height * 2.2F;
-                                if (y + rowHeight > (view == null ? size.Height - margin : 1000000)) break;
+                                if (columns < cells.Count) truncated = true;
+                                float cellWidth = width / columns, rowHeight = regular.Height + 8;
+                                var cellText = new string[columns];
                                 for (int i = 0; i < columns; i++)
                                 {
-                                    var box = new RectangleF(margin + i * cellWidth, y, cellWidth, rowHeight);
-                                    g.DrawRectangle(border, box.X, box.Y, box.Width, box.Height);
-                                    box.Inflate(-5, -3);
-                                    g.DrawString(ParagraphText(cells[i], 1000), regular, ink, box, format);
+                                    var text = new StringBuilder();
+                                    foreach (XmlNode paragraph in cells[i].SelectNodes(".//*[local-name()='p']"))
+                                    {
+                                        if (text.Length > 0) text.Append('\n');
+                                        text.Append(ParagraphText(paragraph, 32768 - text.Length));
+                                        if (text.Length >= 32768) break;
+                                    }
+                                    cellText[i] = text.ToString();
+                                    if (cellText[i].Length == 32768)
+                                    {
+                                        cellText[i] = cellText[i].Substring(0, 32766) + "…";
+                                        truncated = true;
+                                    }
+                                    float textHeight = g.MeasureString(cellText[i], regular, Math.Max(1, (int)(cellWidth - 10)), format).Height;
+                                    rowHeight = Math.Max(rowHeight, (float)Math.Ceiling(textHeight) + 8);
+                                }
+                                float available = (view == null ? size.Height - margin : 1000000) - y;
+                                if (available <= 0) { truncated = true; break; }
+                                if (rowHeight > available) { rowHeight = available; truncated = true; }
+                                if (view == null || (y + rowHeight > view.ScrollY && y < view.ScrollY + size.Height))
+                                {
+                                    for (int i = 0; i < columns; i++)
+                                    {
+                                        var box = new RectangleF(margin + i * cellWidth, y, cellWidth, rowHeight);
+                                        g.DrawRectangle(border, box.X, box.Y, box.Width, box.Height);
+                                        box.Inflate(-5, -3);
+                                        if (box.Height > 0) g.DrawString(cellText[i], regular, ink, box, format);
+                                    }
                                 }
                                 y += rowHeight;
                             }
@@ -468,16 +493,21 @@ namespace DesktopHover
                         { if (numberFormats.Count >= 10000) break; numberFormats.Add(Int(Attr(xf, "numFmtId"), 0)); }
                     }
                 }
-                bool date1904 = Attr(workbook.SelectSingleNode("/*[local-name()='workbook']/*[local-name()='workbookPr']"), "date1904") == "1";
+                bool date1904 = IsTrue(Attr(workbook.SelectSingleNode("/*[local-name()='workbook']/*[local-name()='workbookPr']"), "date1904"));
                 var values = new Dictionary<int, string>();
+                var hiddenRows = new HashSet<int>();
+                int previousRow = 0;
                 int highestColumn = 0, highestRow = 0, scanned = 0;
                 bool truncated = false;
                 foreach (XmlNode row in worksheet.SelectNodes("/*[local-name()='worksheet']/*[local-name()='sheetData']/*[local-name()='row']"))
                 {
                     package.Cancellation.ThrowIfCancellationRequested();
-                    int rowIndex = Int(Attr(row, "r"), highestRow + 1);
-                    if (rowIndex > (view == null ? 30 : 5000)) { truncated = true; continue; }
-                    if (rowIndex < 1 || Attr(row, "hidden") == "1") continue;
+                    int rowIndex = Int(Attr(row, "r"), previousRow + 1);
+                    if (rowIndex < 1) continue;
+                    previousRow = rowIndex;
+                    if (rowIndex > 5000) { truncated = true; continue; }
+                    if (IsTrue(Attr(row, "hidden"))) { hiddenRows.Add(rowIndex); continue; }
+                    if (view == null && rowIndex - hiddenRows.Count > 30) { truncated = true; continue; }
                     int nextColumn = 0;
                     foreach (XmlNode cell in row.ChildNodes)
                     {
@@ -496,7 +526,7 @@ namespace DesktopHover
                             value = index >= 0 && index < strings.Count ? strings[index] : "";
                         }
                         else if (type == "inlineStr") value = ParagraphText(cell.SelectSingleNode("./*[local-name()='is']"), 2000);
-                        else if (type == "b") value = value == "1" ? "TRUE" : "FALSE";
+                        else if (type == "b") value = IsTrue(value) ? "TRUE" : "FALSE";
                         else if (type == "" || type == "n")
                         {
                             int style = Int(Attr(cell, "s"), 0);
@@ -516,11 +546,13 @@ namespace DesktopHover
                     }
                     if (scanned > (view == null ? 10000 : 100000)) break;
                 }
-                sheetContent = new SheetContent { Values = values, HighestColumn = highestColumn, HighestRow = highestRow, Truncated = truncated };
+                var visibleRows = new List<int>(highestRow);
+                for (int i = 1; i <= highestRow; i++) if (!hiddenRows.Contains(i)) visibleRows.Add(i);
+                sheetContent = new SheetContent { Values = values, HighestColumn = highestColumn, VisibleRows = visibleRows.ToArray(), Truncated = truncated };
                 package.CacheSheet(sheetKey, sheetContent);
             }
             var displayedValues = sheetContent.Values;
-            int columnCount = sheetContent.HighestColumn, rowCount = sheetContent.HighestRow;
+            int columnCount = sheetContent.HighestColumn, rowCount = sheetContent.VisibleRows.Length;
             bool contentTruncated = sheetContent.Truncated;
             int contentHeight = maximum.Height, contentWidth = maximum.Width;
             var image = new Bitmap(maximum.Width, maximum.Height);
@@ -547,7 +579,7 @@ namespace DesktopHover
                         double width;
                         if (!Double.TryParse(Attr(col, "width"), NumberStyles.Float, CultureInfo.InvariantCulture, out width) || Double.IsNaN(width) || Double.IsInfinity(width)) continue;
                         for (int i = Math.Max(0, Int(Attr(col, "min"), 1) - 1); i < Math.Min(columns, Int(Attr(col, "max"), columns)); i++)
-                            widths[i] = Attr(col, "hidden") == "1" ? 0 : (float)Math.Max(1, Math.Min(100, width));
+                            widths[i] = IsTrue(Attr(col, "hidden")) ? 0 : (float)Math.Max(1, Math.Min(100, width));
                     }
                     float firstWidth = 0, totalWidth = 0;
                     for (int col = 0; col < columns; col++) { totalWidth += widths[col]; if (col < 8) firstWidth += widths[col]; }
@@ -586,7 +618,7 @@ namespace DesktopHover
                         {
                             string value;
                             if (widths[col] > 12 && positions[col + 1] >= gutter && positions[col] <= image.Width &&
-                                displayedValues.TryGetValue((firstRow + row) * 16384 + col, out value))
+                                displayedValues.TryGetValue((sheetContent.VisibleRows[firstRow + row] - 1) * 16384 + col, out value))
                                 g.DrawString(value, font, ink, new RectangleF(positions[col] + 6, y, widths[col] - 12, rowHeight), format);
                         }
                     }
@@ -596,7 +628,7 @@ namespace DesktopHover
                     GraphicsState gutterState = g.Save();
                     g.SetClip(new RectangleF(0, top + rowHeight, gutter, Math.Max(0, image.Height - top - rowHeight)));
                     for (int row = 0; row < rows; row++)
-                        g.DrawString((firstRow + row + 1).ToString(CultureInfo.InvariantCulture), font, muted,
+                        g.DrawString(sheetContent.VisibleRows[firstRow + row].ToString(CultureInfo.InvariantCulture), font, muted,
                             new RectangleF(5, top + (row + 1) * rowHeight - rowOffset, gutter - 8, rowHeight), format);
                     for (int row = 0; row <= rows; row++)
                     { float y = top + (row + 1) * rowHeight - rowOffset; g.DrawLine(pen, 0, y, gutter, y); }
@@ -663,6 +695,7 @@ namespace DesktopHover
 
         private static string TextOf(XmlNode node) { return node == null ? "" : node.InnerText; }
         private static string Limit(string value, int limit) { return value.Length <= limit ? value : value.Substring(0, limit - 1) + "…"; }
+        private static bool IsTrue(string text) { return text == "1" || text == "true"; }
         private static int Int(string text, int fallback) { int value; return Int32.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? value : fallback; }
         private static Size Fit(double width, double height, Size maximum, bool upscale)
         {
