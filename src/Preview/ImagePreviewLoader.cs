@@ -28,8 +28,6 @@ namespace DesktopHover
         private static readonly LinkedList<CachedImage> cache = new LinkedList<CachedImage>();
         private const long MaximumCacheBytes = 48L * 1024 * 1024;
         private static long cacheBytes;
-        private static int generation;
-        internal static void Invalidate() { Interlocked.Increment(ref generation); }
         private sealed class CachedImage
         {
             internal string Path;
@@ -37,18 +35,25 @@ namespace DesktopHover
             internal Size Size;
             internal Bitmap Image;
             internal int Width, Height;
-            internal int Generation;
         }
 
-        internal static ImagePreviewResult Load(string path, Size size, CancellationToken cancellation)
+        internal static ImagePreviewResult Load(string path, Size size, CancellationToken cancellation, bool refresh = false)
         {
             var result = new ImagePreviewResult();
             bool entered = false;
             try
             {
                 decoder.Wait(cancellation); entered = true;
-                int currentGeneration = Volatile.Read(ref generation);
                 path = Path.GetFullPath(path);
+                // Evict all sizes for this file under the same semaphore used by decodes.
+                if (refresh)
+                    for (var node = cache.Last; node != null; )
+                    {
+                        var previous = node.Previous;
+                        if (String.Equals(node.Value.Path, path, StringComparison.OrdinalIgnoreCase))
+                            RemoveCachedImage(node);
+                        node = previous;
+                    }
                 var info = new FileInfo(path);
                 if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
                     new DriveInfo(Path.GetPathRoot(path)).DriveType == DriveType.Network ||
@@ -61,7 +66,7 @@ namespace DesktopHover
                     for (var node = cache.First; node != null; node = node.Next)
                     {
                         CachedImage entry = node.Value;
-                        if (entry.Generation != currentGeneration || !String.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase) ||
+                        if (!String.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase) ||
                             entry.Size.Width < size.Width || entry.Size.Height < size.Height ||
                             entry.Length != info.Length || entry.Written != info.LastWriteTimeUtc.Ticks) continue;
                         result.Image = (Bitmap)entry.Image.Clone();
@@ -92,13 +97,10 @@ namespace DesktopHover
                     if (cost <= MaximumCacheBytes)
                     {
                         while (cache.Count >= 8 || cacheBytes + cost > MaximumCacheBytes)
-                        {
-                            cacheBytes -= cache.Last.Value.Cost;
-                            cache.Last.Value.Image.Dispose(); cache.RemoveLast();
-                        }
+                            RemoveCachedImage(cache.Last);
                         cache.AddFirst(new CachedImage { Path = path, Size = size, Length = info.Length,
                             Written = info.LastWriteTimeUtc.Ticks, Cost = cost, Width = result.Width,
-                            Height = result.Height, Generation = currentGeneration, Image = (Bitmap)result.Image.Clone() });
+                            Height = result.Height, Image = (Bitmap)result.Image.Clone() });
                         cacheBytes += cost;
                     }
                 }
@@ -114,6 +116,13 @@ namespace DesktopHover
                 return result;
             }
             finally { if (entered) decoder.Release(); }
+        }
+
+        private static void RemoveCachedImage(LinkedListNode<CachedImage> node)
+        {
+            cacheBytes -= node.Value.Cost;
+            node.Value.Image.Dispose();
+            cache.Remove(node);
         }
     }
 }

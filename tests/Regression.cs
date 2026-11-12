@@ -32,6 +32,11 @@ namespace DesktopHover
             AppLog.TestDirectory = Path.Combine(output, "application-logs");
             try
             {
+                if (args.Length > 1 && args[1] == "pinned-updates")
+                {
+                    PinnedUpdates(args.Length > 2 ? args[2] : null);
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "windows-accent")
                 {
                     WindowsAccentPreferences(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -117,6 +122,11 @@ namespace DesktopHover
                 {
                     GlassVideoColors(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "pinned-media-glass")
+                {
+                    PinnedMediaGlass(args.Length > 2 ? args[2] : null);
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "video-z-order")
                 {
                     VideoZOrder(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -157,6 +167,8 @@ namespace DesktopHover
                 RefreshAndDetail();
                 RefreshStates();
                 GlassVideoColors();
+                PinnedMediaGlass(null);
+                PinnedUpdates(null);
                 Playback();
                 VideoLoop(null);
                 Hotkeys();
@@ -1384,10 +1396,64 @@ namespace DesktopHover
         private static Color VideoPixel(PreviewWindow window)
         {
             Rectangle area = Field<Rectangle>(window, "imageArea");
-            Point point = window.PointToScreen(new Point(area.Left + area.Width / 2, area.Top + area.Height / 2));
+            return ScreenPixel(window.PointToScreen(new Point(area.Left + area.Width / 2, area.Top + area.Height / 2)));
+        }
+        private static Color ScreenPixel(Point point)
+        {
             using (var pixel = new Bitmap(1, 1))
             using (Graphics graphics = Graphics.FromImage(pixel))
             { graphics.CopyFromScreen(point, Point.Empty, pixel.Size); return pixel.GetPixel(0, 0); }
+        }
+
+        private static void PinnedMediaGlass(string video)
+        {
+            if (video == null) { video = Path.Combine(output, "pinned-glass.avi"); WriteVideo(video); }
+            string audio = Path.Combine(output, "pinned-glass.wav"); WriteSilentWav(audio);
+            var settings = new AppSettings { Theme = "glass", AutoPlayMedia = true, LoopVideo = true, VolumePercent = 0, AnimationsEnabled = false };
+            using (var background = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual,
+                Bounds = Rectangle.Inflate(Screen.PrimaryScreen.WorkingArea, -24, -24), ShowInTaskbar = false, TopMost = true })
+            using (var window = new PreviewWindow(true))
+            {
+                background.Show(); window.Owner = background; window.TopMost = true;
+                window.Configure(settings);
+                foreach (string file in new[] { video, audio })
+                {
+                    Check(window.ShowFile(file, background.Bounds.Location, Rectangle.Empty), "pin opens " + Path.GetExtension(file));
+                    window.ActivatePinned();
+                    Until(() => window.MediaState == "media_playing" && window.PlaybackPosition.TotalMilliseconds > 100, 16000);
+                    Field<ToolStripButton>(window, "playbackButton").PerformClick();
+                    Check(window.MediaState == "media_paused", "the pinned transport pauses playback");
+                    Check(Field<MediaPlayback>(window, "media").HasVideo == (file == video), "decoder opens the expected media stream");
+                    Panel transport = Field<Panel>(window, "mediaControls");
+                    Label timeline = Field<Label>(window, "mediaTime");
+                    Rectangle area = Field<Rectangle>(window, "imageArea");
+                    Point[] samples = {
+                        window.PointToScreen(new Point(window.ClientSize.Width / 2, 8)),
+                        transport.PointToScreen(new Point(transport.Width / 3, 1)),
+                        timeline.PointToScreen(new Point(4, 4)),
+                        window.PointToScreen(new Point(area.Left + 18, area.Top + 18))
+                    };
+                    Color[] red = SampleMediaBackdrop(background, window, Color.Red, samples);
+                    Color[] blue = SampleMediaBackdrop(background, window, Color.Blue, samples);
+                    string[] regions = { "header", "playback controls", "timestamp", "media content" };
+                    for (int i = 0; i < samples.Length; i++)
+                    {
+                        bool translucent = WindowBackdrop.IsActive(window) && (i < 3 || file == audio);
+                        Check(translucent ? red[i].R > blue[i].R + 10 && blue[i].B > red[i].B + 10 &&
+                            red[i].GetBrightness() < .45 && blue[i].GetBrightness() < .45 :
+                            red[i].ToArgb() == blue[i].ToArgb(), Path.GetExtension(file) + " " + regions[i] +
+                            (translucent ? " reveals the tinted backdrop" : " stays opaque") + " (" + red[i] + ", " + blue[i] + ")");
+                    }
+                }
+            }
+        }
+        private static Color[] SampleMediaBackdrop(Form background, PreviewWindow window, Color color, Point[] samples)
+        {
+            background.BackColor = color; background.Refresh(); Pump(350);
+            var point = new Native.POINT { X = samples[0].X, Y = samples[0].Y };
+            if (Native.GetAncestor(Native.WindowFromPoint(point), 2) != window.Handle)
+                throw new InvalidOperationException("Another window covers the preview. The screen color check requires a visible preview.");
+            return Array.ConvertAll(samples, ScreenPixel);
         }
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr window);
@@ -1577,9 +1643,8 @@ namespace DesktopHover
             text.Append("trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n");
             File.WriteAllText(path, text.ToString(), Encoding.ASCII);
         }
-        private static void Playback()
+        private static void WriteSilentWav(string wav)
         {
-            string wav = Path.Combine(output, "silent.wav");
             using (var writer = new BinaryWriter(File.Create(wav)))
             {
                 writer.Write(Encoding.ASCII.GetBytes("RIFF")); writer.Write(96036);
@@ -1588,6 +1653,10 @@ namespace DesktopHover
                 writer.Write((short)2); writer.Write((short)16); writer.Write(Encoding.ASCII.GetBytes("data"));
                 writer.Write(96000); writer.Write(new byte[96000]);
             }
+        }
+        private static void Playback()
+        {
+            string wav = Path.Combine(output, "silent.wav"); WriteSilentWav(wav);
             using (var window = new PreviewWindow(true))
             {
                 window.Configure(new AppSettings { AutoPlayMedia = false, VolumePercent = 0, AnimationsEnabled = false });

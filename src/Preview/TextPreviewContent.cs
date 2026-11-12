@@ -19,6 +19,7 @@ namespace DesktopHover
         internal TextSpan[] Spans;
         internal int Heading;
         internal bool CodeBlock, ListItem;
+        internal int MarkdownBlock, MarkdownOffset;
     }
 
     internal sealed partial class TextPreviewContent

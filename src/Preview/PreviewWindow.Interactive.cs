@@ -168,7 +168,7 @@ namespace DesktopHover
                     if (table) LayoutTable();
                     else if (!textPreview.IsMarkdown) using (Graphics g = CreateGraphics())
                         textGutterWidth = Math.Max(Px(38), TextRenderer.MeasureText(g, Math.Max(1, textPreview.Lines.Length).ToString(), codeFont).Width + Px(20));
-                    if (reflow && findOpen) RebuildMatches();
+                    if (reflow && findOpen && matchIndex >= 0) StepMatch(0);
                 }
                 if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
                 Text = String.IsNullOrEmpty(fileName) ? L10n.Text(language, "pinned_preview") : fileName + " — Desktop Hover";

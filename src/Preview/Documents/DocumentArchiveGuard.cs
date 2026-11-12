@@ -8,11 +8,18 @@ namespace DesktopHover
     // Bound that work before constructing it, including when the EOCD count is forged.
     internal static class DocumentArchiveGuard
     {
-        private const int MaximumEntries = 4096;
+        internal const int MaximumEntries = 4096;
         private const long MaximumDirectoryBytes = 4L * 1024L * 1024L;
 
         internal static bool IsSafe(Stream stream, CancellationToken cancellation)
         {
+            bool exceeded;
+            return CheckDirectory(stream, cancellation, out exceeded);
+        }
+
+        internal static bool CheckDirectory(Stream stream, CancellationToken cancellation, out bool entryLimitExceeded)
+        {
+            entryLimitExceeded = false;
             if (stream == null || !stream.CanRead || !stream.CanSeek) return false;
             long originalPosition = stream.Position;
             try
@@ -37,15 +44,16 @@ namespace DesktopHover
                 uint directoryOffset = UInt32(tail, endRecord + 16);
                 // Multi-volume and ZIP64 containers are outside this bounded preview reader.
                 if (UInt16(tail, endRecord + 4) != 0 || UInt16(tail, endRecord + 6) != 0 ||
-                    UInt16(tail, endRecord + 8) != entries || entries > MaximumEntries ||
-                    directorySize == uint.MaxValue || directoryOffset == uint.MaxValue ||
-                    directorySize > MaximumDirectoryBytes)
+                    UInt16(tail, endRecord + 8) != entries ||
+                    directorySize == uint.MaxValue || directoryOffset == uint.MaxValue)
                     return false;
                 long endRecordOffset = length - tailLength + endRecord;
                 long directoryEnd = (long)directoryOffset + directorySize;
                 if (directoryEnd != endRecordOffset || directoryOffset > endRecordOffset) return false;
                 if (entries == 0) return directorySize == 0;
                 if (directorySize < 46L * entries) return false;
+                if (entries > MaximumEntries) { entryLimitExceeded = true; return false; }
+                if (directorySize > MaximumDirectoryBytes) return false;
 
                 stream.Position = directoryOffset;
                 byte[] header = new byte[46];

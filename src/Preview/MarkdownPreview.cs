@@ -28,7 +28,7 @@ namespace DesktopHover
                     if (fence == '\0') { fence = first; fenceLength = n; continue; }
                     if (first == fence && n >= fenceLength && value.Substring(n).Trim().Length == 0) { fence = '\0'; continue; }
                 }
-                var line = new TextPreviewLine { Text = source.Text, CodeBlock = fence != '\0' };
+                var line = new TextPreviewLine { Text = source.Text, CodeBlock = fence != '\0', MarkdownBlock = blocks.Count };
                 if (!line.CodeBlock)
                 {
                     if (first == '#' && n <= 6 && (n == value.Length || value[n] == ' '))
@@ -84,10 +84,12 @@ namespace DesktopHover
                         }
                         int space = rest.LastIndexOf(' ', lo);
                         int cut = space > 0 ? space : lo;
-                        rows.Add(new TextPreviewLine { Text = rest.Substring(0,cut), Heading = block.Heading, ListItem = block.ListItem });
+                        rows.Add(new TextPreviewLine { Text = rest.Substring(0,cut), Heading = block.Heading, ListItem = block.ListItem,
+                            MarkdownBlock = block.MarkdownBlock, MarkdownOffset = block.Text.Length - rest.Length });
                         rest = rest.Substring(cut).TrimStart();
                     }
-                    if (rest.Length > 0) rows.Add(new TextPreviewLine { Text = rest, Heading = block.Heading, ListItem = block.ListItem });
+                    if (rest.Length > 0) rows.Add(new TextPreviewLine { Text = rest, Heading = block.Heading, ListItem = block.ListItem,
+                        MarkdownBlock = block.MarkdownBlock, MarkdownOffset = block.Text.Length - rest.Length });
                 }
             }
             textPreview.Lines = rows.ToArray(); return true;

@@ -9,6 +9,8 @@ namespace DesktopHover
 {
     internal static class ArchiveListing
     {
+        internal sealed class EntryLimitException : IOException { }
+
         internal static bool Supports(string path)
         {
             string ext = Path.GetExtension(path ?? "").ToLowerInvariant();
@@ -23,7 +25,12 @@ namespace DesktopHover
             bool shortened = false;
             using (var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             {
-                if (!DocumentArchiveGuard.IsSafe(stream, cancellation)) throw new InvalidDataException("Unsupported archive directory.");
+                bool entryLimitExceeded;
+                if (!DocumentArchiveGuard.CheckDirectory(stream, cancellation, out entryLimitExceeded))
+                {
+                    if (entryLimitExceeded) throw new EntryLimitException();
+                    throw new InvalidDataException("Unsupported archive directory.");
+                }
                 stream.Position = 0;
                 using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
                 foreach (ZipArchiveEntry entry in zip.Entries)

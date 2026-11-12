@@ -91,14 +91,16 @@ namespace DesktopHover
             string term = findText.Text;
             if (term.Length != 0)
             {
-                for (int row = 0; row < textPreview.RowCount; row++)
+                var lines = textPreview.MarkdownSource ?? textPreview.Lines;
+                int rows = HasTable ? textPreview.TableRows.Length : lines.Length;
+                for (int row = 0; row < rows; row++)
                 {
                     if (HasTable)
                     {
                         string[] cells = textPreview.TableRows[row];
                         for (int col = 0; col < cells.Length; col++) FindIn(cells[col],term,row,col);
                     }
-                    else FindIn(textPreview.Lines[row].Text,term,row,0);
+                    else FindIn(lines[row].Text,term,row,0);
                 }
             }
             StepMatch(1);
@@ -118,8 +120,15 @@ namespace DesktopHover
             {
                 matchIndex = (matchIndex + step + matches.Count) % matches.Count;
                 var hit = matches[matchIndex];
-                if (hit.Row < textOffset || hit.Row >= textOffset + textVisibleLines)
-                    textOffset = Math.Max(0, Math.Min(hit.Row - textVisibleLines / 2,textPreview.RowCount - textVisibleLines));
+                int row = hit.Row;
+                if (textPreview.IsMarkdown)
+                {
+                    var lines = textPreview.Lines;
+                    row = Array.FindIndex(lines, line => line.MarkdownBlock == hit.Row &&
+                        line.MarkdownOffset + line.Text.Length > hit.Offset);
+                }
+                if (row >= 0 && (row < textOffset || row >= textOffset + textVisibleLines))
+                    textOffset = Math.Max(0, Math.Min(row - textVisibleLines / 2,textPreview.RowCount - textVisibleLines));
                 if (HasTable && (hit.Column < tableColumn || hit.Column >= tableColumn + tableVisibleColumns))
                 { tableColumn = hit.Column; LayoutTable(); UpdateToolbar(); }
             }
@@ -132,13 +141,21 @@ namespace DesktopHover
         {
             if (!findOpen || matchIndex < 0 || matchIndex >= matches.Count) return false;
             var hit = matches[matchIndex];
-            if (hit.Row != row || hit.Column != col || hit.Offset + findText.TextLength > value.Length) return false;
+            int offset = hit.Offset;
+            if (textPreview.IsMarkdown)
+            {
+                var visualLine = textPreview.Lines[row];
+                row = visualLine.MarkdownBlock;
+                offset -= visualLine.MarkdownOffset;
+            }
+            if (hit.Row != row || hit.Column != col) return false;
+            int prefix = Math.Max(0, offset);
+            int length = Math.Min(value.Length, offset + findText.TextLength) - prefix;
+            if (length <= 0) return false;
             var state = g.Save();
             try
             {
                 g.SetClip(bounds,System.Drawing.Drawing2D.CombineMode.Intersect);
-                int length = findText.TextLength;
-                int prefix = hit.Offset;
                 string left = value.Substring(0,prefix), term = value.Substring(prefix,length);
                 int before = TextRenderer.MeasureText(g,left,font,Size.Empty,MarkdownFlags).Width;
                 int mark = Math.Max(1,TextRenderer.MeasureText(g,term,font,Size.Empty,MarkdownFlags).Width);

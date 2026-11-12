@@ -94,6 +94,8 @@ namespace DesktopHover
             bool resize = maximumPreviewWidth != targetWidth || maximumPreviewHeight != targetHeight || upscale != settings.Upscale;
             bool resumeLoop = settings.LoopVideo && !previewSettings.LoopVideo && mediaState == "media_ended";
             bool themeChanged = !String.Equals(previewSettings.Theme, settings.Theme, StringComparison.OrdinalIgnoreCase);
+            if (settings.VolumePercent != previewSettings.VolumePercent)
+                volumePercent = Math.Max(0, Math.Min(100, settings.VolumePercent));
             previewSettings = settings.Clone();
             autoPlayMedia = settings.AutoPlayMedia;
             UiMotion.Enabled = settings.AnimationsEnabled;
@@ -112,7 +114,6 @@ namespace DesktopHover
             ForeColor=Brand.Text;
             maximumPreviewWidth=interactive ? Math.Max(640, settings.MaxWidth) : settings.MaxWidth;
             maximumPreviewHeight=interactive ? Math.Max(480, settings.MaxHeight) : settings.MaxHeight;
-            volumePercent=Math.Max(0,Math.Min(100,settings.VolumePercent));
             slideIntervalSeconds=Math.Max(1,Math.Min(10,settings.SlideIntervalSeconds));
             upscale=settings.Upscale;
             language=L10n.Normalize(settings.Language);
@@ -207,7 +208,7 @@ namespace DesktopHover
         {
             if (IsDisposed || String.IsNullOrEmpty(path)) return false;
             if (!previewSettings.Allows(path)) { ClearPreview(); return false; }
-            if (String.Equals(CurrentPath, path, StringComparison.OrdinalIgnoreCase) &&
+            if (!refreshing && String.Equals(CurrentPath, path, StringComparison.OrdinalIgnoreCase) &&
                 mediaKind == MediaKind.Image && (imageTask != null || preview != null)) return true;
             ClearPreview(false);
             try
@@ -224,7 +225,8 @@ namespace DesktopHover
                 var token = imageCancellation.Token;
                 var size = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
                 string source = CurrentPath;
-                imageTask = Task.Factory.StartNew(() => ImagePreviewLoader.Load(source, size, token),
+                bool refreshImage = refreshing;
+                imageTask = Task.Factory.StartNew(() => ImagePreviewLoader.Load(source, size, token, refreshImage),
                     System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
                 mediaTimer.Interval = 40; mediaTimer.Start();
                 Invalidate();
@@ -275,9 +277,17 @@ namespace DesktopHover
             }, TaskScheduler.Default);
         }
 
+        private string PreviewStatusText()
+        {
+            string text = L10n.Text(language, mediaState ?? "image_unavailable");
+            return mediaState == "archive_entry_limit"
+                ? String.Format(L10n.Culture(language), text, DocumentArchiveGuard.MaximumEntries)
+                : text;
+        }
+
         private void LayoutImage()
         {
-            description = preview == null ? L10n.Text(language, mediaState ?? "image_unavailable") :
+            description = preview == null ? PreviewStatusText() :
                 String.Format(L10n.Culture(language), "{0} × {1} px  ·  {2}", sourceWidth, sourceHeight, FormatBytes(sourceBytes));
             if (interactive) { LayoutInteractive(); return; }
             Rectangle area = Screen.FromPoint(mediaCursor).WorkingArea;
@@ -542,7 +552,8 @@ namespace DesktopHover
 
         private void PaintDocumentCard(Graphics graphics)
         {
-            using (var background = new SolidBrush(Brand.Surface)) graphics.FillRectangle(background, imageArea);
+            if (!interactive || !WindowBackdrop.IsActive(this))
+                using (var background = new SolidBrush(Brand.Surface)) graphics.FillRectangle(background, imageArea);
             var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
             int centerX = imageArea.Left + imageArea.Width / 2;
             int top = imageArea.Top + Px(24);
@@ -554,7 +565,7 @@ namespace DesktopHover
             }
             TextRenderer.DrawText(graphics, L10n.Text(language, mediaKind == MediaKind.Image ? "preview_title" : "document_preview"), titleFont,
                 new Rectangle(imageArea.X + Px(8), top + Px(48), Math.Max(1, imageArea.Width - Px(16)), Px(24)), Brand.Text, flags);
-            TextRenderer.DrawText(graphics, L10n.Text(language, mediaState), descriptionFont,
+            TextRenderer.DrawText(graphics, PreviewStatusText(), descriptionFont,
                 new Rectangle(imageArea.X + Px(18), top + Px(80), Math.Max(1, imageArea.Width - Px(36)),
                     Math.Max(1, imageArea.Height - Px(112))), Brand.Muted, flags | TextFormatFlags.WordBreak);
         }
@@ -762,6 +773,9 @@ namespace DesktopHover
 
         private void StartMediaSession(string path, bool requireVideo)
         {
+            // Let Show create the themed owner before passing its handle to WPF.
+            // Creating the handle while hidden can leave the first media pin solid.
+            LayoutMedia();
             var session = new MediaPlayback(Handle, mediaMuted ? 0 : volumePercent);
             media = session;
             session.Opened += delegate
@@ -803,7 +817,6 @@ namespace DesktopHover
             };
             session.Failed += delegate { MediaFailed(session); };
             mediaDeadline = DateTime.UtcNow.AddSeconds(15);
-            LayoutMedia();
             UpdateMediaDescription();
             mediaTimer.Start();
             session.Open(path);
@@ -1024,7 +1037,8 @@ namespace DesktopHover
             // The native video child draws live frames; GDI draws only the audio/loading card.
             if (media != null && media.IsOpen && media.HasVideo) return;
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            SettingsWindow.FillRound(graphics, imageArea, Px(9), Brand.Surface);
+            if (!interactive || !WindowBackdrop.IsActive(this))
+                SettingsWindow.FillRound(graphics, imageArea, Px(9), Brand.Surface);
             string title = L10n.Text(language, mediaKind == MediaKind.Video ? "video_preview" : "audio_preview");
             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;

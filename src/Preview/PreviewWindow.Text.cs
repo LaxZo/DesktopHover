@@ -16,7 +16,9 @@ namespace DesktopHover
             textCancellation.Dispose(); textCancellation = null;
             mediaTimer.Stop(); mediaTimer.Interval = 200;
             bool archive = ArchiveListing.Supports(CurrentPath);
+            string errorKey = archive ? "archive_unavailable" : "text_unavailable";
             try { textPreview = task.GetAwaiter().GetResult(); }
+            catch (ArchiveListing.EntryLimitException) { textPreview = null; errorKey = "archive_entry_limit"; }
             catch (Exception error)
             {
                 textPreview = null;
@@ -24,7 +26,7 @@ namespace DesktopHover
             }
             if (textPreview == null)
             {
-                mediaState = archive ? "archive_unavailable" : "text_unavailable";
+                mediaState = errorKey;
                 LayoutImage(); ShowPreview(); Invalidate();
             }
             else { mediaState = null; LayoutText(); RestoreLoadedView(); if (findOpen) RebuildMatches(); }

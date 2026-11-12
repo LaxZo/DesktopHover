@@ -50,8 +50,8 @@ namespace DesktopHover
                     repinRequested = false;
                     if (manual || missing || (!IsPreviewLoading && changed))
                     {
-                        if (unavailable) ShowUnavailableFile(stamp);
-                        else ReloadPinned();
+                        if (unavailable) ShowUnavailableFile(CurrentPath, stamp, CaptureView());
+                        else ReloadPinned(stamp);
                     }
                     if (contentStamp == null) contentStamp = stamp;
                     observedChange = stamp;
@@ -80,24 +80,25 @@ namespace DesktopHover
             CheckFileChanges();
         }
 
-        private void ReloadPinned()
+        private void ReloadPinned(string stamp)
         {
             string path = CurrentPath; Point cursor = mediaCursor; Rectangle item = mediaItemBounds;
             PinnedViewState view = CaptureView();
             PowerPointPreviewReader.Invalidate(path);
             OfficePreviewReader.Invalidate(path);
-            ImagePreviewLoader.Invalidate();
             refreshing = true; reloadView = view;
-            try { ClearPreview(false); ShowFile(path, cursor, item); }
+            try
+            {
+                if (!ShowFile(path, cursor, item))
+                    ShowUnavailableFile(path, stamp, view);
+            }
             finally { refreshing = false; }
         }
 
-        private void ShowUnavailableFile(string stamp)
+        private void ShowUnavailableFile(string path, string stamp, PinnedViewState view)
         {
-            PinnedViewState view = CaptureView();
-            string path = CurrentPath, name = fileName;
             ClearPreview(false);
-            CurrentPath = path; fileName = name; contentStamp = stamp;
+            CurrentPath = path; fileName = System.IO.Path.GetFileName(path); contentStamp = stamp;
             reloadView = view;
             mediaKind = MediaKind.Document; mediaState = "file_unavailable";
             description = L10n.Text(language, mediaState);
