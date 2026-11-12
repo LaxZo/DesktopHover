@@ -1,4 +1,6 @@
 using System;
+using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace DesktopHover
@@ -6,7 +8,8 @@ namespace DesktopHover
     public sealed partial class PreviewWindow
     {
         private readonly OfficeViewOptions officeView = new OfficeViewOptions();
-        private ToolStripComboBox sheetPicker;
+        private WorksheetPicker sheetPicker;
+        private ToolStripControlHost sheetHost;
         private VScrollBar officeScroll;
         private HScrollBar officeHorizontalScroll;
         private Timer officeTimer;
@@ -17,9 +20,10 @@ namespace DesktopHover
 
         private void InitializeOfficeView()
         {
-            sheetPicker = new ToolStripComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AutoSize = false, Width = 130, Visible = false };
-            toolbar.Items.Add(sheetPicker);
-            UiDrawing.StylePicker(sheetPicker);
+            sheetPicker = new WorksheetPicker();
+            sheetHost = new ToolStripControlHost(sheetPicker) { AutoSize = false, Visible = false,
+                Margin = new Padding(2, 0, 2, 0), Overflow = ToolStripItemOverflow.Never };
+            toolbar.Items.Add(sheetHost);
             officeScroll = new VScrollBar { Visible = false, SmallChange = 80 };
             Controls.Add(officeScroll);
             officeHorizontalScroll = new HScrollBar { Visible = false, SmallChange = 80 };
@@ -74,16 +78,24 @@ namespace DesktopHover
                 officeHorizontalScroll.Maximum = officeContentWidth - 1;
                 officeHorizontalScroll.Value = Math.Max(0, Math.Min(officeView.ScrollX, officeContentWidth - officePageWidth));
                 officeView.ScrollX = officeHorizontalScroll.Value;
-                sheetPicker.Items.Clear();
-                if (result.SheetNames != null)
+                string[] names = result.SheetNames ?? Array.Empty<string>();
+                if (!sheetPicker.Items.Cast<string>().SequenceEqual(names))
                 {
-                    sheetPicker.Items.AddRange(result.SheetNames);
+                    sheetPicker.BeginUpdate();
+                    try
+                    {
+                        sheetPicker.Items.Clear();
+                        sheetPicker.Items.AddRange(names);
+                    }
+                    finally { sheetPicker.EndUpdate(); }
+                }
+                if (names.Length > 0)
+                {
                     sheetPicker.SelectedIndex = result.SheetIndex;
                     officeView.SheetIndex = result.SheetIndex;
                     officeView.SheetName = sheetPicker.SelectedItem as string;
                 }
-                sheetPicker.Visible = sheetPicker.Items.Count > 1;
-                sheetPicker.ToolTipText = sheetPicker.AccessibleName = L10n.Text(language, "worksheet");
+                sheetHost.Visible = sheetPicker.Items.Count > 1;
             }
             finally { updatingOffice = false; }
         }
@@ -91,6 +103,12 @@ namespace DesktopHover
         private void LayoutOfficeView()
         {
             if (officeScroll == null) return;
+            if (sheetHost.Available)
+            {
+                sheetPicker.SetMetrics(scale, toolbarFont);
+                sheetHost.Size = new Size(Px(144), sheetPicker.PreferredHeight);
+                sheetHost.ToolTipText = sheetHost.AccessibleName = sheetPicker.AccessibleName = L10n.Text(language, "worksheet");
+            }
             officeScroll.Visible = IsOfficeView && officeContentHeight > officePageHeight;
             officeHorizontalScroll.Visible = IsOfficeView && officeContentWidth > officePageWidth;
             int width = SystemInformation.VerticalScrollBarWidth;
@@ -127,7 +145,8 @@ namespace DesktopHover
             officeView.SheetName = null;
             officeHorizontalScroll.Value = 0; officeHorizontalScroll.Visible = false;
             officeScroll.Value = 0; officeScroll.Visible = false;
-            sheetPicker.Items.Clear(); sheetPicker.Visible = false; updatingOffice = false;
+            if (sheetPicker.IsHandleCreated && sheetPicker.DroppedDown) sheetPicker.DroppedDown = false;
+            sheetPicker.Items.Clear(); sheetHost.Visible = false; updatingOffice = false;
         }
     }
 }

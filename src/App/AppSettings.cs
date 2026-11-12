@@ -81,7 +81,7 @@ namespace DesktopHover
             }
         }
         public bool StartWithWindows;
-        public string Language="en";
+        public string Language="system";
         public string Theme="dark";
 
         internal static string DefaultPath

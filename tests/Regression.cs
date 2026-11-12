@@ -36,6 +36,14 @@ namespace DesktopHover
                 {
                     WindowsAccentPreferences(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                if (args.Length > 1 && args[1] == "new-formats")
+                {
+                    NewFormats(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
+                if (args.Length > 1 && args[1] == "menu-layout")
+                {
+                    PopupSpacing(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "table-data")
                 {
                     TabularPreviewData(); Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
@@ -122,6 +130,8 @@ namespace DesktopHover
                     PowerPointPriority(args[2], args[3]);
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                NewFormats();
+                PopupSpacing();
                 TabularPreviewData();
                 TableWindowAndHotkeys();
                 ReviewFixes();
@@ -575,23 +585,31 @@ namespace DesktopHover
         private static void TrayLayoutAndMotion()
         {
             var settings = new AppSettings { Language = "lv", AnimationsEnabled = false };
+            using (var owner = new Form { ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.Manual, ClientSize = new Size(8, 8) })
             using (var menu = new TrayMenu(() => settings, () => false,
                 value => { settings = value; UiMotion.Enabled = value.AnimationsEnabled; }, value => { }, () => { }, () => { }))
             {
                 menu.SetHotkeyState(true, true);
                 Rectangle work = Screen.PrimaryScreen.WorkingArea;
                 Point origin = new Point(work.Right - 20, work.Bottom - 20);
-                menu.Show(origin); Pump(30);
+                // NotifyIcon gives its menu a foreground window. Provide a live owner
+                // after earlier UI tests have closed their forms.
+                owner.Location = origin; owner.Show(); owner.Activate(); Pump(30);
+                Action showMenu = delegate { menu.Show(owner, owner.PointToClient(origin)); };
+                showMenu(); Pump(30);
                 Rectangle settled = menu.Bounds;
                 Console.WriteLine("Compact Latvian tray menu: " + menu.Width + " x " + menu.Height);
                 Check(menu.Height <= 410 && menu.Width <= 335, "Latvian tray menu stays compact with both shortcuts");
-                Check(menu.Visible && menu.Opacity == 1 && Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds), "disabled tray motion opens immediately inside the screen");
+                Check(menu.Visible && menu.Opacity == 1 && Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds),
+                    "disabled tray motion opens immediately inside the screen (visible=" + menu.Visible + ", opacity=" + menu.Opacity +
+                    ", bounds=" + menu.Bounds + ", work area=" + Screen.FromRectangle(menu.Bounds).WorkingArea + ")");
                 using (var bitmap = new Bitmap(menu.Width, menu.Height))
                 { menu.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(Path.Combine(output, "tray-compact-lv.png")); }
                 menu.Close();
                 foreach (var language in L10n.Languages)
                 {
-                    settings.Language = language.Code; menu.RefreshState(); menu.Show(origin); Pump(10);
+                    settings.Language = language.Code; menu.RefreshState(); showMenu(); Pump(10);
                     bool fits = Screen.FromRectangle(menu.Bounds).WorkingArea.Contains(menu.Bounds);
                     foreach (ToolStripItem item in menu.Items)
                         if (item.Available) fits &= item.Bounds.Top >= 0 && item.Bounds.Bottom <= menu.Height;
@@ -599,7 +617,7 @@ namespace DesktopHover
                     menu.Close();
                 }
                 settings.Language = "lv"; settings.AnimationsEnabled = true; menu.RefreshState();
-                menu.Show(origin);
+                showMenu();
                 Check(menu.Opacity < 1 && VisibleMenuArea(menu) < menu.Width * menu.Height * .85,
                     "tray entrance starts faded and reveals from a corner");
                 Pump(50);
@@ -608,12 +626,12 @@ namespace DesktopHover
                 Check(menu.Visible && menu.Opacity == 1 && menu.Bounds == settled,
                     "tray entrance finishes at the normal Windows menu position");
                 Check(VisibleMenuArea(menu) > menu.Width * menu.Height * .98, "completed entrance restores the full rounded menu");
-                menu.Close(); menu.Show(origin); menu.Close(); Pump(300);
+                menu.Close(); showMenu(); menu.Close(); Pump(300);
                 Check(!menu.Visible && menu.Opacity == 1, "closing during entrance cancels motion without reopening the menu");
-                menu.Show(origin); UiMotion.Enabled = false;
+                showMenu(); UiMotion.Enabled = false;
                 Check(menu.Visible && menu.Opacity == 1 && menu.Bounds == settled && VisibleMenuArea(menu) > menu.Width * menu.Height * .98,
                     "disabling motion mid-entrance restores full menu immediately");
-                menu.Close(); UiMotion.Enabled = true; menu.Show(origin);
+                menu.Close(); UiMotion.Enabled = true; showMenu();
                 typeof(Control).GetMethod("OnKeyDown", Private).Invoke(menu, new object[] { new KeyEventArgs(Keys.Down) });
                 Check(menu.Opacity == 1 && menu.Bounds == settled, "keyboard navigation finishes the entrance before selecting items");
                 var sizes = (ToolStripMenuItem)menu.Items["image-size"];
@@ -1402,11 +1420,33 @@ namespace DesktopHover
                 window.Configure(new AppSettings { AnimationsEnabled = false, Language = "lv" });
                 window.ShowFile(sheetPath, new Point(300, 300), Rectangle.Empty);
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
-                var picker = Field<ToolStripComboBox>(window, "sheetPicker");
+                var picker = Field<WorksheetPicker>(window, "sheetPicker");
                 Check(picker.Visible && picker.Items.Count == 2, "worksheet picker includes visible sheets");
-                picker.SelectedIndex = 1; Pump(160);
+                foreach (string theme in new[] { "dark", "light", "glass" })
+                {
+                    window.Configure(new AppSettings { Theme = theme, Language = "lv", AnimationsEnabled = false, UseWindowsAccent = true });
+                    Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                    picker.Focus(); picker.DroppedDown = true; Pump(60);
+                    Check(picker.DroppedDown && picker.DrawMode == DrawMode.OwnerDrawFixed &&
+                        picker.BackColor == (SystemInformation.HighContrast ? SystemColors.Window : Brand.Surface) &&
+                        picker.DropDownWidth >= picker.Width && picker.AccessibleName == L10n.Text("lv", "worksheet"),
+                        "worksheet menu opens with the " + theme + " palette and localized name");
+                    CaptureScreen(window, "worksheet-menu-" + theme + ".png");
+                    picker.DroppedDown = false;
+                }
+                window.Configure(new AppSettings { AnimationsEnabled = false, Language = "lv" });
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
-                Check(picker.SelectedIndex == 1 && Field<OfficeViewOptions>(window, "officeView").SheetIndex == 1, "worksheet selection survives asynchronous render");
+                picker.Focus(); picker.DroppedDown = true;
+                InfoTipRestoreGuard.PostMessage(picker.Handle, 0x0100, (IntPtr)Keys.Down, IntPtr.Zero);
+                InfoTipRestoreGuard.PostMessage(picker.Handle, 0x0100, (IntPtr)Keys.Enter, IntPtr.Zero);
+                Pump(180);
+                Until(() => !Field<bool>(window, "documentLoading"), 5000);
+                Check(!picker.DroppedDown && picker.SelectedIndex == 1 && Field<OfficeViewOptions>(window, "officeView").SheetIndex == 1,
+                    "keyboard worksheet selection survives asynchronous render");
+                picker.DroppedDown = true;
+                InfoTipRestoreGuard.PostMessage(picker.Handle, 0x0100, (IntPtr)Keys.Escape, IntPtr.Zero);
+                Pump(40);
+                Check(!picker.DroppedDown && window.Visible && picker.SelectedIndex == 1, "Escape dismisses only the worksheet list");
                 var scroll = Field<VScrollBar>(window, "officeScroll");
                 Check(scroll.Visible && scroll.Maximum > scroll.LargeChange * 3, "long worksheet exposes scrolling");
                 // First column uses 30 / (30 + 10 + 8.43) of the available width.
@@ -1452,7 +1492,7 @@ namespace DesktopHover
                 window.Configure(new AppSettings { AnimationsEnabled = false });
                 window.ShowFile(sheetPath, new Point(300, 300), Rectangle.Empty);
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
-                var picker = Field<ToolStripComboBox>(window, "sheetPicker"); picker.SelectedIndex = 1; Pump(160);
+                var picker = Field<WorksheetPicker>(window, "sheetPicker"); picker.SelectedIndex = 1; Pump(160);
                 Until(() => !Field<bool>(window, "documentLoading"), 5000);
                 var horizontal = Field<HScrollBar>(window, "officeHorizontalScroll");
                 Check(horizontal.Visible && horizontal.Maximum > 1000000, "Excel exposes horizontal scrolling through column XFD");
@@ -1572,6 +1612,18 @@ namespace DesktopHover
                 Field<CheckBox>(window, "mediaMute").Checked = false;
                 Check(!player.IsMuted && Math.Abs(player.Volume - .35) < .001, "unmute restores the selected volume");
                 Snapshot(window, "audio-timeline.png");
+                var mute = Field<MuteButton>(window, "mediaMute");
+                foreach (string theme in new[] { "dark", "light", "glass" })
+                {
+                    window.Configure(new AppSettings { Theme = theme, Language = "lv", VolumePercent = 35,
+                        AnimationsEnabled = false, AutoPlayMedia = false, UseWindowsAccent = true });
+                    Check(mute.AccessibleName == "Bez skaņas" && mute.Width >= TextRenderer.MeasureText(mute.Text, mute.Font).Width + 40,
+                        "localized mute label fits in the " + theme + " theme");
+                    mute.Checked = false; Snapshot(mute, "sound-on-" + theme + ".png");
+                    mute.Checked = true; Snapshot(mute, "sound-off-" + theme + ".png");
+                    Check(player.IsMuted && (mute.AccessibilityObject.State & AccessibleStates.Checked) != 0,
+                        "themed mute button exposes its active state in " + theme);
+                }
             }
         }
         private static void VideoLoop(string path)

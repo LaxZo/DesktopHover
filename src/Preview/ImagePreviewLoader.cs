@@ -80,7 +80,12 @@ namespace DesktopHover
                 }
                 else
                 {
-                    result.Image = PreviewWindow.LoadImage(path, size.Width, size.Height,
+                    if (SvgPreview.Supports(path))
+                    {
+                        result.Image = SvgPreview.Load(path, size, cancellation, out result.Width, out result.Height);
+                        result.Bytes = info.Length;
+                    }
+                    else result.Image = PreviewWindow.LoadImage(path, size.Width, size.Height,
                         out result.Width, out result.Height, out result.Bytes);
                     cancellation.ThrowIfCancellationRequested();
                     long cost = (long)result.Image.Width * result.Image.Height * 4;

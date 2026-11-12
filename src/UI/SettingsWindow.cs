@@ -94,7 +94,7 @@ namespace DesktopHover
             themeToggle.SetBounds(242, 1158, 40, 32);
             themeMenu = new ContextMenuStrip {
                 Name = "theme-menu", Font = bodyFont, ShowImageMargin = false, ShowCheckMargin = true,
-                DropShadowEnabled = false, Padding = new Padding(5), Renderer = new HoverMenuRenderer()
+                DropShadowEnabled = false, Renderer = new HoverMenuRenderer(checksOnRight: true)
             };
             MenuMotion.Attach(themeMenu); SystemCursors.UseHand(themeMenu);
             foreach (string theme in new[] { "dark", "light", "glass" })
@@ -136,10 +136,12 @@ namespace DesktopHover
                 ShowImageMargin = false,
                 ShowCheckMargin = true,
                 DropShadowEnabled = false,
-                Padding = new Padding(5),
-                Renderer = new HoverMenuRenderer()
+                Renderer = new HoverMenuRenderer(checksOnRight: true)
             };
             MenuMotion.Attach(languageMenu);
+            var follow = new ToolStripMenuItem { Name = "language-system", Tag = "system", AutoSize = false };
+            follow.Click += delegate { this.settings.Language = "system"; Apply(); };
+            languageMenu.Items.Add(follow);
             SystemCursors.UseHand(languageMenu);
             foreach (L10n.LanguageOption language in L10n.Languages)
             {
@@ -148,14 +150,11 @@ namespace DesktopHover
                 {
                     Name = "language-" + code,
                     Tag = code,
-                    AutoSize = false,
-                    Size = new Size(272, 30)
+                    AutoSize = false
                 };
                 item.Click += delegate { this.settings.Language = code; Apply(); };
                 languageMenu.Items.Add(item);
             }
-            languageMenu.AutoSize = false;
-            languageMenu.Size = new Size(240, languageMenu.Items.Count * 30 + languageMenu.Padding.Vertical);
             languageMenu.Opened += delegate
             {
                 languagePicker.Selected = true;
@@ -386,22 +385,26 @@ namespace DesktopHover
             int rowWidth = Math.Max(Math.Max(modifiers.Width, key.Width), TextRenderer.MeasureText(save.Text, menu.Font).Width + (int)(32 * uiScale));
             modifiers.Width = key.Width = rowWidth;
             save.AutoSize = false; save.Size = new Size(rowWidth, (int)Math.Round(29 * uiScale));
-            int menuHeight = menu.Padding.Vertical;
-            foreach (ToolStripItem item in menu.Items) menuHeight += item.Height + item.Margin.Vertical;
-            menu.AutoSize = false;
-            menu.Size = new Size(rowWidth + menu.Padding.Horizontal, menuHeight);
             Control anchor = forPin ? pinShortcutButton : toggleShortcutButton;
+            UiDrawing.FitMenuRows(menu, anchor, uiScale);
             menu.Show(anchor, new Point(0, anchor.Height));
         }
 
         private void ShowLanguageMenu()
         {
             if (languageMenu.Visible) { languageMenu.Close(); return; }
+            int itemWidth = (int)Math.Round(180 * uiScale);
+            int itemHeight = (int)Math.Round(30 * uiScale);
+            foreach (ToolStripItem item in languageMenu.Items)
+                itemWidth = Math.Max(itemWidth, TextRenderer.MeasureText(item.Text, languageMenu.Font).Width + (int)(50 * uiScale));
+            foreach (ToolStripItem item in languageMenu.Items) item.Size = new Size(itemWidth, itemHeight);
+            UiDrawing.FitMenuRows(languageMenu, languagePicker, uiScale);
             languageMenu.Show(languagePicker, new Point(languagePicker.Width, -5), ToolStripDropDownDirection.AboveLeft);
         }
         private void ShowThemeMenu()
         {
             if (themeMenu.Visible) { themeMenu.Close(); return; }
+            UiDrawing.FitMenuRows(themeMenu, themeToggle, uiScale);
             themeMenu.Show(themeToggle, new Point(themeToggle.Width, -5), ToolStripDropDownDirection.AboveLeft);
         }
 
@@ -557,6 +560,7 @@ namespace DesktopHover
             languageMenu.AccessibleName = T("language");
             foreach (ToolStripMenuItem item in languageMenu.Items)
             {
+                if ((string)item.Tag == "system") item.Text = T("follow_windows");
                 item.BackColor = Brand.Surface;
                 item.ForeColor = Brand.Text;
                 item.Checked = (string)item.Tag == settings.Language;
@@ -861,7 +865,20 @@ namespace DesktopHover
 
     internal sealed class HoverMenuRenderer : ToolStripProfessionalRenderer
     {
-        public HoverMenuRenderer() { RoundedEdges = false; }
+        private readonly bool checksOnRight;
+        public HoverMenuRenderer(bool checksOnRight = false)
+        {
+            this.checksOnRight = checksOnRight;
+            RoundedEdges = false;
+        }
+
+        private bool IsChoiceRow(ToolStripMenuItem item)
+        {
+            if (item == null) return false;
+            var menu = item.Owner as ToolStripDropDownMenu;
+            // WinForms can use the parent renderer for automatically created submenus.
+            return checksOnRight || (menu != null && menu.ShowCheckMargin && menu.OwnerItem != null && !item.HasDropDownItems);
+        }
 
         protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
         {
@@ -917,7 +934,13 @@ namespace DesktopHover
             e.TextColor = !e.Item.Enabled ? Brand.Muted : item != null && item.Checked ? Brand.Accent :
                 UiMotion.Blend(Brand.Text, Brand.Accent, MenuMotion.HoverAmount(e.Item));
             // Native text bounds omit the extra row padding; center against the whole row.
-            e.TextRectangle = new Rectangle(e.TextRectangle.X, 0, e.TextRectangle.Width, e.Item.Height);
+            if (IsChoiceRow(item))
+            {
+                int inset = Math.Max(4, item.Height / 4);
+                e.TextRectangle = new Rectangle(inset, 0, Math.Max(1, item.Width - 4 * inset), item.Height);
+                e.TextFormat |= TextFormatFlags.EndEllipsis;
+            }
+            else e.TextRectangle = new Rectangle(e.TextRectangle.X, 0, e.TextRectangle.Width, e.Item.Height);
             e.TextFormat = (e.TextFormat & ~TextFormatFlags.Bottom) |
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
             base.OnRenderItemText(e);
@@ -926,7 +949,8 @@ namespace DesktopHover
         protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            int x = e.ImageRectangle.Left + e.ImageRectangle.Width / 2;
+            int x = IsChoiceRow(e.Item as ToolStripMenuItem) ? e.Item.Width - 2 * Math.Max(4, e.Item.Height / 4) :
+                e.ImageRectangle.Left + e.ImageRectangle.Width / 2;
             int y = e.Item.Height / 2;
             using (var pen = new Pen(Brand.Accent, 1.7f))
             {

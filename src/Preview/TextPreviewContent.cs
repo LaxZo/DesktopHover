@@ -17,6 +17,8 @@ namespace DesktopHover
     {
         internal string Text;
         internal TextSpan[] Spans;
+        internal int Heading;
+        internal bool CodeBlock, ListItem;
     }
 
     internal sealed partial class TextPreviewContent
@@ -31,6 +33,7 @@ namespace DesktopHover
         internal string LanguageName, EncodingName;
         internal bool IsCode, Truncated;
         internal long FileBytes;
+        internal int ArchiveFileCount = -1;
 
         internal static bool IsSupported(string path)
         {
@@ -42,7 +45,7 @@ namespace DesktopHover
         internal static TextPreviewContent Load(string path, System.Threading.CancellationToken cancellation = default(System.Threading.CancellationToken))
         {
             cancellation.ThrowIfCancellationRequested();
-            if (!IsSupported(path)) throw new InvalidDataException("Unsupported text file.");
+            if (!IsSupported(path) && !ArchiveListing.Supports(path)) throw new InvalidDataException("Unsupported text file.");
             path = Path.GetFullPath(path);
             // Hovering must never fetch network content or hydrate an online-only cloud file.
             if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
@@ -51,6 +54,7 @@ namespace DesktopHover
             var file = new FileInfo(path);
             if (!file.Exists || ((int)file.Attributes & (0x10 | 0x1000 | 0x40000 | 0x400000)) != 0)
                 throw new IOException("The file is not available locally.");
+            if (ArchiveListing.Supports(path)) return ArchiveListing.Load(file, cancellation);
 
             byte[] bytes = new byte[MaximumBytes];
             int count = 0;
@@ -80,7 +84,7 @@ namespace DesktopHover
                 return table;
             }
             string language = LanguageFor(path);
-            var lexer = new Lexer(language);
+            var lexer = language == "Markdown" ? null : new Lexer(language);
             var lines = new List<TextPreviewLine>();
             int start = 0;
             while (start <= text.Length && lines.Count < MaximumLines)
@@ -92,7 +96,7 @@ namespace DesktopHover
                 if (line.Length > MaximumColumns) truncated = true;
                 // Scan the complete (bounded) line so a comment after column 500 still
                 // affects the following line, even though only its first 500 columns show.
-                TextSpan[] spans = lexer.Scan(line);
+                TextSpan[] spans = lexer == null ? null : lexer.Scan(line);
                 lines.Add(new TextPreviewLine {
                     Text = line.Length > MaximumColumns ? line.Substring(0, MaximumColumns) : line,
                     Spans = spans
@@ -102,10 +106,12 @@ namespace DesktopHover
                 if (text[end] == '\r' && start < text.Length && text[start] == '\n') start++;
             }
             if (start <= text.Length) truncated = true;
-            return new TextPreviewContent {
+            var content = new TextPreviewContent {
                 Lines = lines.ToArray(), LanguageName = language, EncodingName = encodingName,
-                IsCode = language != "Plain text", Truncated = truncated, FileBytes = fileBytes
+                IsCode = language != "Plain text" && language != "Markdown", Truncated = truncated, FileBytes = fileBytes
             };
+            if (language == "Markdown") content.FormatMarkdown();
+            return content;
         }
 
         private static string Decode(byte[] bytes, int count, bool truncated, out string name)
@@ -160,7 +166,7 @@ namespace DesktopHover
                 throw new InvalidDataException("Binary files cannot be previewed as text.");
         }
 
-        private static string NormalizeLine(string text, int start, int end)
+        internal static string NormalizeLine(string text, int start, int end)
         {
             var line = new StringBuilder(end - start);
             for (int i = start; i < end; i++)
@@ -198,11 +204,13 @@ namespace DesktopHover
                 case ".yaml": case ".yml": return "YAML";
                 case ".ini": case ".cfg": case ".conf": case ".toml": case ".properties": return "INI";
                 case ".html": case ".htm": case ".xhtml": case ".vue": case ".svelte": return "HTML";
-                case ".xml": case ".xaml": case ".svg": case ".csproj": case ".vbproj": case ".props": case ".targets": case ".resx": case ".config": return "XML";
+                case ".xml": case ".xaml": case ".csproj": case ".vbproj": case ".props": case ".targets": case ".resx": case ".config": return "XML";
                 case ".css": case ".scss": case ".sass": case ".less": return "CSS";
                 case ".sql": return "SQL";
                 case ".go": return "Go";
                 case ".rs": return "Rust";
+                case ".lua": return "Lua";
+                case ".dart": return "Dart";
                 case ".kt": case ".kts": return "Kotlin";
                 case ".swift": return "Swift";
                 case ".php": case ".phtml": return "PHP";
@@ -222,7 +230,6 @@ namespace DesktopHover
             private readonly bool hashComments, slashComments, blockComments, markup;
             private string blockEnd, stringEnd;
             private bool doubledQuote, backtickEscape, insideTag, tagName;
-            private char markdownFence;
 
             internal Lexer(string language)
             {
@@ -230,7 +237,7 @@ namespace DesktopHover
                 markup = language == "HTML" || language == "XML";
                 hashComments = language == "Python" || language == "PowerShell" || language == "Shell" || language == "Ruby" ||
                     language == "YAML" || language == "INI" || language == "Dockerfile" || language == "Makefile" || language == "CMake" || language == "PHP";
-                slashComments = !markup && !hashComments && language != "Plain text" && language != "Markdown" && language != "SQL" && language != "Batch";
+                slashComments = !markup && !hashComments && language != "Plain text" && language != "Markdown" && language != "SQL" && language != "Batch" && language != "Lua";
                 if (language == "PHP") slashComments = true;
                 blockComments = slashComments || language == "SQL";
                 var comparer = language == "SQL" || language == "PowerShell" || language == "Batch" || language == "Dockerfile" || language == "CMake" ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -242,7 +249,6 @@ namespace DesktopHover
             {
                 var spans = new List<TextSpan>();
                 if (language == "Plain text") return spans.ToArray();
-                if (language == "Markdown") { ScanMarkdown(line, spans); return spans.ToArray(); }
                 int i = 0;
                 bool firstToken = true;
                 while (i < line.Length)
@@ -276,7 +282,22 @@ namespace DesktopHover
                         if (c == '>') { insideTag = false; i++; Add(spans, start, i, TextTokenKind.Operator); continue; }
                         if (!insideTag) { i++; continue; }
                     }
+                    if (language == "Lua" && (c == '[' || At(line, i, "--[")))
+                    {
+                        bool comment = c == '-';
+                        int open = comment ? i + 2 : i, end = open + 1;
+                        while (end < line.Length && line[end] == '=') end++;
+                        if (end < line.Length && line[end] == '[')
+                        {
+                            string close = "]" + line.Substring(open + 1, end - open - 1) + "]";
+                            int stop = line.IndexOf(close, end + 1, StringComparison.Ordinal);
+                            if (stop < 0) { if (comment) blockEnd = close; else { stringEnd = close; doubledQuote = backtickEscape = false; } }
+                            i = stop < 0 ? line.Length : stop + close.Length;
+                            Add(spans, start, i, comment ? TextTokenKind.Comment : TextTokenKind.String); continue;
+                        }
+                    }
                     if ((hashComments && c == '#') || (slashComments && At(line, i, "//")) ||
+                        (language == "Lua" && At(line, i, "--")) ||
                         (language == "SQL" && At(line, i, "--")) || (language == "INI" && c == ';') ||
                         (language == "Batch" && firstToken && (At(line, i, "::") || WordAt(line, i, "rem"))))
                     { Add(spans, start, line.Length, TextTokenKind.Comment); break; }
@@ -290,7 +311,7 @@ namespace DesktopHover
                     if (verbatim || c == '\'' || c == '"' || ((language == "JavaScript" || language == "TypeScript" || language == "Go") && c == '`'))
                     {
                         char quote = line[i];
-                        bool triple = language == "Python" && At(line, i, new string(quote, 3));
+                        bool triple = (language == "Python" || language == "Dart") && At(line, i, new string(quote, 3));
                         stringEnd = new string(quote, triple ? 3 : 1);
                         doubledQuote = verbatim || language == "SQL" || language == "PowerShell";
                         backtickEscape = language == "PowerShell";
@@ -350,37 +371,6 @@ namespace DesktopHover
                 }
             }
 
-            private void ScanMarkdown(string line, List<TextSpan> spans)
-            {
-                int first = 0;
-                while (first < line.Length && Char.IsWhiteSpace(line[first])) first++;
-                if (first + 2 < line.Length && ((line[first] == '`' && At(line, first, "```")) || (line[first] == '~' && At(line, first, "~~~"))))
-                {
-                    if (markdownFence == '\0') markdownFence = line[first];
-                    else if (markdownFence == line[first]) markdownFence = '\0';
-                    Add(spans, first, line.Length, TextTokenKind.Preprocessor); return;
-                }
-                if (markdownFence != '\0') { Add(spans, 0, line.Length, TextTokenKind.String); return; }
-                if (first < line.Length && line[first] == '#') { Add(spans, first, line.Length, TextTokenKind.Keyword); return; }
-                if (first < line.Length && line[first] == '>') { Add(spans, first, line.Length, TextTokenKind.Comment); return; }
-                int i = 0;
-                while (i < line.Length)
-                {
-                    char c = line[i];
-                    if (c == '`' || c == '*' || c == '_')
-                    {
-                        int end = line.IndexOf(c, i + 1);
-                        if (end >= 0) { Add(spans, i, end + 1, c == '`' ? TextTokenKind.String : TextTokenKind.Keyword); i = end + 1; continue; }
-                    }
-                    if (c == '[')
-                    {
-                        int end = line.IndexOf(']', i + 1);
-                        if (end >= 0) { Add(spans, i, end + 1, TextTokenKind.Property); i = end + 1; continue; }
-                    }
-                    i++;
-                }
-            }
-
             private static void Add(List<TextSpan> spans, int start, int end, TextTokenKind kind)
             {
                 if (kind == TextTokenKind.Plain || start >= MaximumColumns) return;
@@ -406,6 +396,8 @@ namespace DesktopHover
                     case "PowerShell": return "begin break catch class continue data define do dynamicparam else elseif end enum exit filter finally for foreach from function if in param process return switch throw trap try until using var while workflow parallel sequence $true $false $null";
                     case "Shell": return "if then else elif fi for while until in do done case esac function select time export local readonly return break continue source alias unset true false";
                     case "SQL": return "select from where join inner outer left right full on as union all distinct group by order having limit offset asc desc insert into values update set delete create alter drop table database index view primary foreign key references null not and or in is like between exists case when then else end begin commit rollback with over partition true false";
+                    case "Lua": return "and break do else elseif end false for function goto if in local nil not or repeat return then true until while";
+                    case "Dart": return "abstract as assert async await base break case catch class const continue covariant default deferred do dynamic else enum export extends extension external factory false final finally for get hide if implements import in interface is late library mixin new null of on operator part required rethrow return sealed set show static super switch sync this throw true try typedef var void when while with yield";
                     case "JSON": return "true false null";
                     case "YAML": case "INI": return "true false null yes no on off";
                     case "Dockerfile": return "FROM RUN CMD LABEL EXPOSE ENV ADD COPY ENTRYPOINT VOLUME USER WORKDIR ARG ONBUILD STOPSIGNAL HEALTHCHECK SHELL AS";

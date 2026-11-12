@@ -55,6 +55,18 @@ namespace DesktopHover
 
         internal static bool IsRequested(Form window)
         { WindowBackdrop backdrop; return windows.TryGetValue(window, out backdrop) && backdrop.requested; }
+        internal static void ApplyPopupFrame(IntPtr window)
+        {
+            // The native list owns scrolling and keyboard input. Theme its separate
+            // top-level frame as well as the owner-drawn rows.
+            bool contrast = SystemInformation.HighContrast;
+            int dark = !contrast && !Brand.IsLight ? 1 : 0;
+            int corners = contrast ? 0 : 3; // DWMWCP_ROUNDSMALL
+            int border = contrast ? -1 : ColorTranslator.ToWin32(Brand.Border);
+            DwmSetWindowAttribute(window, 20, ref dark, sizeof(int));
+            DwmSetWindowAttribute(window, 33, ref corners, sizeof(int));
+            DwmSetWindowAttribute(window, 34, ref border, sizeof(int));
+        }
         internal static bool IsActive(Control control)
         {
             Form form = control as Form ?? control.FindForm();

@@ -53,7 +53,7 @@ namespace DesktopHover
             catch (ArgumentException) { return false; }
             switch (extension)
             {
-                case ".pdf":
+                case ".ttf": case ".otf": case ".pdf":
                 case ".docx": case ".docm": case ".dotx": case ".dotm":
                 case ".xlsx": case ".xlsm": case ".xltx": case ".xltm":
                 case ".pptx": case ".pptm": case ".potx": case ".potm":
@@ -106,6 +106,7 @@ namespace DesktopHover
                 }
                 if (info.Length > MaximumFileBytes)
                     return new DocumentPreviewResult(null, "document_limit");
+                if (FontPreview.Supports(path)) return FontPreview.Load(path, maxSize, palette ?? OfficePreviewPalette.Default, cancellation);
                 if (pdfFile)
                 {
                     int pages;
@@ -146,7 +147,11 @@ namespace DesktopHover
                 return new DocumentPreviewResult(thumbnail, thumbnail == null ? unavailableKey : "document_shell");
             }
             catch (OperationCanceledException) { return null; }
-            catch { return new DocumentPreviewResult(null, unavailableKey); }
+            catch (Exception error)
+            {
+                AppLog.PreviewError("Document preview", path, error);
+                return new DocumentPreviewResult(null, unavailableKey);
+            }
         }
 
         private static DocumentPreviewResult TryReader(string path, Size maxSize, CancellationToken cancellation, bool office, OfficePreviewPalette palette = null, OfficeViewOptions view = null)

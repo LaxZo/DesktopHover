@@ -8,7 +8,7 @@
 <p align="center">Apskati attēlus, dokumentus un dizaina projektus, atskaņo medijus un lasi kodu, neatverot citu programmu.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā, gaišā un caurspīdīgā tēma &nbsp;·&nbsp; 12 valodas
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā, gaišā un caurspīdīgā tēma &nbsp;·&nbsp; 14 valodas
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Paturēt priekšskatījumu atvērtu** | Piespraud pēdējo priekšskatījumu, pāršķir PDF lapas vai slaidus, apturi atskaņošanu, palielini un pārvieto attēlu vai ritini tekstu. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
 | **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi, Photoshop apvienotie attēli un ar PDF saderīgs Illustrator saturs. Citiem Adobe projektiem izmanto iegultos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. |
-| **Pielāgot sev** | Tumšā, gaišā vai caurspīdīgā tēma, 12 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
+| **Pielāgot sev** | Tumšā, gaišā vai caurspīdīgā tēma, 14 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
 
@@ -172,9 +172,11 @@ Piespraustais skatītājs izmanto lietotnes tēmu un noapaļotu logu. Tā izmēr
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
 | Palaišana kopā ar Windows | Automātiska palaišana pēc pierakstīšanās. |
 
-**Saskarnes valodas:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська.
+**Saskarnes valodas:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti. Pirmajā palaišanas reizē programma seko Windows saskarnes valodai. Iestatījumos var izvēlēties citu valodu.
 
 Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskās palaišanas izvēle glabājas atsevišķi pašreizējā lietotāja Windows reģistra `Run` atslēgā.
+
+Piespraustā teksta, koda, Markdown vai tabulas priekšskatījumā nospied **Ctrl+F**, lai meklētu ielādētajā fragmentā. **Enter** vai **F3** pāriet uz nākamo atbilstību, **Shift+F3** uz iepriekšējo, un **Esc** aizver meklēšanu.
 
 ## Atbalstītie faili
 
@@ -183,9 +185,13 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 | **Attēli** | JPG/JPEG/JFIF, PNG, BMP, GIF (arī animēti), TIFF, ICO, WebP, HEIC/HEIF, AVIF un Adobe DNG (vajadzīgs saderīgs Windows RAW dekodētājs). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; atskaņošanai vajadzīgs saderīgs Windows kodeks. |
-| **Teksts un dati** | TXT, LOG, Markdown, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
+| **Teksts un dati** | TXT, LOG, JSON, YAML, INI, TOML un citi konfigurācijas faili. |
+| **Markdown** | Virsraksti, saraksti, rindkopas ar teksta aplaušanu un atsevišķi koda bloki izvēlētajā tēmā. |
+| **SVG** | Vektoru figūras, līknes, grupas un krāsu pārejas ar caurspīdīgu fonu. |
+| **ZIP, EDOC un ASiC-E** | Failu nosaukumi, mapes un nesaspiestie izmēri bez atarhivēšanas. ZIP formāta parakstītajos konteineros redzami ievietotie dokumenti. Apakšējā joslā ir kopējais failu skaits, tabulā – pirmie 300 ieraksti. Arhīvā var būt līdz 4096 ierakstiem. |
+| **TTF un OTF** | Fonta saimes nosaukums un dažādu izmēru burtu paraugi, tostarp latviešu burti. |
 | **CSV un TSV** | Tabula ar numurētām rindām un kolonnu burtiem. Piespraustajā logā pārej uz citām kolonnām ar bultiņu taustiņiem vai Shift un peles ritenīti. Uzved peli uz šūnas, lai izlasītu tekstu, kas tajā neietilpst. |
-| **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
+| **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Lua, Dart, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
 | **PDF** | Pirmā lapa pēc peles uzvešanas; lapu pāršķiršana piespraustajā logā. Izmanto Windows 10/11 iebūvēto PDF atbalstu bez Adobe lietotnes vai sīktēlu nodrošinātāja. |
 | **Photoshop** | PSD/PSB/PSDT apvienotais 8 bitu RGB/pelēktoņu attēls bez saspiešanas vai ar RLE, pielāgots priekšskatījuma izmēram. Saglabātos sīktēlus izmanto kā rezerves variantu. |
@@ -222,7 +228,7 @@ Priekšskatījuma faili atbalsta MP4/MOV/WebM/M4V/AVI/WMV video un PNG/JPG/JPEG/
 - Priekšskatījumi darbojas ar **lokāli pieejamiem failiem**. Tīkla mapes, piesaistīti tīkla diski un tikai mākonī pieejami faili tiek izlaisti.
 - Tekstam nolasa līdz **256 KiB**, **300 rindām** un **500 rakstzīmēm rindā**. Pēc peles uzvešanas redzams sākums; piespraustajā logā var ritināt ielādētās rindas. Par saīsinājumu informē apakšējā josla.
 - Sintakses krāsas nodrošina pamata leksiska analīze. Kods netiek izpildīts vai rediģēts.
-- Markdown, HTML un SVG tiek rādīti kā avota teksts.
+- HTML tiek rādīts kā pirmkods. SVG priekšskatījums atbalsta statiskos zīmēšanas elementus lokālos failos līdz 2 MiB. Skripti, ārējie resursi, iegultie attēli, filtri un stilu lapas tiek izlaisti.
 - Dokumentu/projektu satura nolasīšanai ir **512 MiB** faila robeža; Adobe priekšskatījuma failiem ir iepriekš norādītie atsevišķie ierobežojumi. ZIP pakotnēm ierobežots arī ierakstu, XML un iegulto attēlu apjoms; šifrēts, bojāts vai pārāk liels saturs var nebūt pieejams.
 - PDF rāda pirmo lapu pēc peles uzvešanas un ļauj pāršķirt lapas piespraustajā logā. Rediģēšana un paroles ievade nav paredzēta. Failiem, kuri prasa paroli, bojātiem PDF un neatbalstītam saturam priekšskatījums var nebūt pieejams.
 - Word un Excel priekšskatījumi ir fragmenti, ne precīzi drukas maketi. Piespraustajā Word skatā var ritināt līdz 2000 satura blokiem. Excel priekšskatījums pēc peles uzvešanas rāda pirmās redzamās darblapas sākumu (līdz 8 kolonnām/30 rindām); piespraustajā skatā var pārslēgt redzamās darblapas un ritināt abos virzienos līdz kolonnai XFD. Piespraustajam Excel ir 5000 rindu un 100 000 šūnu robeža, ievērojot arī pakotnes/XML ierobežojumus. Par saīsinātu saturu tiek parādīts paziņojums. Excel rāda saglabātās vērtības vai formulas tekstu; formulas un makrosi netiek izpildīti, ārējās saites netiek ielādētas. Nolasītās Office pakotnes daļas un apstrādātais saturs tiek glabāts ritināšanas kešatmiņā, avota failus neturot atvērtus.

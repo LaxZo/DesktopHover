@@ -9,7 +9,7 @@ namespace DesktopHover
     {
         internal readonly TextBox Editor;
         internal readonly SearchClearButton ClearButton;
-        private readonly float scale;
+        private float scale;
         private readonly UiTween emphasis;
 
         internal HoverSearchBox(float scale)
@@ -37,6 +37,14 @@ namespace DesktopHover
             // black there so the field shares the same material without a bright box.
             Editor.BackColor = ClearButton.BackColor = Brand.IsGlass ? Color.Black : Brand.Surface;
             Editor.ForeColor = Brand.Text; Invalidate(true);
+        }
+        internal void SetScale(float value)
+        {
+            if (scale == value) return;
+            scale = value;
+            ClearButton.UiScale = value;
+            Arrange();
+            Invalidate(true);
         }
         private int Px(int value) { return (int)Math.Round(value * scale); }
         private void Arrange()
@@ -72,11 +80,11 @@ namespace DesktopHover
 
         internal sealed class SearchClearButton : Button
         {
-            private readonly float scale;
+            internal float UiScale;
             private bool hover;
             internal SearchClearButton(float scale)
             {
-                this.scale = scale; FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
+                UiScale = scale; FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
                 SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
                 SystemCursors.UseHand(this);
             }
@@ -87,6 +95,7 @@ namespace DesktopHover
             protected override void OnPaint(PaintEventArgs e)
             {
                 Graphics g = e.Graphics;
+                float scale = UiScale;
                 if (Brand.IsGlass) WindowBackdrop.Clear(g, this); else g.Clear(Brand.Surface);
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 bool active = hover || (Focused && ShowFocusCues);

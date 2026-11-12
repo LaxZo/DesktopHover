@@ -52,7 +52,7 @@ namespace DesktopHover
             detailTimer.Stop();
             if (preview == null || IsPreviewLoading || CurrentPath == null || animatedGif != null) return;
             double width = imageArea.Width * zoom, height = imageArea.Height * zoom;
-            if (mediaKind == MediaKind.Image)
+            if (mediaKind == MediaKind.Image && !SvgPreview.Supports(CurrentPath))
             { width = Math.Min(sourceWidth, width); height = Math.Min(sourceHeight, height); }
             double cap = Math.Min(1, Math.Min(4096 / Math.Max(1, width), 4096 / Math.Max(1, height)));
             Size size = new Size(Math.Max(1, (int)Math.Ceiling(width * cap)), Math.Max(1, (int)Math.Ceiling(height * cap)));

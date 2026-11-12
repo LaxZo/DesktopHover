@@ -18,8 +18,9 @@ namespace DesktopHover
             {
                 case ".jpg": case ".jpeg": case ".jfif": case ".png": case ".bmp":
                 case ".gif": case ".tif": case ".tiff": case ".ico": case ".webp":
-                case ".heic": case ".heif": case ".avif": case ".dng":
+                case ".heic": case ".heif": case ".avif": case ".dng": case ".svg":
                     return MediaKind.Image;
+                case ".zip": case ".edoc": case ".asice": return MediaKind.Document;
                 case ".mp3": case ".wav": case ".wma": case ".m4a": case ".aac":
                 case ".flac": case ".aif": case ".aiff":
                     return MediaKind.Audio;

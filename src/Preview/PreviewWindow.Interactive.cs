@@ -79,8 +79,10 @@ namespace DesktopHover
             zoomInButton = AddAction("+", "zoom_in", () => ChangeZoom(1.25f));
             fitButton = AddAction("", "fit", FitImage);
             refreshButton = AddAction("↻", "refresh_preview", RefreshPinned);
+            findButton = AddAction("⌕", "find_preview", OpenFind);
             loadingLabel = new ToolStripLabel(); toolbar.Items.Add(loadingLabel);
             Controls.Add(toolbar);
+            InitializeFindBar();
             InitializeOfficeView();
             InitializeMediaControls();
             InitializePinnedChrome();
@@ -135,6 +137,7 @@ namespace DesktopHover
                     if (item is ToolStripButton) item.Size = new Size(Px(34), Px(30));
                 pageLabel.Size = new Size(Px(80), Px(30)); zoomLabel.Size = new Size(Px(62), Px(30));
                 int transport = LayoutMediaControls(header + tools);
+                transport += LayoutFindBar(header + tools + transport);
                 viewport = new Rectangle(padding, header + tools + transport + padding,
                     Math.Max(1, ClientSize.Width - padding * 2),
                     Math.Max(1, ClientSize.Height - header - tools - transport - footer - padding * 2));
@@ -158,12 +161,14 @@ namespace DesktopHover
                 if (textPreview != null)
                 {
                     bool table = textPreview.TableRows != null;
-                    textLineHeight = Px(table ? 26 : 21);
+                    bool reflow = textPreview.IsMarkdown && LayoutMarkdown(viewport.Width);
+                    textLineHeight = Px(table ? 26 : textPreview.IsMarkdown ? 30 : 21);
                     textVisibleLines = Math.Max(1, (viewport.Height - (table ? textLineHeight : Px(16))) / textLineHeight);
                     textOffset = Math.Max(0, Math.Min(textOffset, Math.Max(0, textPreview.RowCount - textVisibleLines)));
                     if (table) LayoutTable();
-                    else using (Graphics g = CreateGraphics())
+                    else if (!textPreview.IsMarkdown) using (Graphics g = CreateGraphics())
                         textGutterWidth = Math.Max(Px(38), TextRenderer.MeasureText(g, Math.Max(1, textPreview.Lines.Length).ToString(), codeFont).Width + Px(20));
+                    if (reflow && findOpen) RebuildMatches();
                 }
                 if (media != null && media.IsOpen && media.HasVideo) media.SetVideoBounds(imageArea);
                 Text = String.IsNullOrEmpty(fileName) ? L10n.Text(language, "pinned_preview") : fileName + " — Desktop Hover";
@@ -189,6 +194,8 @@ namespace DesktopHover
                     item.AccessibleName = item.ToolTipText;
                 }
             bool slides = documentSlides != null && documentSlides.Length > 0;
+            findButton.Visible = textPreview != null;
+            findButton.ToolTipText = findButton.AccessibleName = L10n.Text(language, "find_preview") + " (Ctrl+F)";
             int count = slides ? documentSlides.Length : pdfPageCount;
             int index = slides ? documentSlideIndex : pdfPageIndex;
             bool pages = count > 1;
@@ -375,9 +382,14 @@ namespace DesktopHover
         {
             if (interactive)
             {
+                if (keyData == (Keys.Control | Keys.F) && textPreview != null) { OpenFind(); return true; }
+                if (findOpen && HandleFindKey(keyData)) return true;
+                if (findOpen && findField.ContainsFocus && keyData != Keys.F5) return base.ProcessCmdKey(ref msg, keyData);
+                if (sheetPicker != null && sheetPicker.DroppedDown && keyData != Keys.F5)
+                    return base.ProcessCmdKey(ref msg, keyData);
                 if (keyData != Keys.F5 && keyData != Keys.Escape &&
                     ((mediaSeek != null && (mediaSeek.Focused || mediaVolume.Focused || mediaMute.Focused)) ||
-                     (sheetPicker != null && sheetPicker.ComboBox.Focused)))
+                     (sheetPicker != null && sheetPicker.Focused)))
                     return base.ProcessCmdKey(ref msg, keyData);
                 if (HasTable)
                 {
@@ -479,6 +491,8 @@ namespace DesktopHover
                         int direction = key == "next" ? 1 : -1;
                         g.DrawLines(pen, new[] { new PointF(-3 * direction, -6), new PointF(3 * direction, 0), new PointF(-3 * direction, 6) });
                     }
+                    else if (key == "close_advanced")
+                    { g.DrawLine(pen, -5, -5, 5, 5); g.DrawLine(pen, 5, -5, -5, 5); }
                     else if (key == "play_pause")
                     {
                         if (button.Text == "▶") g.FillPolygon(brush, new[] { new PointF(-4, -7), new PointF(7, 0), new PointF(-4, 7) });
@@ -503,7 +517,7 @@ namespace DesktopHover
                     else
                     {
                         g.DrawEllipse(pen, -7, -7, 11, 11); g.DrawLine(pen, 3, 3, 7, 7);
-                        g.DrawLine(pen, -4.5f, -1.5f, 1.5f, -1.5f);
+                        if (key == "zoom_out" || key == "zoom_in") g.DrawLine(pen, -4.5f, -1.5f, 1.5f, -1.5f);
                         if (key == "zoom_in") g.DrawLine(pen, -1.5f, -4.5f, -1.5f, 1.5f);
                     }
                 }

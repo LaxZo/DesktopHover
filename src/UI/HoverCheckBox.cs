@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace DesktopHover
 {
     // Retain the native checkbox's input and accessibility behavior, with app-themed painting.
-    internal sealed class HoverCheckBox : CheckBox
+    internal class HoverCheckBox : CheckBox
     {
         internal float UiScale = 1;
         private readonly UiTween checkMotion, hoverMotion;
@@ -56,6 +56,15 @@ namespace DesktopHover
             using (var pen = new Pen(border, s)) { g.FillPath(fill, tile); g.DrawPath(pen, tile); }
 
             var box = new RectangleF(12 * s, (Height - 18 * s) / 2, 18 * s, 18 * s);
+            DrawIndicator(g, box, selected, surface);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle((int)(40 * s), 0, Math.Max(1, Width - (int)(48 * s)), Height),
+                Enabled ? Brand.Text : Brand.Muted, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine |
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        protected virtual void DrawIndicator(Graphics g, RectangleF box, double selected, Color surface)
+        {
+            float s = UiScale;
             Color ink = Enabled ? Brand.Accent : Brand.Muted;
             using (GraphicsPath outline = Brand.RoundRect(box, 5 * s))
             using (var fill = new SolidBrush(UiMotion.Blend(surface, Enabled ? Brand.AccentFill : Brand.ToggleOff, selected)))
@@ -67,9 +76,6 @@ namespace DesktopHover
                     g.DrawLines(tick, new[] { new PointF(box.Left + 4 * s, box.Top + 9 * s),
                         new PointF(box.Left + 7.5f * s, box.Top + 12.5f * s), new PointF(box.Left + 14 * s, box.Top + 5.5f * s) });
 
-            TextRenderer.DrawText(g, Text, Font, new Rectangle((int)(40 * s), 0, Math.Max(1, Width - (int)(48 * s)), Height),
-                Enabled ? Brand.Text : Brand.Muted, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine |
-                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
         protected override void Dispose(bool disposing)
         {

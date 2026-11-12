@@ -8,7 +8,7 @@
 <p align="center">Preview images, documents and design projects, play media, and read code without opening another app.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark, light &amp; translucent themes &nbsp;·&nbsp; 12 languages
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark, light &amp; translucent themes &nbsp;·&nbsp; 14 languages
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | **Keep a preview open** | Pin the last preview, browse PDF pages or slides, pause playback, zoom and pan images, or scroll text. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
 | **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides, Photoshop composites and PDF-compatible Illustrator artwork. Other Adobe projects use embedded previews, matching image/video preview files or Windows thumbnails. |
-| **Make it your own** | Dark, light or translucent appearance, 12 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
+| **Make it your own** | Dark, light or translucent appearance, 14 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
 
 ## Screenshots
 
@@ -172,7 +172,9 @@ The pinned viewer uses the app’s theme and rounded window controls. Resize or 
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
 | Start with Windows | Run automatically after you sign in. |
 
-**Interface languages:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська.
+**Interface languages:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti. New installations follow the Windows display language. Choose a specific language in Settings to override it.
+
+In a pinned text, code, Markdown or table preview, press **Ctrl+F** to search the loaded excerpt. **Enter** or **F3** selects the next match, **Shift+F3** the previous one, and **Esc** closes the search.
 
 Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is stored separately in the current user's Windows Run registry key.
 
@@ -183,9 +185,13 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **Images** | JPG/JPEG/JFIF, PNG, BMP, GIF (including animation), TIFF, ICO, WebP, HEIC/HEIF, AVIF and Adobe DNG (requires a compatible Windows RAW decoder). |
 | **Audio** | MP3, WAV, WMA, M4A, AAC, FLAC, AIF/AIFF. |
 | **Video** | MP4/M4V, MOV, AVI, WMV, MPG/MPEG, MKV, WebM, FLV/F4V; playback requires a compatible Windows codec. |
-| **Text & data** | TXT, LOG, Markdown, JSON, YAML, INI, TOML and other configuration files. |
+| **Text & data** | TXT, LOG, JSON, YAML, INI, TOML and other configuration files. |
+| **Markdown** | Headings, lists, wrapped paragraphs and fenced code blocks in the current theme. |
+| **SVG** | Static vector shapes, paths, groups and gradients with transparent backgrounds. |
+| **ZIP, EDOC & ASiC-E** | Browse names, folders and uncompressed sizes without extracting files. ZIP-based signed containers list the enclosed documents. The footer counts all files in the directory, and the table shows the first 300 entries. Archives can contain up to 4,096 entries. |
+| **TTF & OTF** | Family name and letter samples at several sizes, including Latvian characters. |
 | **CSV & TSV** | A table with numbered rows and lettered columns. In a pinned window, use the arrow keys or Shift + mouse wheel to reach more columns. Hover over a cell to read clipped text. |
-| **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
+| **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Lua, Dart, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
 | **PDF** | First page on hover; page navigation in the pinned window. Uses the built-in Windows 10/11 PDF renderer without Adobe or a thumbnail provider. |
 | **Photoshop** | PSD/PSB/PSDT merged 8-bit RGB/grayscale images with raw or RLE compression, fitted to the preview size. Saved thumbnails are a fallback. |
@@ -222,7 +228,7 @@ Preview files support MP4/MOV/WebM/M4V/AVI/WMV video and PNG/JPG/JPEG/WebP/BMP i
 - Previews work with **locally available files**. Network shares, mapped network drives and online-only cloud files are skipped.
 - Text previews read up to **256 KiB**, **300 lines** and **500 characters per line**. Hover shows the beginning; the pinned window can scroll through the loaded lines. Shortened previews are marked in the footer.
 - Syntax coloring is a basic lexer, not a full language service. Code is displayed without being executed or edited.
-- Markdown, HTML and SVG are shown as source text, rather than rendered documents.
+- HTML is displayed as source. SVG previews support static drawing elements in local files up to 2 MiB. Scripts, external resources, embedded images, filters and stylesheets are omitted.
 - Document/project parsing is limited to **512 MiB** per file; Adobe preview files have the separate limits above. ZIP packages also have limits on entries, XML and embedded images; encrypted, malformed or oversized content may be unavailable.
 - PDFs show the first page on hover and support page navigation when pinned. Editing and password entry are not provided. Files that require a password, damaged PDFs and unsupported content may not preview.
 - Word and Excel content previews are excerpts, not exact print layouts. Pinned Word previews scroll through up to 2,000 content blocks. Excel hover previews show the first visible worksheet's beginning (up to 8 columns/30 rows); pinned previews let you switch visible worksheets and scroll vertically and horizontally, including columns through XFD. Pinned Excel reads up to 5,000 rows and 100,000 cells, subject to the package/XML limits. Shortened previews display a notice. Excel shows cached values or formula text; formulas and macros are never run, and external links are not loaded. Recently read Office parts and parsed content are cached in memory for scrolling, with no source files held open.

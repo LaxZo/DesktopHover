@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace DesktopHover
@@ -9,7 +10,7 @@ namespace DesktopHover
         private Panel mediaControls;
         private HoverSlider mediaSeek, mediaVolume;
         private Label mediaTime;
-        private CheckBox mediaMute;
+        private MuteButton mediaMute;
         private bool updatingMediaControls, draggingSeek, mediaMuted;
 
         private void InitializeMediaControls()
@@ -18,7 +19,7 @@ namespace DesktopHover
             mediaSeek = new HoverSlider { Minimum = 0, Maximum = 1000, Step = 5, Value = 0 };
             mediaVolume = new HoverSlider { Minimum = 0, Maximum = 100, Step = 5, Value = volumePercent };
             mediaTime = new Label { TextAlign = ContentAlignment.MiddleCenter };
-            mediaMute = new CheckBox { Appearance = Appearance.Button, TextAlign = ContentAlignment.MiddleCenter, FlatStyle = FlatStyle.Flat };
+            mediaMute = new MuteButton();
             mediaControls.Controls.AddRange(new Control[] { mediaSeek, mediaTime, mediaVolume, mediaMute });
             Controls.Add(mediaControls);
             mediaSeek.MouseDown += delegate { draggingSeek = true; };
@@ -90,7 +91,11 @@ namespace DesktopHover
             if (mediaControls == null || !mediaControls.Visible) return 0;
             int height = Px(40), width = Math.Max(1, ClientSize.Width - Px(24));
             mediaControls.SetBounds(Px(12), top, width, height);
-            int muteWidth = Px(70), volumeWidth = Px(92), timeWidth = Px(116);
+            mediaControls.Font = toolbarFont;
+            mediaMute.UiScale = scale;
+            int muteWidth = Px(52) + TextRenderer.MeasureText(mediaMute.Text, mediaMute.Font, Size.Empty,
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width;
+            int volumeWidth = Px(92), timeWidth = Px(116);
             int seekWidth = Math.Max(Px(80), width - muteWidth - volumeWidth - timeWidth);
             mediaSeek.UiScale = mediaVolume.UiScale = scale;
             mediaSeek.SetBounds(0, Px(4), seekWidth, Px(32));
@@ -98,6 +103,36 @@ namespace DesktopHover
             mediaVolume.SetBounds(seekWidth + timeWidth, Px(4), volumeWidth, Px(32));
             mediaMute.SetBounds(width - muteWidth, Px(4), muteWidth, Px(30));
             return height;
+        }
+    }
+
+    internal sealed class MuteButton : HoverCheckBox
+    {
+        protected override void DrawIndicator(Graphics g, RectangleF box, double selected, Color surface)
+        {
+            var state = g.Save();
+            try
+            {
+                g.TranslateTransform(box.Left, box.Top);
+                g.ScaleTransform(UiScale, UiScale);
+                Color ink = Enabled ? UiMotion.Blend(Brand.Text, Brand.Accent, selected) : Brand.Muted;
+                using (var pen = new Pen(ink, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                {
+                    g.DrawPolygon(pen, new[] { new PointF(1, 6.5f), new PointF(4, 6.5f), new PointF(9, 2),
+                        new PointF(9, 16), new PointF(4, 11.5f), new PointF(1, 11.5f) });
+                    if (Checked)
+                    {
+                        g.DrawLine(pen, 12, 6.5f, 17, 11.5f);
+                        g.DrawLine(pen, 17, 6.5f, 12, 11.5f);
+                    }
+                    else
+                    {
+                        g.DrawArc(pen, 6, 4.5f, 8, 9, -50, 100);
+                        g.DrawArc(pen, 4, 1, 13, 16, -48, 96);
+                    }
+                }
+            }
+            finally { g.Restore(state); }
         }
     }
 }

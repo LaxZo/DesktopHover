@@ -34,6 +34,8 @@ namespace DesktopHover
 
         private int TableEdge(int column)
         {
+            if (textPreview.ArchiveFileCount >= 0 && tableVisibleColumns == 2 && column == 1)
+                return imageArea.Right - (imageArea.Width - textGutterWidth) / 4;
             return imageArea.Left + textGutterWidth + (imageArea.Width - textGutterWidth) * column / tableVisibleColumns;
         }
 
@@ -66,7 +68,8 @@ namespace DesktopHover
                 for (int col = 0; col < tableVisibleColumns; col++)
                 {
                     int x = TableEdge(col), width = TableEdge(col + 1) - x;
-                    TextRenderer.DrawText(graphics, OfficePreviewReader.ColumnName(tableColumn + col), titleFont,
+                    string label = textPreview.ArchiveFileCount >= 0 ? L10n.Text(language, tableColumn + col == 0 ? "archive_path" : "archive_size") : OfficePreviewReader.ColumnName(tableColumn + col);
+                    TextRenderer.DrawText(graphics, label, titleFont,
                         new Rectangle(x, top, width, textLineHeight), Brand.Text, flags | TextFormatFlags.HorizontalCenter);
                     graphics.DrawLine(border, x, top, x, top + (rows + 1) * textLineHeight);
                 }
@@ -79,8 +82,10 @@ namespace DesktopHover
                     for (int col = 0; col < tableVisibleColumns && tableColumn + col < values.Length; col++)
                     {
                         int x = TableEdge(col), width = TableEdge(col + 1) - x;
-                        TextRenderer.DrawText(graphics, values[tableColumn + col], descriptionFont,
-                            new Rectangle(x + Px(6), y, Math.Max(1, width - Px(12)), textLineHeight), Brand.Text, flags);
+                        var cell = new Rectangle(x + Px(6), y, Math.Max(1, width - Px(12)), textLineHeight);
+                        string value = values[tableColumn + col];
+                        if (!PaintFoundText(graphics, row, tableColumn + col, value, descriptionFont, cell))
+                            TextRenderer.DrawText(graphics, value, descriptionFont, cell, Brand.Text, flags);
                     }
                     graphics.DrawLine(border, left, y, right, y);
                 }

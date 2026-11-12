@@ -7,6 +7,36 @@ namespace DesktopHover
 {
     internal static class UiDrawing
     {
+        internal static void FitMenuRows(ToolStripDropDownMenu menu, Control anchor, float scale)
+        {
+            // WinForms includes the check column in Padding.Left, then subtracts it
+            // when positioning each menu item. It is already inside the row width.
+            int inset = Math.Max(1, (int)Math.Round(4 * scale));
+            Size available = Screen.FromControl(anchor).WorkingArea.Size;
+            int rowWidth = 0;
+            foreach (ToolStripItem item in menu.Items)
+                if (item.Available && item is ToolStripMenuItem) rowWidth = Math.Max(rowWidth, item.Width);
+            rowWidth = Math.Max(1, Math.Min(rowWidth, available.Width - 2 * inset));
+            menu.SuspendLayout();
+            try
+            {
+                menu.AutoSize = false;
+                int height = menu.Padding.Vertical;
+                foreach (ToolStripItem item in menu.Items)
+                {
+                    if (!item.Available) continue;
+                    if (item is ToolStripMenuItem)
+                    {
+                        item.Margin = new Padding(inset, item.Margin.Top, inset, item.Margin.Bottom);
+                        item.Width = rowWidth;
+                    }
+                    height += item.Height + item.Margin.Vertical;
+                }
+                menu.Size = new Size(rowWidth + 2 * inset, Math.Min(height, available.Height));
+            }
+            finally { menu.ResumeLayout(true); }
+        }
+
         internal static ToolTip CreateToolTip()
         {
             var tip = new ToolTip { OwnerDraw = true, ShowAlways = true };
@@ -20,35 +50,6 @@ namespace DesktopHover
                     TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
             };
             return tip;
-        }
-
-        internal static void StylePicker(ToolStripComboBox picker)
-        {
-            ComboBox box = picker.ComboBox;
-            box.FlatStyle = FlatStyle.Flat;
-            box.DrawMode = DrawMode.OwnerDrawFixed;
-            box.DrawItem += delegate(object sender, DrawItemEventArgs e)
-            {
-                bool selected = (e.State & DrawItemState.Selected) != 0;
-                bool contrast = SystemInformation.HighContrast;
-                Color background = contrast ? (selected ? SystemColors.Highlight : SystemColors.Window) :
-                    (selected ? Brand.SelectedSurface : Brand.Surface);
-                Color ink = contrast ? (selected ? SystemColors.HighlightText : SystemColors.WindowText) : Brand.Text;
-                using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
-                if (e.Index >= 0 && e.Index < box.Items.Count)
-                    TextRenderer.DrawText(e.Graphics, box.GetItemText(box.Items[e.Index]), e.Font, e.Bounds, ink,
-                        TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-                if ((e.State & (DrawItemState.Focus | DrawItemState.NoFocusRect)) == DrawItemState.Focus) e.DrawFocusRectangle();
-            };
-            BindNativeTheme(box);
-            RefreshPicker(picker);
-        }
-
-        internal static void RefreshPicker(ToolStripComboBox picker)
-        {
-            picker.BackColor = SystemInformation.HighContrast ? SystemColors.Window : Brand.Surface;
-            picker.ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Brand.Text;
-            RefreshNativeTheme(picker.ComboBox);
         }
 
         internal static void BindNativeTheme(Control control)

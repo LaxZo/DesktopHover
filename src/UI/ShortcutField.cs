@@ -26,6 +26,8 @@ namespace DesktopHover
             ToolStripDropDown menu = DropDown;
             menu.Font = font;
             StyleMenu(menu, scale, true);
+            if (!keyGrid)
+                DropDownOpening += delegate { UiDrawing.FitMenuRows((ToolStripDropDownMenu)menu, GetCurrentParent(), scale); };
             menu.Closing += delegate(object sender, ToolStripDropDownClosingEventArgs e)
             {
                 // WinForms cascades an ItemClicked dismissal up the whole menu tree.
@@ -45,7 +47,8 @@ namespace DesktopHover
             ToolStripItem choice = keyGrid ? (ToolStripItem)new ToolStripButton { AutoToolTip = false } : new ToolStripMenuItem();
             choice.Text = choice.Name = choice.AccessibleName = text;
             choice.AutoSize = false; choice.Margin = Padding.Empty;
-            choice.Size = new Size(Px(keyGrid ? 36 : 144), Px(28));
+            int width = keyGrid ? Px(36) : Math.Max(Px(144), TextRenderer.MeasureText(text, Font).Width + Px(50));
+            choice.Size = new Size(width, Px(28));
             SetChecked(choice, value == Value);
             choice.Click += delegate
             {

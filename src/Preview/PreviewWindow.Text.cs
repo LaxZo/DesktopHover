@@ -15,13 +15,19 @@ namespace DesktopHover
             var task = textTask; textTask = null;
             textCancellation.Dispose(); textCancellation = null;
             mediaTimer.Stop(); mediaTimer.Interval = 200;
-            try { textPreview = task.GetAwaiter().GetResult(); } catch { textPreview = null; }
+            bool archive = ArchiveListing.Supports(CurrentPath);
+            try { textPreview = task.GetAwaiter().GetResult(); }
+            catch (Exception error)
+            {
+                textPreview = null;
+                if (archive) AppLog.PreviewError("Reading archive directory", CurrentPath, error);
+            }
             if (textPreview == null)
             {
-                mediaState = "text_unavailable";
+                mediaState = archive ? "archive_unavailable" : "text_unavailable";
                 LayoutImage(); ShowPreview(); Invalidate();
             }
-            else { mediaState = null; LayoutText(); RestoreLoadedView(); }
+            else { mediaState = null; LayoutText(); RestoreLoadedView(); if (findOpen) RebuildMatches(); }
         }
 
         private void CancelTextLoad()

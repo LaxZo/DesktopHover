@@ -108,17 +108,7 @@ namespace DesktopHover
             string rootClass=Native.Class(root);
             string path=(rootClass=="Progman" || rootClass=="WorkerW") ? ResolveDesktop(name) : ResolveExplorer(root,name,hoveredTab);
             Diagnostic+="path="+path+"\r\n";
-            if(path==null || !Supported(path) || !File.Exists(path)) return null;
-            // Do not hydrate online-only cloud files or open network content merely by hovering.
-            if(path.StartsWith(@"\\",StringComparison.Ordinal)) return null;
-            try
-            {
-                var drive=new DriveInfo(System.IO.Path.GetPathRoot(path));
-                if(drive.DriveType==DriveType.Network) return null;
-                int attrs=(int)File.GetAttributes(path);
-                if((attrs & (0x1000 | 0x40000 | 0x400000)) != 0) return null;
-            }
-            catch { return null; }
+            if(path==null) return null;
             return new HoverItem {Path=path,Root=root,Surface=sourceSurface,Bounds=Rectangle.FromLTRB((int)r.Left,(int)r.Top,(int)r.Right,(int)r.Bottom)};
         }
         private string ResolveDesktop(string name)
@@ -173,7 +163,7 @@ namespace DesktopHover
             const uint showExtensions = 2; // SSF_SHOWEXTENSIONS and SHELLFLAGSTATE.fShowExtensions
             uint flags;
             SHGetSettings(out flags, showExtensions);
-            return folderCache.Resolve(directory, name, delegate
+            string resolved = folderCache.Resolve(directory, name, delegate
             {
                 var index = new FolderNameIndex();
                 object items = null;
@@ -188,7 +178,9 @@ namespace DesktopHover
                         {
                             item = ((dynamic)items).Item(i);
                             string display = ((dynamic)item).Name, path = ((dynamic)item).Path;
-                            bool valid = (bool)((dynamic)item).IsFileSystem && !(bool)((dynamic)item).IsFolder && Supported(path);
+                            // Explorer exposes compressed files as browsable shell folders.
+                            bool valid = (bool)((dynamic)item).IsFileSystem && Supported(path) &&
+                                (ArchiveListing.Supports(path) || !(bool)((dynamic)item).IsFolder);
                             index.AddItem(display, path, valid);
                         }
                         finally { Release(item); }
@@ -197,6 +189,20 @@ namespace DesktopHover
                 finally { Release(items); }
                 return index;
             }, (flags & showExtensions) != 0);
+            if (resolved == null || resolved.StartsWith(@"\\", StringComparison.Ordinal)) return null;
+            try
+            {
+                if (new DriveInfo(Path.GetPathRoot(resolved)).DriveType == DriveType.Network) return null;
+                // Check only the matched path. A real directory named e.g. photos.zip
+                // and online-only files must never be opened by a hover.
+                const FileAttributes excluded = FileAttributes.Directory | FileAttributes.Offline |
+                    (FileAttributes)(0x40000 | 0x400000);
+                return (File.GetAttributes(resolved) & excluded) == 0 ? resolved : null;
+            }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
+            catch (ArgumentException) { return null; }
+            catch (NotSupportedException) { return null; }
         }
         private static void Release(object o) { if(o!=null && Marshal.IsComObject(o)) Marshal.ReleaseComObject(o); }
         public void Dispose() { folderCache.Dispose(); Release(shell); shell=null; }

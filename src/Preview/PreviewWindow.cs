@@ -102,9 +102,10 @@ namespace DesktopHover
             appliedWindowsAccent = Brand.WindowsAccentColor;
             if (themeChanged && sheetPicker != null)
             {
-                UiDrawing.RefreshPicker(sheetPicker);
+                sheetPicker.RefreshTheme();
                 UiDrawing.RefreshNativeTheme(officeScroll);
                 UiDrawing.RefreshNativeTheme(officeHorizontalScroll);
+                if (mediaMute != null) mediaMute.Invalidate();
             }
             WindowBackdrop.Apply(this, settings.Theme);
             BackColor=Brand.Background;
@@ -120,7 +121,7 @@ namespace DesktopHover
             if (slideshowTimer != null) slideshowTimer.Interval = slideIntervalSeconds * 1000;
             if ((!interactive && resize) || (CurrentPath != null && !settings.Allows(CurrentPath))) ClearPreview();
             else Invalidate();
-            if (themeChanged && mediaKind == MediaKind.Document && OfficePreviewReader.SupportsTheming(CurrentPath))
+            if (themeChanged && mediaKind == MediaKind.Document && (OfficePreviewReader.SupportsTheming(CurrentPath) || FontPreview.Supports(CurrentPath)))
             {
                 CancelDocumentLoad();
                 StartDocumentLoad(CurrentPath, false);
@@ -288,6 +289,8 @@ namespace DesktopHover
             {
                 double fit = Math.Min((double)maxWidth / preview.Width, (double)maxHeight / preview.Height);
                 if (!upscale) fit = Math.Min(1, fit);
+                if (!upscale && SvgPreview.Supports(CurrentPath))
+                    fit = Math.Min(fit, Math.Min((double)sourceWidth / preview.Width, (double)sourceHeight / preview.Height));
                 width = Math.Max(1, (int)Math.Round(preview.Width * fit));
                 height = Math.Max(1, (int)Math.Round(preview.Height * fit));
             }
@@ -306,7 +309,7 @@ namespace DesktopHover
             if (interactive && !refreshing && String.Equals(CurrentPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
             { CheckRepinnedFile(); ActivatePinned(); return true; }
             if (kind == MediaKind.Image) return ShowImage(path, cursor, itemBounds);
-            if (kind == MediaKind.Text) return ShowText(path, cursor, itemBounds);
+            if (kind == MediaKind.Text || ArchiveListing.Supports(path)) return ShowText(path, cursor, itemBounds);
             if (kind == MediaKind.Document) return ShowDocument(path, cursor, itemBounds);
             if (kind == MediaKind.Audio || kind == MediaKind.Video) return ShowMedia(path, kind, cursor, itemBounds);
             ClearPreview();
@@ -580,12 +583,14 @@ namespace DesktopHover
         {
             sourceBytes = textPreview.FileBytes;
             bool table = textPreview.TableRows != null;
-            string type = table || textPreview.IsCode ? textPreview.LanguageName : L10n.Text(language, "text_preview");
+            string type = table || textPreview.IsCode || textPreview.IsMarkdown ? textPreview.LanguageName : L10n.Text(language, "text_preview");
+            string detail = textPreview.ArchiveFileCount < 0 ? textPreview.EncodingName :
+                String.Format(L10n.Culture(language), L10n.Text(language, "file_count"), textPreview.ArchiveFileCount);
             AccessibleName = table ? type + " · " + L10n.Text(language, "text_preview") : L10n.Text(language, textPreview.IsCode ? "code_preview" : "text_preview");
             Text = AccessibleName + " — Desktop Hover";
             if (interactive)
             {
-                description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+                description = type + " · " + detail + " · " + FormatBytes(sourceBytes);
                 if (textPreview.Truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
                 LayoutInteractive(); ShowPreview(); Invalidate(); return;
             }
@@ -595,7 +600,8 @@ namespace DesktopHover
             int width = Math.Max(1, Math.Min(maximumPreviewWidth, workingArea.Width - padding * 2 - Px(32)));
             int maximumHeight = Math.Max(1, Math.Min(maximumPreviewHeight,
                 workingArea.Height - padding - footerPadding - footerHeight - Px(interactive ? 90 : 32)));
-            textLineHeight = Px(table ? 26 : 21);
+            if (textPreview.IsMarkdown) LayoutMarkdown(width);
+            textLineHeight = Px(table ? 26 : textPreview.IsMarkdown ? 30 : 21);
             int height = Math.Min(maximumHeight, Math.Max(Px(120),
                 textPreview.RowCount * textLineHeight + (table ? textLineHeight : Px(16))));
             ClientSize = new DrawingSize(width + padding * 2, height + padding + footerPadding + footerHeight);
@@ -607,7 +613,7 @@ namespace DesktopHover
             textVisibleLines = Math.Max(0, (imageArea.Height - (table ? textLineHeight : Px(16))) / textLineHeight);
             bool truncated = textPreview.Truncated || textPreview.RowCount > textVisibleLines;
             if (table) { LayoutTable(); truncated |= textPreview.TableColumns > tableVisibleColumns; }
-            else using (Graphics graphics = CreateGraphics())
+            else if (!textPreview.IsMarkdown) using (Graphics graphics = CreateGraphics())
             using (StringFormat format = CodeFormat())
             {
                 string lastNumber = Math.Max(1, Math.Min(textVisibleLines, textPreview.Lines.Length)).ToString(CultureInfo.InvariantCulture);
@@ -617,7 +623,7 @@ namespace DesktopHover
                     if (graphics.MeasureString(textPreview.Lines[i].Text, codeFont, DrawingPoint.Empty, format).Width > textWidth)
                         truncated = true;
             }
-            description = type + " · " + textPreview.EncodingName + " · " + FormatBytes(sourceBytes);
+            description = type + " · " + detail + " · " + FormatBytes(sourceBytes);
             if (truncated) description = L10n.Text(language, "text_truncated") + " · " + description;
             PositionContent(mediaCursor, mediaItemBounds, workingArea);
             ShowPreview();
@@ -640,6 +646,7 @@ namespace DesktopHover
                 graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 using (var background = new SolidBrush(Brand.EditorBackground)) graphics.FillRectangle(background, imageArea);
                 if (textPreview.TableRows != null && textPreview.RowCount > 0) { PaintTable(graphics); return; }
+                if (textPreview.IsMarkdown && textPreview.RowCount > 0) { PaintMarkdown(graphics); return; }
                 using (var gutter = new SolidBrush(Brand.EditorGutter))
                     graphics.FillRectangle(gutter, imageArea.Left, imageArea.Top, textGutterWidth, imageArea.Height);
                 if (textPreview.RowCount == 0 ||
@@ -661,6 +668,8 @@ namespace DesktopHover
                         graphics.DrawString(number, codeFont, numbers, imageArea.Left + textGutterWidth - Px(9) - numberWidth, y, format);
                         TextPreviewLine line = textPreview.Lines[i + textOffset];
                         float x = imageArea.Left + textGutterWidth + Px(10);
+                        if (PaintFoundText(graphics, i + textOffset, 0, line.Text, codeFont,
+                            new Rectangle((int)x, (int)y, Math.Max(1, imageArea.Right - (int)x), textLineHeight))) continue;
                         int end = 0;
                         foreach (TextSpan span in line.Spans)
                         {
@@ -910,6 +919,7 @@ namespace DesktopHover
             mediaState = null;
             documentMediaNoteKey = null;
             textPreview = null;
+            if (findOpen && !refreshing) ResetFind();
             pdfPageIndex = pdfPageCount = textOffset = tableColumn = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
             if (interactive && !String.IsNullOrEmpty(contentTip.GetToolTip(this))) contentTip.SetToolTip(this, null);
             if (interactive) StopPanning();
