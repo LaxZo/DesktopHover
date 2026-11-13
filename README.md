@@ -8,7 +8,7 @@
 <p align="center">Preview images, documents and design projects, play media, and read code without opening another app.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark, light &amp; translucent themes &nbsp;·&nbsp; 14 languages
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Desktop &amp; File Explorer &nbsp;·&nbsp; Dark, light &amp; translucent themes &nbsp;·&nbsp; 18 languages
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover is a Windows tray app that previews a local file when you rest the
 | **Keep a preview open** | Pin a file to browse PDF or TIFF pages, choose a PowerPoint slide, scroll text or pause playback. |
 | **Read text and code** | Line numbers, a monospace font and syntax colors for common languages, scripts and configuration files. |
 | **Look inside documents and projects** | PDF first pages, Word excerpts, Excel worksheets, PowerPoint slides, Photoshop composites and PDF-compatible Illustrator artwork. Other Adobe projects use embedded previews, matching image/video preview files or Windows thumbnails. |
-| **Make it your own** | Dark, light or translucent appearance, 14 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
+| **Make it your own** | Dark, light or translucent appearance, 18 interface languages, adjustable preview size, hover delay and optional startup with Windows. |
 
 ## Screenshots
 
@@ -184,7 +184,7 @@ Wheel zoom is centered on the pointer, and the toolbar shows the current scale. 
 | Enlarge small images | Allow an image smaller than the preview limit to be enlarged. |
 | Start with Windows | Run automatically after you sign in. |
 
-**Interface languages:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti. New installations follow the Windows display language. Choose a specific language in Settings to override it.
+**Interface languages:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti · Suomi · Polski · Türkçe · Bahasa Indonesia. New installations follow the Windows display language. Choose a specific language in Settings to override it.
 
 Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is stored separately in the current user's Windows Run registry key.
 

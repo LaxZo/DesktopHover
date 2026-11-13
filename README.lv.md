@@ -8,7 +8,7 @@
 <p align="center">Apskati attēlus, dokumentus un dizaina projektus, atskaņo medijus un lasi kodu, neatverot citu programmu.</p>
 
 <p align="center">
-  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā, gaišā un caurspīdīgā tēma &nbsp;·&nbsp; 14 valodas
+  <strong>Windows x64</strong> &nbsp;·&nbsp; Darbvirsma un File Explorer &nbsp;·&nbsp; Tumšā, gaišā un caurspīdīgā tēma &nbsp;·&nbsp; 18 valodas
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Desktop Hover ir Windows lietotne, kas darbojas sistēmas teknē un rāda lokāl
 | **Paturēt priekšskatījumu atvērtu** | Piespraud failu, lai pāršķirtu PDF vai TIFF lapas, izvēlētos PowerPoint slaidu, ritinātu tekstu vai apturētu atskaņošanu. |
 | **Lasīt tekstu un kodu** | Rindu numuri, vienāda platuma fonts un sintakses krāsas izplatītām programmēšanas valodām, skriptiem un konfigurācijas failiem. |
 | **Ieskatīties dokumentos un projektos** | PDF pirmās lapas, Word fragmenti, Excel lapas, PowerPoint slaidi, Photoshop apvienotie attēli un ar PDF saderīgs Illustrator saturs. Citiem Adobe projektiem izmanto iegultos priekšskatījumus, atbilstošus attēla/video priekšskatījuma failus vai Windows sīktēlus. |
-| **Pielāgot sev** | Tumšā, gaišā vai caurspīdīgā tēma, 14 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
+| **Pielāgot sev** | Tumšā, gaišā vai caurspīdīgā tēma, 18 saskarnes valodas, maināms priekšskatījuma lielums, parādīšanās aizture un palaišana kopā ar Windows. |
 
 ## Ekrānattēli
 
@@ -184,7 +184,7 @@ Ar peles ritenīti attēlu pietuvina kursora vietā, un rīkjoslā redzams pašr
 | Mazu attēlu palielināšana | Ļauj attēlu, kas mazāks par priekšskatījuma robežām, parādīt palielinātu. |
 | Palaišana kopā ar Windows | Automātiska palaišana pēc pierakstīšanās. |
 
-**Saskarnes valodas:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti. Pirmajā palaišanas reizē programma seko Windows saskarnes valodai. Iestatījumos var izvēlēties citu valodu.
+**Saskarnes valodas:** English · Latviešu · Русский · 简体中文 · Deutsch · Español · Français · Português (Brasil) · Italiano · 日本語 · 한국어 · Українська · Lietuvių · Eesti · Suomi · Polski · Türkçe · Bahasa Indonesia. Pirmajā palaišanas reizē programma seko Windows saskarnes valodai. Iestatījumos var izvēlēties citu valodu.
 
 Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskās palaišanas izvēle glabājas atsevišķi pašreizējā lietotāja Windows reģistra `Run` atslēgā.
 

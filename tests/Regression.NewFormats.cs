@@ -80,18 +80,40 @@ namespace DesktopHover
             var old = Thread.CurrentThread.CurrentUICulture;
             try
             {
-                foreach (string code in new[] { "lt-LT","et-EE","en-US","fi-FI" })
+                foreach (var option in L10n.Languages)
                 {
-                    Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo(code);
-                    var explicitCode = code == "fi-FI" ? "en" : code.Substring(0,2);
-                    Check(L10n.Text("system","find_preview") == L10n.Text(explicitCode,"find_preview") &&
-                        L10n.Culture("system").TwoLetterISOLanguageName == explicitCode,"Windows language " + code);
+                    Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo(option.CultureName);
+                    Check(L10n.Text("system","find_preview") == L10n.Text(option.Code,"find_preview") &&
+                        L10n.Culture("system").Name == option.CultureName, "Windows language " + option.Code);
                 }
+                Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("hu-HU");
+                Check(L10n.Culture("system").Name == "en-US", "unsupported Windows language falls back to English");
                 Check(new AppSettings().Language == "system" && L10n.Normalize("lv") == "lv","automatic default and explicit language");
                 foreach (var entry in (Dictionary<string,string[]>)typeof(L10n).GetField("Strings",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null))
                     Check(entry.Value.Length == L10n.Languages.Length && entry.Value.All(v=>!String.IsNullOrWhiteSpace(v)),"complete translations for " + entry.Key);
-                foreach (var entry in (Dictionary<string,string[]>)typeof(FeatureText).GetField("strings",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null))
-                    foreach (string locale in new[] { "lt","et" }) Check(!String.IsNullOrEmpty(L10n.Text(locale,entry.Key)),locale+" feature "+entry.Key);
+                var features = (Dictionary<string,string[]>)typeof(FeatureText).GetField("translated",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);
+                foreach (var key in ((Dictionary<string,string[]>)typeof(FeatureText).GetField("strings",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null)).Keys)
+                    Check(features[key].Length == L10n.Languages.Length - 2 && features[key].All(v => !String.IsNullOrWhiteSpace(v)),
+                        "complete feature translations for " + key);
+                string preferences = Path.Combine(output, "language-test.ini");
+                using (var window = new SettingsWindow(new AppSettings(), false, selected => selected.Save(preferences), null))
+                {
+                    var menu = Field<ContextMenuStrip>(window, "languageMenu");
+                    foreach (var option in new[] {
+                        new[] { "fi", "Asetukset", "Kiinnitä viimeisin esikatselu" },
+                        new[] { "pl", "Ustawienia", "Przypnij ostatni podgląd" },
+                        new[] { "tr", "Ayarlar", "Son önizlemeyi sabitle" },
+                        new[] { "id", "Pengaturan", "Sematkan pratinjau terakhir" } })
+                    {
+                        var item = (ToolStripMenuItem)menu.Items["language-" + option[0]];
+                        item.PerformClick();
+                        string saved = AppSettings.Load(preferences).Language;
+                        Check(item.Checked && saved == option[0] && window.Text.EndsWith(option[1]) &&
+                            L10n.Text(saved, "pin") == option[2], "select, apply and save " + option[0]);
+                    }
+                    menu.Items["language-system"].PerformClick();
+                    Check(AppSettings.Load(preferences).Language == "system", "restore automatic language selection");
+                }
             }
             finally { Thread.CurrentThread.CurrentUICulture = old; }
             using (var pinned = new PreviewWindow(true))
