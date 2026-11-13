@@ -176,6 +176,8 @@ The pinned viewer uses the app’s theme and rounded window controls. Resize or 
 
 In a pinned text, code, Markdown or table preview, press **Ctrl+F** to search the loaded excerpt. **Enter** or **F3** selects the next match, **Shift+F3** the previous one, and **Esc** closes the search.
 
+Use **↑ / ↓** to scroll one row and **Page Up / Page Down** to scroll one screen. In a pinned PDF, PowerPoint presentation or multi-page TIFF, press **Ctrl+G** or click the page counter, enter a page or slide number and press **Enter**. Hovering over a TIFF shows its first page.
+
 Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is stored separately in the current user's Windows Run registry key.
 
 ## Supported files
@@ -190,7 +192,7 @@ Preferences are stored in `%LOCALAPPDATA%\DesktopHover\settings.ini`. Startup is
 | **SVG** | Static vector shapes, paths, groups and gradients with transparent backgrounds. |
 | **ZIP, EDOC & ASiC-E** | Browse names, folders and uncompressed sizes without extracting files. ZIP-based signed containers list the enclosed documents. The footer counts all files in the directory, and the table shows the first 300 entries. Archives can contain up to 4,096 entries. |
 | **TTF & OTF** | Family name and letter samples at several sizes, including Latvian characters. |
-| **CSV & TSV** | A table with numbered rows and lettered columns. In a pinned window, use the arrow keys or Shift + mouse wheel to reach more columns. Hover over a cell to read clipped text. |
+| **CSV & TSV** | A table with numbered rows and lettered columns. Use **← / →** or **Shift + mouse wheel** to reach more columns in a pinned window. Hover over a cell to read clipped text. For CSV, the **Delimiter** menu offers automatic detection, comma, semicolon and tab. The choice is kept when the file refreshes. |
 | **Source code** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Lua, Dart, Swift, PHP, Ruby, SQL, HTML/XML/CSS and related formats. |
 | **Scripts & project files** | PowerShell, shell and batch scripts; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE and common dotfiles. |
 | **PDF** | First page on hover; page navigation in the pinned window. Uses the built-in Windows 10/11 PDF renderer without Adobe or a thumbnail provider. |

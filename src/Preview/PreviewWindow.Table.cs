@@ -10,6 +10,32 @@ namespace DesktopHover
         private int tableColumn, tableVisibleColumns = 1;
         private bool HasTable { get { return textPreview != null && textPreview.TableRows != null; } }
 
+        private void AddSeparatorChoice(string key, char? separator)
+        {
+            var item = new ToolStripMenuItem { Name = key, Tag = separator };
+            item.Click += delegate
+            {
+                if (!HasTable || csvSeparator == separator) return;
+                csvSeparator = separator;
+                RefreshPinned();
+            };
+            csvButton.DropDownItems.Add(item);
+        }
+
+        private void UpdateSeparatorMenu()
+        {
+            csvButton.Visible = HasTable && textPreview.LanguageName == "CSV";
+            if (!csvButton.Visible) return;
+            csvButton.Text = csvButton.AccessibleName = L10n.Text(language, "csv_separator");
+            csvButton.DropDown.BackColor = SystemInformation.HighContrast ? SystemColors.Menu : Brand.Surface;
+            csvButton.DropDown.ForeColor = SystemInformation.HighContrast ? SystemColors.MenuText : Brand.Text;
+            foreach (ToolStripMenuItem item in csvButton.DropDownItems)
+            {
+                item.Text = L10n.Text(language, item.Name);
+                item.Checked = csvSeparator == (char?)item.Tag;
+            }
+        }
+
         private void LayoutTable()
         {
             textGutterWidth = Math.Min(Px(46), imageArea.Width / 4);

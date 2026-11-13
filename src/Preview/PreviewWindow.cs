@@ -219,20 +219,28 @@ namespace DesktopHover
                 mediaState = "preview_loading";
                 mediaCursor = cursor; mediaItemBounds = itemBounds;
                 scale = GetScale(interactive && interactiveSized ? (WindowState == FormWindowState.Minimized ? RestoreBounds.Location : Location) : cursor); SetFonts(); UpdateLanguage();
-                LayoutImage();
+                StartImagePage(pageIndex, refreshing);
                 ShowPreview();
-                imageCancellation = new System.Threading.CancellationTokenSource();
-                var token = imageCancellation.Token;
-                var size = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
-                string source = CurrentPath;
-                bool refreshImage = refreshing;
-                imageTask = Task.Factory.StartNew(() => ImagePreviewLoader.Load(source, size, token, refreshImage),
-                    System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
-                mediaTimer.Interval = 40; mediaTimer.Start();
-                Invalidate();
                 return true;
             }
             catch { ClearPreview(); return false; }
+        }
+
+        private void StartImagePage(int page, bool refresh)
+        {
+            CancelImageDetail();
+            CancelImageLoad();
+            ClearImage();
+            pageIndex = page;
+            mediaState = "preview_loading";
+            imageCancellation = new System.Threading.CancellationTokenSource();
+            var token = imageCancellation.Token;
+            string source = CurrentPath;
+            var size = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
+            imageTask = Task.Factory.StartNew(() => ImagePreviewLoader.Load(source, size, token, refresh, page),
+                System.Threading.CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+            mediaTimer.Interval = 40; mediaTimer.Start();
+            LayoutImage(); Invalidate();
         }
 
         private void CompleteImageLoad()
@@ -251,6 +259,8 @@ namespace DesktopHover
                     preview = result.Image; animatedGif = result.Animation;
                     result.Image = null; result.Animation = null;
                     sourceWidth = result.Width; sourceHeight = result.Height; sourceBytes = result.Bytes;
+                    pageCount = result.FrameCount;
+                    pageIndex = Math.Min(pageIndex, pageCount - 1);
                 }
             }
             LayoutImage(); ShowPreview(); Invalidate();
@@ -360,8 +370,8 @@ namespace DesktopHover
 
         private void StartDocumentLoad(string path, bool allowVideo)
         {
-            if (interactive && pdfPageIndex > 0 && String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
-            { LoadPdfPage(pdfPageIndex); return; }
+            if (interactive && pageIndex > 0 && String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
+            { LoadPdfPage(pageIndex); return; }
             documentCancellation = new System.Threading.CancellationTokenSource();
             var token = documentCancellation.Token;
             var bounds = interactive ? new DrawingSize(1600, 1200) : new DrawingSize(maximumPreviewWidth, maximumPreviewHeight);
@@ -419,7 +429,7 @@ namespace DesktopHover
         {
             mediaState = result.NoteKey;
             if (result.FileBytes > 0) sourceBytes = result.FileBytes;
-            if (result.PageCount > 0) { pdfPageCount = result.PageCount; pdfPageIndex = Math.Min(pdfPageIndex, pdfPageCount - 1); }
+            if (result.PageCount > 0) { pageCount = result.PageCount; pageIndex = Math.Min(pageIndex, pageCount - 1); }
             documentDetail = result.DetailKey;
             bool hadSlides = documentSlides != null && documentSlides.Length > 0;
             if (!hadSlides)
@@ -542,7 +552,7 @@ namespace DesktopHover
                 ? "document_preview" : mediaState);
             string slidePosition = documentSlides != null && documentSlides.Length > 0
                 ? " · " + (documentSlideIndex + 1) + "/" + Math.Max(documentSlideTotal, documentSlides.Length) : "";
-            if (pdfPageCount > 0) slidePosition = " · " + (pdfPageIndex + 1) + "/" + pdfPageCount;
+            if (pageCount > 0) slidePosition = " · " + (pageIndex + 1) + "/" + pageCount;
             // The hover-only PDF note says "first page"; pinned previews can show any page.
             if (interactive && mediaState == "document_pdf") note = null;
             description = type + (String.IsNullOrEmpty(note) ? "" : " · " + note) + slidePosition + " · " + FormatBytes(sourceBytes);
@@ -583,7 +593,8 @@ namespace DesktopHover
                 SetFonts(); UpdateLanguage(); LayoutImage(); ShowPreview();
                 textCancellation = new System.Threading.CancellationTokenSource();
                 var token = textCancellation.Token; string source = CurrentPath;
-                textTask = Task.Factory.StartNew(() => TextPreviewContent.Load(source, token));
+                char? separator = csvSeparator;
+                textTask = Task.Factory.StartNew(() => TextPreviewContent.Load(source, token, separator));
                 mediaTimer.Interval = 40; mediaTimer.Start();
                 return true;
             }
@@ -918,6 +929,8 @@ namespace DesktopHover
         {
             CancelImageDetail();
             ClearOfficeView();
+            if (!refreshing) csvSeparator = null;
+            if (pageInput != null) pageInput.Visible = false;
             if (mediaControls != null) { mediaControls.Visible = false; draggingSeek = false; }
             if (entranceMotion != null) entranceMotion.Finish();
             CancelImageLoad();
@@ -933,7 +946,7 @@ namespace DesktopHover
             documentMediaNoteKey = null;
             textPreview = null;
             if (findOpen && !refreshing) ResetFind();
-            pdfPageIndex = pdfPageCount = textOffset = tableColumn = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
+            pageIndex = pageCount = textOffset = tableColumn = wheelRemainder = 0; playbackPaused = false; fitMode = true; zoom = 1; pan = DrawingPoint.Empty;
             if (interactive && !String.IsNullOrEmpty(contentTip.GetToolTip(this))) contentTip.SetToolTip(this, null);
             if (interactive) StopPanning();
             if (!IsDisposed && (hide || !interactive))
@@ -1160,7 +1173,14 @@ namespace DesktopHover
         internal static Bitmap LoadImage(string path, int maximumWidth, int maximumHeight,
             out int sourceWidth, out int sourceHeight, out long bytes)
         {
-            int orientation=1;
+            int frameCount;
+            return LoadImagePage(path, maximumWidth, maximumHeight, 0, out frameCount, out sourceWidth, out sourceHeight, out bytes);
+        }
+
+        internal static Bitmap LoadImagePage(string path, int maximumWidth, int maximumHeight, int page,
+            out int frameCount, out int sourceWidth, out int sourceHeight, out long bytes)
+        {
+            int orientation = 1;
             // DelayCreation reads dimensions without eagerly allocating the original pixels.
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete))
@@ -1169,17 +1189,20 @@ namespace DesktopHover
                 if (bytes <= 0 || bytes > MaximumFileBytes)
                     throw new InvalidDataException("Attēla fails ir pārāk liels.");
                 BitmapDecoder decoder = BitmapDecoder.Create(stream,
-                    BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+                    BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
                 if (decoder.Frames.Count == 0)
                     throw new InvalidDataException("Attēls nesatur kadrus.");
-                sourceWidth = decoder.Frames[0].PixelWidth;
-                sourceHeight = decoder.Frames[0].PixelHeight;
+                bool tiff = decoder is TiffBitmapDecoder;
+                frameCount = tiff ? decoder.Frames.Count : 1;
+                BitmapFrame frame = decoder.Frames[Math.Max(0, Math.Min(page, frameCount - 1))];
+                sourceWidth = frame.PixelWidth;
+                sourceHeight = frame.PixelHeight;
                 try
                 {
-                    BitmapMetadata metadata=decoder.Frames[0].Metadata as BitmapMetadata;
+                    BitmapMetadata metadata = frame.Metadata as BitmapMetadata;
                     if(metadata!=null)
                     {
-                        object value=metadata.GetQuery("/app1/ifd/{ushort=274}") ?? metadata.GetQuery("/ifd/{ushort=274}");
+                        object value = metadata.GetQuery(tiff ? "/ifd/{ushort=274}" : "/app1/ifd/{ushort=274}");
                         if(value!=null) orientation=Convert.ToInt32(value);
                     }
                 }
@@ -1187,17 +1210,17 @@ namespace DesktopHover
                 if (sourceWidth <= 0 || sourceHeight <= 0 ||
                     (long)sourceWidth * sourceHeight > MaximumPixels)
                     throw new InvalidDataException("Attēla izmēri ir pārāk lieli.");
-            }
-
-            double ratio = Math.Min(1.0, Math.Min(
-                (double)maximumWidth / (orientation >= 5 && orientation <= 8 ? sourceHeight : sourceWidth),
-                (double)maximumHeight / (orientation >= 5 && orientation <= 8 ? sourceWidth : sourceHeight)));
-            BitmapImage decoded = new BitmapImage();
-            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete))
-            {
-                if (stream.Length <= 0 || stream.Length > MaximumFileBytes)
-                    throw new InvalidDataException("Attēla fails ir pārāk liels.");
+                double ratio = Math.Min(1.0, Math.Min(
+                    (double)maximumWidth / (orientation >= 5 && orientation <= 8 ? sourceHeight : sourceWidth),
+                    (double)maximumHeight / (orientation >= 5 && orientation <= 8 ? sourceWidth : sourceHeight)));
+                if (tiff)
+                {
+                    BitmapSource pixels = frame;
+                    if (ratio < 1.0) pixels = new TransformedBitmap(frame, new ScaleTransform(ratio, ratio));
+                    return CopyOrientedImage(pixels, orientation, ref sourceWidth, ref sourceHeight);
+                }
+                stream.Position = 0;
+                var decoded = new BitmapImage();
                 decoded.BeginInit();
                 decoded.CacheOption = BitmapCacheOption.OnLoad;
                 decoded.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
@@ -1206,9 +1229,12 @@ namespace DesktopHover
                 if (ratio < 1.0)
                     decoded.DecodePixelWidth = Math.Max(1, (int)Math.Floor(sourceWidth * ratio));
                 decoded.EndInit();
-                decoded.Freeze();
+                return CopyOrientedImage(decoded, orientation, ref sourceWidth, ref sourceHeight);
             }
+        }
 
+        private static Bitmap CopyOrientedImage(BitmapSource decoded, int orientation, ref int sourceWidth, ref int sourceHeight)
+        {
             Bitmap detached = new Bitmap(decoded.PixelWidth, decoded.PixelHeight,
                 System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
 
@@ -1217,17 +1243,13 @@ namespace DesktopHover
             {
                 FormatConvertedBitmap pixels = new FormatConvertedBitmap(decoded,
                     PixelFormats.Pbgra32, null, 0);
-                int stride = checked(pixels.PixelWidth * 4);
-                byte[] buffer = new byte[checked(stride * pixels.PixelHeight)];
-                pixels.CopyPixels(buffer, stride, 0);
                 BitmapData locked = detached.LockBits(new Rectangle(0, 0, detached.Width,
                     detached.Height), ImageLockMode.WriteOnly,
                     System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
                 try
                 {
-                    for (int row = 0; row < pixels.PixelHeight; row++)
-                        Marshal.Copy(buffer, row * stride,
-                            IntPtr.Add(locked.Scan0, row * locked.Stride), stride);
+                    pixels.CopyPixels(System.Windows.Int32Rect.Empty, locked.Scan0,
+                        checked(locked.Stride * detached.Height), locked.Stride);
                 }
                 finally
                 {

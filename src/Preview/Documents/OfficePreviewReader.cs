@@ -214,6 +214,12 @@ namespace DesktopHover
                 }
             }
 
+            internal static XmlReaderSettings XmlSettings()
+            {
+                return new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
+                    MaxCharactersInDocument = MaximumXmlBytes, MaxCharactersFromEntities = 1024, IgnoreComments = true };
+            }
+
             internal XmlDocument Xml(string name)
             {
                 Cancellation.ThrowIfCancellationRequested();
@@ -221,8 +227,7 @@ namespace DesktopHover
                 if (data.Documents.TryGetValue(name, out cached)) return cached;
                 byte[] bytes = Read(name, MaximumXmlBytes);
                 if (bytes == null) return null;
-                var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
-                    MaxCharactersInDocument = MaximumXmlBytes, MaxCharactersFromEntities = 1024, IgnoreComments = true };
+                var settings = XmlSettings();
                 var result = new XmlDocument { XmlResolver = null };
                 using (var input = new MemoryStream(bytes, false))
                 using (XmlReader reader = XmlReader.Create(input, settings))
@@ -452,6 +457,56 @@ namespace DesktopHover
             catch { image.Dispose(); throw; }
         }
 
+        private static Dictionary<int, string> ReadSharedStrings(Package package, string part, HashSet<int> needed)
+        {
+            var result = new Dictionary<int, string>();
+            byte[] bytes = package.Read(part, MaximumXmlBytes);
+            if (bytes == null) return result;
+            using (var input = new MemoryStream(bytes, false))
+            using (var reader = XmlReader.Create(input, Package.XmlSettings()))
+            {
+                int index = -1, textDepth = -1, phoneticDepth = -1;
+                StringBuilder value = null;
+                while ((needed.Count > 0 || value != null) && reader.Read())
+                {
+                    package.Cancellation.ThrowIfCancellationRequested();
+                    if (reader.Depth > 128) throw new InvalidDataException();
+                    if (reader.NodeType == XmlNodeType.Element)
+                    {
+                        if (reader.Depth == 0 && reader.LocalName != "sst") break;
+                        if (reader.Depth == 1 && reader.LocalName == "si")
+                        {
+                            ++index;
+                            if (!needed.Remove(index)) continue;
+                            if (reader.IsEmptyElement) result[index] = "";
+                            else value = new StringBuilder();
+                        }
+                        else if (value != null && !reader.IsEmptyElement)
+                        {
+                            if (reader.LocalName == "rPh") phoneticDepth = reader.Depth;
+                            if (reader.LocalName == "t" && phoneticDepth < 0) textDepth = reader.Depth;
+                        }
+                    }
+                    else if (reader.NodeType == XmlNodeType.EndElement)
+                    {
+                        if (value != null && reader.Depth == 1)
+                        {
+                            result[index] = value.ToString();
+                            value = null;
+                        }
+                        if (reader.Depth == textDepth) textDepth = -1;
+                        if (reader.Depth == phoneticDepth) phoneticDepth = -1;
+                    }
+                    else if (textDepth >= 0 && value != null && value.Length < 2000 && reader.HasValue)
+                    {
+                        string chunk = reader.Value;
+                        value.Append(chunk, 0, Math.Min(chunk.Length, 2000 - value.Length));
+                    }
+                }
+            }
+            return result;
+        }
+
         private static DocumentPreviewResult RenderSheet(Package package, string part, XmlDocument workbook, Size maximum, OfficePreviewPalette palette, OfficeViewOptions view = null)
         {
             Dictionary<string, Relation> relations = package.Relations(part);
@@ -478,21 +533,14 @@ namespace DesktopHover
             SheetContent sheetContent = package.CachedSheet(sheetKey);
             if (sheetContent == null)
             {
-                var strings = new List<string>();
+                string sharedPart = null;
+                var sharedCells = new Dictionary<int, int>();
                 var numberFormats = new List<int>();
                 var customFormats = new Dictionary<int, string>();
                 foreach (Relation relation in relations.Values)
                 {
                     if (relation.Type.EndsWith("/sharedStrings", StringComparison.Ordinal))
-                    {
-                        XmlDocument shared = package.Xml(relation.Target);
-                        if (shared != null) foreach (XmlNode item in shared.SelectNodes("/*[local-name()='sst']/*[local-name()='si']"))
-                        {
-                            package.Cancellation.ThrowIfCancellationRequested();
-                            if (strings.Count >= 50000) break;
-                            strings.Add(ParagraphText(item, 2000));
-                        }
-                    }
+                        sharedPart = relation.Target;
                     if (relation.Type.EndsWith("/styles", StringComparison.Ordinal))
                     {
                         XmlDocument styles = package.Xml(relation.Target);
@@ -546,10 +594,11 @@ namespace DesktopHover
                         if (type == "s")
                         {
                             int index = Int(value, -1);
-                            value = index >= 0 && index < strings.Count ? strings[index] : "";
+                            if (index >= 0) sharedCells[(rowIndex - 1) * 16384 + column] = index;
+                            value = "";
                         }
                         else if (type == "inlineStr") value = ParagraphText(cell.SelectSingleNode("./*[local-name()='is']"), 2000);
-                        else if (type == "b") value = IsTrue(value) ? "TRUE" : "FALSE";
+                        else if (type == "b" && hasCachedValue) value = IsTrue(value) ? "TRUE" : "FALSE";
                         else if (type == "" || type == "n")
                         {
                             int style = Int(Attr(cell, "s"), 0);
@@ -568,6 +617,16 @@ namespace DesktopHover
                         highestRow = Math.Max(highestRow, rowIndex);
                     }
                     if (scanned > (view == null ? 10000 : 100000)) break;
+                }
+                if (sharedCells.Count > 0)
+                {
+                    var strings = ReadSharedStrings(package, sharedPart, new HashSet<int>(sharedCells.Values));
+                    foreach (var cell in sharedCells)
+                    {
+                        string value;
+                        if (strings.TryGetValue(cell.Value, out value)) values[cell.Key] = value;
+                        else truncated = true;
+                    }
                 }
                 var visibleRows = new List<int>(highestRow);
                 for (int i = 1; i <= highestRow; i++) if (!hiddenRows.Contains(i)) visibleRows.Add(i);

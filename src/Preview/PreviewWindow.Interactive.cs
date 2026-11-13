@@ -15,10 +15,14 @@ namespace DesktopHover
         private Timer refreshTimer;
         private string observedChange;
         private ToolStripLabel pageLabel, zoomLabel, loadingLabel;
+        private ToolStripControlHost pageInput;
+        private PageNumberBox pageNumber;
+        private ToolStripDropDownButton csvButton;
+        private char? csvSeparator;
         private ToolStripSeparator zoomSeparator;
         private readonly ToolTip contentTip = UiDrawing.CreateToolTip();
         private Font toolbarFont;
-        private int pdfPageIndex, pdfPageCount, textOffset, wheelRemainder;
+        private int pageIndex, pageCount, textOffset, wheelRemainder;
         private bool playbackPaused, panning, interactiveSized, arrangingInteractive, fitMode = true;
         private float zoom = 1;
         private int documentReferenceWidth;
@@ -68,8 +72,16 @@ namespace DesktopHover
                 Renderer = new PinnedToolbarRenderer(), ShowItemToolTips = true, CanOverflow = true };
             SystemCursors.UseHand(toolbar);
             previousButton = AddAction("‹", "previous", () => Navigate(-1));
-            pageLabel = new ToolStripLabel { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
+            pageLabel = new ToolStripLabel { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter,
+                LinkBehavior = LinkBehavior.NeverUnderline };
+            pageLabel.Click += delegate { BeginPageJump(); };
             toolbar.Items.Add(pageLabel);
+            pageNumber = new PageNumberBox(HandlePageKey) { MaxLength = 10,
+                TextAlign = HorizontalAlignment.Center, BorderStyle = BorderStyle.FixedSingle };
+            pageInput = new ToolStripControlHost(pageNumber) { AutoSize = false, Visible = false,
+                Overflow = ToolStripItemOverflow.Never };
+            toolbar.Items.Add(pageInput);
+            pageInput.Leave += delegate { if (pageInput.Available) EndPageJump(); };
             nextButton = AddAction("›", "next", () => Navigate(1));
             playbackButton = AddAction("Ⅱ", "play_pause", TogglePlayback);
             zoomSeparator = new ToolStripSeparator(); toolbar.Items.Add(zoomSeparator);
@@ -80,6 +92,13 @@ namespace DesktopHover
             fitButton = AddAction("", "fit", FitImage);
             refreshButton = AddAction("↻", "refresh_preview", RefreshPinned);
             findButton = AddAction("⌕", "find_preview", OpenFind);
+            csvButton = new ToolStripDropDownButton { Visible = false, DisplayStyle = ToolStripItemDisplayStyle.Text };
+            toolbar.Items.Add(csvButton);
+            ShortcutField.StyleMenu(csvButton.DropDown, scale, true);
+            AddSeparatorChoice("csv_auto", null);
+            AddSeparatorChoice("csv_comma", ',');
+            AddSeparatorChoice("csv_semicolon", ';');
+            AddSeparatorChoice("csv_tab", '\t');
             loadingLabel = new ToolStripLabel(); toolbar.Items.Add(loadingLabel);
             Controls.Add(toolbar);
             InitializeFindBar();
@@ -135,7 +154,9 @@ namespace DesktopHover
                 toolbar.Padding = new Padding(Px(10), Px(6), Px(10), Px(6));
                 foreach (ToolStripItem item in toolbar.Items)
                     if (item is ToolStripButton) item.Size = new Size(Px(34), Px(30));
-                pageLabel.Size = new Size(Px(80), Px(30)); zoomLabel.Size = new Size(Px(62), Px(30));
+                pageLabel.Size = new Size(Px(80), Px(30));
+                pageInput.Size = new Size(pageLabel.Width, pageNumber.PreferredHeight);
+                zoomLabel.Size = new Size(Px(62), Px(30));
                 int transport = LayoutMediaControls(header + tools);
                 transport += LayoutFindBar(header + tools + transport);
                 viewport = new Rectangle(padding, header + tools + transport + padding,
@@ -196,12 +217,21 @@ namespace DesktopHover
             bool slides = documentSlides != null && documentSlides.Length > 0;
             findButton.Visible = textPreview != null;
             findButton.ToolTipText = findButton.AccessibleName = L10n.Text(language, "find_preview") + " (Ctrl+F)";
-            int count = slides ? documentSlides.Length : pdfPageCount;
-            int index = slides ? documentSlideIndex : pdfPageIndex;
+            UpdateSeparatorMenu();
+            int count = AvailablePages;
+            int index = CurrentPageIndex;
             bool pages = count > 1;
-            previousButton.Visible = nextButton.Visible = pageLabel.Visible = pages;
-            previousButton.Enabled = pages && index > 0 && !documentLoading;
-            nextButton.Enabled = pages && index + 1 < count && !documentLoading;
+            bool canNavigate = pages && !documentLoading && imageTask == null;
+            previousButton.Visible = nextButton.Visible = pages;
+            pageLabel.Visible = pages && !pageInput.Available;
+            pageLabel.IsLink = canNavigate;
+            pageLabel.LinkColor = Brand.Text; pageLabel.ActiveLinkColor = Brand.Accent;
+            pageLabel.ToolTipText = pageLabel.AccessibleName = pages ? L10n.Text(language, "jump_page") + " (Ctrl+G)" : "";
+            pageLabel.AccessibleRole = pages ? AccessibleRole.PushButton : AccessibleRole.StaticText;
+            pageInput.BackColor = SystemInformation.HighContrast ? SystemColors.Window : Brand.Surface;
+            pageInput.ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Brand.Text;
+            previousButton.Enabled = canNavigate && index > 0;
+            nextButton.Enabled = canNavigate && index + 1 < count;
             pageLabel.Text = (index + 1) + " / " + (slides ? Math.Max(documentSlideTotal, count) : count);
             if (HasTable && textPreview.TableColumns > tableVisibleColumns)
             {
@@ -233,28 +263,79 @@ namespace DesktopHover
             toolbar.Invalidate();
         }
 
+        private int AvailablePages { get { return documentSlides == null ? pageCount : documentSlides.Length; } }
+        private int CurrentPageIndex { get { return documentSlides == null ? pageIndex : documentSlideIndex; } }
+
+        private sealed class PageNumberBox : TextBox
+        {
+            private readonly Func<Keys, bool> handleKey;
+            internal PageNumberBox(Func<Keys, bool> handleKey) { this.handleKey = handleKey; }
+            protected override bool ProcessCmdKey(ref Message message, Keys key)
+            { return handleKey(key) || base.ProcessCmdKey(ref message, key); }
+            protected override void OnKeyDown(KeyEventArgs e)
+            {
+                if (handleKey(e.KeyData)) e.SuppressKeyPress = true;
+                else base.OnKeyDown(e);
+            }
+        }
+
+        private void BeginPageJump()
+        {
+            if (AvailablePages < 2 || documentLoading || imageTask != null) return;
+            pageInput.AccessibleName = pageNumber.AccessibleName = L10n.Text(language, "jump_page");
+            pageInput.ToolTipText = pageInput.AccessibleName + " (1–" + AvailablePages + ")";
+            pageNumber.Text = (CurrentPageIndex + 1).ToString();
+            pageLabel.Visible = false;
+            pageInput.Visible = true;
+            pageNumber.Focus();
+            pageNumber.SelectAll();
+        }
+
+        private void EndPageJump()
+        {
+            pageInput.Visible = false;
+            pageLabel.Visible = AvailablePages > 1;
+        }
+
+        private bool HandlePageKey(Keys key)
+        {
+            if (key == Keys.Escape) { EndPageJump(); Focus(); return true; }
+            if (key != Keys.Enter) return false;
+            int number;
+            if (Int32.TryParse(pageNumber.Text, out number) && number >= 1 && number <= AvailablePages)
+            { EndPageJump(); Focus(); NavigateToPage(number - 1); }
+            else
+            {
+                pageNumber.SelectAll();
+                contentTip.Show(pageInput.ToolTipText, pageNumber, 0, pageNumber.Height, 2400);
+            }
+            return true;
+        }
+
         private void Navigate(int delta)
         {
             if (HasTable) { ScrollTableColumns(delta * tableVisibleColumns); return; }
-            if (documentLoading) return;
-            if (documentSlides != null && documentSlides.Length > 0)
+            NavigateToPage(Math.Max(0, Math.Min(AvailablePages - 1, CurrentPageIndex + delta)));
+        }
+
+        private void NavigateToPage(int target)
+        {
+            if (target < 0 || target >= AvailablePages || documentLoading || imageTask != null) return;
+            if (documentSlides != null)
             {
-                int target = Math.Max(0, Math.Min(documentSlides.Length - 1, documentSlideIndex + delta));
-                if (target == documentSlideIndex) return;
                 playbackPaused = true; slideshowTimer.Stop();
-                ShowDocumentSlide(target); ClampPan(); UpdateToolbar();
+                if (target != documentSlideIndex) ShowDocumentSlide(target);
+                ClampPan(); UpdateToolbar();
             }
-            else if (pdfPageCount > 1)
-            {
-                int target = Math.Max(0, Math.Min(pdfPageCount - 1, pdfPageIndex + delta));
-                if (target != pdfPageIndex) LoadPdfPage(target);
-            }
+            else if (target == CurrentPageIndex) return;
+            else if (mediaKind == MediaKind.Image) StartImagePage(target, false);
+            else LoadPdfPage(target);
         }
 
         private void LoadPdfPage(int index)
         {
             CancelImageDetail();
-            CancelDocumentLoad(); pdfPageIndex = index;
+            CancelDocumentLoad(); pageIndex = index;
             documentLoading = true; mediaState = "document_loading";
             documentProgress = new DocumentProgress();
             documentCancellation = new System.Threading.CancellationTokenSource();
@@ -382,6 +463,8 @@ namespace DesktopHover
         {
             if (interactive)
             {
+                if (pageInput.Available) return HandlePageKey(keyData) || base.ProcessCmdKey(ref msg, keyData);
+                if (keyData == (Keys.Control | Keys.G) && AvailablePages > 1) { BeginPageJump(); return true; }
                 if (keyData == (Keys.Control | Keys.F) && textPreview != null) { OpenFind(); return true; }
                 if (findOpen && HandleFindKey(keyData)) return true;
                 if (findOpen && findField.ContainsFocus && keyData != Keys.F5) return base.ProcessCmdKey(ref msg, keyData);
@@ -391,12 +474,12 @@ namespace DesktopHover
                     ((mediaSeek != null && (mediaSeek.Focused || mediaVolume.Focused || mediaMute.Focused)) ||
                      (sheetPicker != null && sheetPicker.Focused)))
                     return base.ProcessCmdKey(ref msg, keyData);
-                if (HasTable)
+                if (textPreview != null)
                 {
                     switch (keyData)
                     {
-                        case Keys.Left: ScrollTableColumns(-1); return true;
-                        case Keys.Right: ScrollTableColumns(1); return true;
+                        case Keys.Left: if (HasTable) { ScrollTableColumns(-1); return true; } break;
+                        case Keys.Right: if (HasTable) { ScrollTableColumns(1); return true; } break;
                         case Keys.Up: ScrollText(-1); return true;
                         case Keys.Down: ScrollText(1); return true;
                         case Keys.PageUp: ScrollText(-textVisibleLines); return true;
@@ -433,7 +516,7 @@ namespace DesktopHover
                 if (lines < 0) lines = textVisibleLines;
                 ScrollText(-steps * lines); return;
             }
-            if ((ModifierKeys & Keys.Control) == 0 && (pdfPageCount > 1 || documentSlides != null)) Navigate(-steps);
+            if ((ModifierKeys & Keys.Control) == 0 && (pageCount > 1 || documentSlides != null)) Navigate(-steps);
             else ZoomAt((float)Math.Pow(1.25, steps), e.Location);
         }
         protected override void OnMouseDown(MouseEventArgs e)

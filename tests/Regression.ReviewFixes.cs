@@ -178,7 +178,7 @@ namespace DesktopHover
                 Call(window, "UpdateToolbar"); var label = Field<ToolStripLabel>(window, "zoomLabel");
                 Check(label.Text == "100%", "document starts with expected zoom");
                 Set(window, "detailDue", DateTime.UtcNow.AddHours(1));
-                Set(window, "detailPage", Field<int>(window, "pdfPageIndex"));
+                Set(window, "detailPage", Field<int>(window, "pageIndex"));
                 Set(window, "detailSlide", Field<int>(window, "documentSlideIndex"));
                 Set(window, "detailCancellation", new CancellationTokenSource());
                 Set(window, "detailTask", Task.FromResult(new ImagePreviewResult { Image = new Bitmap(3200, 2400) }));

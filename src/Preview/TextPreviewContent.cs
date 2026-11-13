@@ -43,7 +43,8 @@ namespace DesktopHover
             catch (ArgumentException) { return false; }
         }
 
-        internal static TextPreviewContent Load(string path, System.Threading.CancellationToken cancellation = default(System.Threading.CancellationToken))
+        internal static TextPreviewContent Load(string path, System.Threading.CancellationToken cancellation = default(System.Threading.CancellationToken),
+            char? csvSeparator = null)
         {
             cancellation.ThrowIfCancellationRequested();
             if (!IsSupported(path) && !ArchiveListing.Supports(path)) throw new InvalidDataException("Unsupported text file.");
@@ -81,7 +82,7 @@ namespace DesktopHover
             {
                 var table = new TextPreviewContent { LanguageName = extension == ".csv" ? "CSV" : "TSV",
                     EncodingName = encodingName, FileBytes = fileBytes, Truncated = truncated };
-                table.ReadTable(text, extension == ".tsv", cancellation);
+                table.ReadTable(text, extension == ".tsv", cancellation, csvSeparator);
                 return table;
             }
             string language = LanguageFor(path);

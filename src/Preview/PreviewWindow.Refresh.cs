@@ -18,6 +18,7 @@ namespace DesktopHover
             internal bool Fit, Paused;
             internal Point Pan;
             internal int Page, Slide, TextOffset, TableColumn;
+            internal char? CsvSeparator;
             internal OfficeViewOptions Office;
             internal TimeSpan Position;
         }
@@ -25,8 +26,9 @@ namespace DesktopHover
         private PinnedViewState CaptureView()
         {
             return reloadView ?? new PinnedViewState { Zoom = zoom, Fit = fitMode, Pan = pan,
-                Paused = playbackPaused, Page = pdfPageIndex, Slide = documentSlideIndex,
-                TextOffset = textOffset, TableColumn = tableColumn, Office = officeView.Copy(), Position = PlaybackPosition };
+                Paused = playbackPaused, Page = pageIndex, Slide = documentSlideIndex,
+                TextOffset = textOffset, TableColumn = tableColumn, CsvSeparator = csvSeparator,
+                Office = officeView.Copy(), Position = PlaybackPosition };
         }
 
         // Only one metadata read can be in flight per window. Results from an old
@@ -109,7 +111,8 @@ namespace DesktopHover
         {
             if (!refreshing) { reloadView = null; return; }
             if (reloadView == null) return;
-            pdfPageIndex = reloadView.Page;
+            pageIndex = reloadView.Page;
+            csvSeparator = reloadView.CsvSeparator;
             playbackPaused = reloadView.Paused;
             officeView.SheetIndex = reloadView.Office.SheetIndex;
             officeView.SheetName = reloadView.Office.SheetName;

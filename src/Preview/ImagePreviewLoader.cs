@@ -11,6 +11,7 @@ namespace DesktopHover
         internal Bitmap Image;
         internal AnimatedGif Animation;
         internal int Width, Height;
+        internal int FrameCount = 1;
         internal long Bytes;
         internal string ErrorKey;
         public void Dispose()
@@ -35,9 +36,10 @@ namespace DesktopHover
             internal Size Size;
             internal Bitmap Image;
             internal int Width, Height;
+            internal int Frame, FrameCount;
         }
 
-        internal static ImagePreviewResult Load(string path, Size size, CancellationToken cancellation, bool refresh = false)
+        internal static ImagePreviewResult Load(string path, Size size, CancellationToken cancellation, bool refresh = false, int frame = 0)
         {
             var result = new ImagePreviewResult();
             bool entered = false;
@@ -67,10 +69,12 @@ namespace DesktopHover
                     {
                         CachedImage entry = node.Value;
                         if (!String.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase) ||
+                            entry.Frame != Math.Min(frame, entry.FrameCount - 1) ||
                             entry.Size.Width < size.Width || entry.Size.Height < size.Height ||
                             entry.Length != info.Length || entry.Written != info.LastWriteTimeUtc.Ticks) continue;
                         result.Image = (Bitmap)entry.Image.Clone();
                         result.Width = entry.Width; result.Height = entry.Height; result.Bytes = entry.Length;
+                        result.FrameCount = entry.FrameCount;
                         cache.Remove(node); cache.AddFirst(node);
                         return result;
                     }
@@ -90,8 +94,8 @@ namespace DesktopHover
                         result.Image = SvgPreview.Load(path, size, cancellation, out result.Width, out result.Height);
                         result.Bytes = info.Length;
                     }
-                    else result.Image = PreviewWindow.LoadImage(path, size.Width, size.Height,
-                        out result.Width, out result.Height, out result.Bytes);
+                    else result.Image = PreviewWindow.LoadImagePage(path, size.Width, size.Height, frame,
+                        out result.FrameCount, out result.Width, out result.Height, out result.Bytes);
                     cancellation.ThrowIfCancellationRequested();
                     long cost = (long)result.Image.Width * result.Image.Height * 4;
                     if (cost <= MaximumCacheBytes)
@@ -100,6 +104,7 @@ namespace DesktopHover
                             RemoveCachedImage(cache.Last);
                         cache.AddFirst(new CachedImage { Path = path, Size = size, Length = info.Length,
                             Written = info.LastWriteTimeUtc.Ticks, Cost = cost, Width = result.Width,
+                            Frame = Math.Min(frame, result.FrameCount - 1), FrameCount = result.FrameCount,
                             Height = result.Height, Image = (Bitmap)result.Image.Clone() });
                         cacheBytes += cost;
                     }

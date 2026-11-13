@@ -9,7 +9,7 @@ namespace DesktopHover
     {
         private const int MaximumTableColumns = 128;
 
-        private void ReadTable(string text, bool tsv, CancellationToken cancellation)
+        private void ReadTable(string text, bool tsv, CancellationToken cancellation, char? csvSeparator)
         {
             int start = 0;
             char separator = tsv ? '\t' : ',';
@@ -21,7 +21,8 @@ namespace DesktopHover
                     separator = text[4];
                     start = text[5] == '\r' && text.Length > 6 && text[6] == '\n' ? 7 : 6;
                 }
-                else separator = DetectCsvSeparator(text);
+                else if (!csvSeparator.HasValue) separator = DetectCsvSeparator(text);
+                if (csvSeparator.HasValue) separator = csvSeparator.Value;
             }
             var rows = new List<string[]>();
             var cells = new List<string>();
@@ -71,6 +72,7 @@ namespace DesktopHover
             // header breaks ties for semicolon exports containing decimal commas.
             int commaRows = 0, semiRows = 0, commas = 0, semis = 0, records = 0;
             char first = ','; bool quoted = false;
+            int start = 0, decimalRows = 0;
             for (int i = 0; i <= text.Length && records < 12; i++)
             {
                 char c = i == text.Length ? '\n' : text[i];
@@ -78,15 +80,42 @@ namespace DesktopHover
                 if (quoted) continue;
                 if (c == ',') commas++;
                 else if (c == ';') semis++;
-                else if ((c == '\r' || c == '\n') && (commas > 0 || semis > 0))
+                else if (c == '\r' || c == '\n')
                 {
+                    if (commas == 0 && semis == 0) { start = i + 1; continue; }
+                    if (commas > 0 && semis > 0 && HasDecimalFields(text, start, i)) decimalRows++;
                     if (records++ == 0) first = semis > commas ? ';' : ',';
                     if (commas > 0) commaRows++;
                     if (semis > 0) semiRows++;
-                    commas = semis = 0;
+                    commas = semis = 0; start = i + 1;
                 }
             }
+            if (records > 0 && decimalRows == records) return ';';
             return commaRows == semiRows ? first : semiRows > commaRows ? ';' : ',';
+        }
+
+        // A comma within a decimal field is evidence only if the complete record
+        // can be read as semicolon-separated numbers. Quoted text does not vote.
+        private static bool HasDecimalFields(string text, int start, int end)
+        {
+            while (start < end)
+            {
+                while (start < end && Char.IsWhiteSpace(text[start])) start++;
+                if (start < end && (text[start] == '+' || text[start] == '-')) start++;
+                int digits = start;
+                while (start < end && Char.IsDigit(text[start])) start++;
+                if (start == digits) return false;
+                if (start < end && text[start] == ',')
+                {
+                    digits = ++start;
+                    while (start < end && Char.IsDigit(text[start])) start++;
+                    if (start == digits) return false;
+                }
+                while (start < end && Char.IsWhiteSpace(text[start])) start++;
+                if (start == end) return true;
+                if (text[start++] != ';') return false;
+            }
+            return false;
         }
     }
 }

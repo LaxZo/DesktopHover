@@ -32,6 +32,12 @@ namespace DesktopHover
             AppLog.TestDirectory = Path.Combine(output, "application-logs");
             try
             {
+                if (args.Length > 1 && args[1] == "preview-navigation")
+                {
+                    PreviewNavigation();
+                    if (args.Length > 2) RefreshSlides(args[2]);
+                    Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
+                }
                 if (args.Length > 1 && args[1] == "pinned-updates")
                 {
                     PinnedUpdates(args.Length > 2 ? args[2] : null);
@@ -140,6 +146,7 @@ namespace DesktopHover
                     PowerPointPriority(args[2], args[3]);
                     Console.WriteLine("PASS: " + assertions + " assertions"); return 0;
                 }
+                PreviewNavigation();
                 NewFormats();
                 PopupSpacing();
                 TabularPreviewData();
@@ -1122,11 +1129,11 @@ namespace DesktopHover
                 string pdf = Path.Combine(output, "two-pages.pdf"); WritePdf(pdf);
                 window.ShowFile(pdf, new Point(300, 300), Rectangle.Empty);
                 Until(() => !Field<bool>(window, "documentLoading"), 12000);
-                Check(Field<int>(window, "pdfPageCount") == 2, "PDF reports page count");
+                Check(Field<int>(window, "pageCount") == 2, "PDF reports page count");
                 Check(Field<Bitmap>(window, "preview").GetPixel(100, 100).R > 200, "PDF first page is red");
                 Field<ToolStripButton>(window, "nextButton").PerformClick();
                 Until(() => !Field<bool>(window, "documentLoading"), 12000);
-                Check(Field<int>(window, "pdfPageIndex") == 1, "PDF navigation selects second page");
+                Check(Field<int>(window, "pageIndex") == 1, "PDF navigation selects second page");
                 Check(Field<Bitmap>(window, "preview").GetPixel(100, 100).B > 200, "PDF second page is blue");
                 Check(window.Bounds == retainedBounds, "PDF loading and page changes preserve window bounds");
                 Snapshot(window, "pinned-pdf.png");
@@ -1296,13 +1303,13 @@ namespace DesktopHover
                 Call(window, "ChangeZoom", 2f);
                 typeof(PreviewWindow).GetField("pan", Private).SetValue(window, new Point(70, 40));
                 RefreshAndWait(window);
-                Check(Field<int>(window, "pdfPageIndex") == 1 && Field<float>(window, "zoom") == 2 && Field<Point>(window, "pan") == new Point(70, 40),
+                Check(Field<int>(window, "pageIndex") == 1 && Field<float>(window, "zoom") == 2 && Field<Point>(window, "pan") == new Point(70, 40),
                     "F5 retains PDF page, zoom and pan");
                 Check(Field<Bitmap>(window, "preview").GetPixel(40, 40).B > 200, "refreshed PDF actually renders the retained blue page");
                 // Replace the source with a one-page PDF while the second page is selected.
                 File.WriteAllText(pdf, File.ReadAllText(pdf).Replace("/Kids [3 0 R 5 0 R] /Count 2", "/Kids [3 0 R      ] /Count 1"), Encoding.ASCII);
                 RefreshAndWait(window);
-                Check(Field<int>(window, "pdfPageIndex") == 0 && window.HasImage, "refresh clamps a removed PDF page to an available page");
+                Check(Field<int>(window, "pageIndex") == 0 && window.HasImage, "refresh clamps a removed PDF page to an available page");
                 window.ShowFile(text, new Point(300, 300), Rectangle.Empty);
                 Until(() => Field<TextPreviewContent>(window, "textPreview") != null, 5000);
                 typeof(PreviewWindow).GetField("textOffset", Private).SetValue(window, 90);
@@ -1335,13 +1342,18 @@ namespace DesktopHover
                 Until(() => !Field<bool>(window, "documentLoading"), 65000);
                 Check(Field<byte[][]>(window, "documentSlides") != null && Field<byte[][]>(window, "documentSlides").Length > 1,
                     "PowerPoint fixture supplies multiple rendered slides");
-                Call(window, "Navigate", 1); Call(window, "ChangeZoom", 2f);
+                JumpTo(window, 2);
+                Check(Field<int>(window, "documentSlideIndex") == 1 && Field<bool>(window, "playbackPaused"),
+                    "jumping to the second slide pauses the slideshow");
+                Call(window, "ChangeZoom", 2f);
                 int slide = Field<int>(window, "documentSlideIndex");
                 int pixel = Field<Bitmap>(window, "preview").GetPixel(50, 50).ToArgb();
                 Call(window, "RefreshPinned");
                 Until(() => !Field<bool>(window, "refreshRequested") && !Field<bool>(window, "documentLoading"), 65000);
                 Check(Field<int>(window, "documentSlideIndex") == slide && Field<float>(window, "zoom") == 2,
-                    "F5 preserves PowerPoint slide and zoom across a fresh native export");
+                    "F5 preserves PowerPoint slide and zoom across a fresh native export (slide " +
+                    Field<int>(window, "documentSlideIndex") + ", zoom " + Field<float>(window, "zoom") + ", " +
+                    window.MediaState + ", " + Field<string>(window, "documentDetail") + ")");
                 Check(Field<Bitmap>(window, "preview").GetPixel(50, 50).ToArgb() == pixel && Field<bool>(window, "playbackPaused"),
                     "refreshed PowerPoint shows the same slide and stays paused");
             }

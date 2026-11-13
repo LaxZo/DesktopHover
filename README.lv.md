@@ -178,6 +178,8 @@ Iestatījumi glabājas `%LOCALAPPDATA%\DesktopHover\settings.ini`. Automātiskā
 
 Piespraustā teksta, koda, Markdown vai tabulas priekšskatījumā nospied **Ctrl+F**, lai meklētu ielādētajā fragmentā. **Enter** vai **F3** pāriet uz nākamo atbilstību, **Shift+F3** uz iepriekšējo, un **Esc** aizver meklēšanu.
 
+Ar **↑ / ↓** ritini par vienu rindu, ar **Page Up / Page Down** — par vienu ekrānu. Piespraustā PDF, PowerPoint prezentācijā vai vairāklapu TIFF nospied **Ctrl+G** vai noklikšķini uz lapu skaitītāja, ievadi lapas vai slaida numuru un nospied **Enter**. Uzvedot peli uz TIFF faila, redzama pirmā lapa.
+
 ## Atbalstītie faili
 
 | Veids | Atpazītie formāti un piemēri |
@@ -190,7 +192,7 @@ Piespraustā teksta, koda, Markdown vai tabulas priekšskatījumā nospied **Ctr
 | **SVG** | Vektoru figūras, līknes, grupas un krāsu pārejas ar caurspīdīgu fonu. |
 | **ZIP, EDOC un ASiC-E** | Failu nosaukumi, mapes un nesaspiestie izmēri bez atarhivēšanas. ZIP formāta parakstītajos konteineros redzami ievietotie dokumenti. Apakšējā joslā ir kopējais failu skaits, tabulā – pirmie 300 ieraksti. Arhīvā var būt līdz 4096 ierakstiem. |
 | **TTF un OTF** | Fonta saimes nosaukums un dažādu izmēru burtu paraugi, tostarp latviešu burti. |
-| **CSV un TSV** | Tabula ar numurētām rindām un kolonnu burtiem. Piespraustajā logā pārej uz citām kolonnām ar bultiņu taustiņiem vai Shift un peles ritenīti. Uzved peli uz šūnas, lai izlasītu tekstu, kas tajā neietilpst. |
+| **CSV un TSV** | Tabula ar numurētām rindām un kolonnu burtiem. Piespraustajā logā pārej uz citām kolonnām ar **← / →** vai **Shift un peles ritenīti**. Uzved peli uz šūnas, lai izlasītu tekstu, kas tajā neietilpst. CSV failiem izvēlnē **Atdalītājs** var izvēlēties automātisku noteikšanu, komatu, semikolu vai tabulāciju. Izvēle saglabājas, atjaunojot failu. |
 | **Pirmkods** | C/C++, C#, JavaScript/TypeScript, Python, Java, Go, Rust, Kotlin, Lua, Dart, Swift, PHP, Ruby, SQL, HTML/XML/CSS un saistītie formāti. |
 | **Skripti un projekta faili** | PowerShell, čaulas un batch skripti; Dockerfile, Makefile, CMakeLists.txt, README, LICENSE un izplatīti konfigurācijas faili ar punktu nosaukuma sākumā. |
 | **PDF** | Pirmā lapa pēc peles uzvešanas; lapu pāršķiršana piespraustajā logā. Izmanto Windows 10/11 iebūvēto PDF atbalstu bez Adobe lietotnes vai sīktēlu nodrošinātāja. |

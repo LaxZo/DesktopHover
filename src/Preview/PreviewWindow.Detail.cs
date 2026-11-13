@@ -38,7 +38,7 @@ namespace DesktopHover
                 {
                     using (var result = task.GetAwaiter().GetResult())
                         if (preview != null && result != null && result.Image != null &&
-                            detailPage == pdfPageIndex && detailSlide == documentSlideIndex &&
+                            detailPage == pageIndex && detailSlide == documentSlideIndex &&
                             (long)result.Image.Width * result.Image.Height > (long)preview.Width * preview.Height)
                         {
                             Bitmap old = preview; preview = result.Image; result.Image = null; old.Dispose();
@@ -58,15 +58,15 @@ namespace DesktopHover
             Size size = new Size(Math.Max(1, (int)Math.Ceiling(width * cap)), Math.Max(1, (int)Math.Ceiling(height * cap)));
             if (size.Width <= preview.Width * 1.1 && size.Height <= preview.Height * 1.1) return;
             if (size.Width <= detailRequested.Width && size.Height <= detailRequested.Height) return;
-            detailRequested = size; detailSlide = documentSlideIndex; detailPage = pdfPageIndex;
+            detailRequested = size; detailSlide = documentSlideIndex; detailPage = pageIndex;
             string path = CurrentPath;
-            int page = pdfPageIndex, slide = documentSlideIndex;
+            int page = pageIndex, slide = documentSlideIndex;
             bool image = mediaKind == MediaKind.Image;
             var palette = OfficePreviewPalette.Capture();
             detailCancellation = new CancellationTokenSource(); var token = detailCancellation.Token;
             detailTask = Task.Factory.StartNew(delegate
             {
-                if (image) return ImagePreviewLoader.Load(path, size, token);
+                if (image) return ImagePreviewLoader.Load(path, size, token, false, page);
                 if (String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
                 {
                     int count;
