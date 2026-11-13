@@ -1,4 +1,4 @@
-param([string]$PythonPath = 'python', [switch]$TrayOnly, [switch]$OfficeOnly)
+param([string]$PythonPath = 'python', [switch]$TrayOnly, [switch]$OfficeOnly, [switch]$SettingsOnly)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $outputDirectory = Join-Path $projectRoot '.verification\readme-assets'
@@ -21,6 +21,11 @@ $compilerArgs = @(
 ) + $sourceFiles + (Join-Path $PSScriptRoot 'assets\DocumentationAssets.cs')
 & "$framework\csc.exe" @compilerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Asset renderer compilation failed.' }
+if ($SettingsOnly) {
+    & $renderer $projectRoot settings
+    if ($LASTEXITCODE -ne 0) { throw 'Settings screenshot rendering failed.' }
+    return
+}
 if ($OfficeOnly) {
     & $renderer $projectRoot office
     if ($LASTEXITCODE -ne 0) { throw 'Office screenshot rendering failed. Generate the demonstration fixtures with a full refresh first.' }

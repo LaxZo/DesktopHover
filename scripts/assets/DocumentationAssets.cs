@@ -27,6 +27,7 @@ namespace DesktopHover
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
                 UiMotion.Enabled = false; Brand.SetTheme("dark");
                 if (args[1] == "artwork") { IconAssets(); SampleArtwork(); }
+                else if (args[1] == "settings") SettingsScreenshots();
                 else if (args[1] == "tray") TrayScreenshot();
                 else if (args[1] == "office") OfficeScreenshots();
                 else Screenshots();
@@ -154,7 +155,7 @@ namespace DesktopHover
 
         private static AppSettings Settings(string theme)
         { return new AppSettings { Theme = theme, Language = "en", MaxWidth = 720, MaxHeight = 540, DelayMs = 450, VolumePercent = 65, AnimationsEnabled = false }; }
-        private static void Screenshots()
+        private static void SettingsScreenshots()
         {
             foreach (string theme in new[] { "dark", "light" })
             {
@@ -164,8 +165,13 @@ namespace DesktopHover
                     settings.ClientSize = new Size(1000, 780); settings.ActiveControl = null;
                     Pump(100); Snapshot(settings, "settings-" + theme + ".png");
                 }
-                Preview("hello.cpp", "code-" + theme + ".png", theme);
             }
+        }
+        private static void Screenshots()
+        {
+            SettingsScreenshots();
+            foreach (string theme in new[] { "dark", "light" })
+                Preview("hello.cpp", "code-" + theme + ".png", theme);
             Preview("Rose landscape.png", "image-preview.png", "dark");
             Preview("Brand board.psd", "photoshop-preview.png", "dark");
             OfficeScreenshots();

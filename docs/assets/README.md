@@ -1,10 +1,10 @@
 # Screenshot assets
 
-All 11 screenshots were regenerated from Desktop Hover's actual Windows Forms controls on **2026-11-01**, using the black, burgundy and rose palette. They use English, a 720 × 540 preview limit, a 0.45-second delay and 65% playback volume. Interface animations are disabled for stable captures. The settings window has a 1000 × 780 content area at 100% scaling.
+The two Settings screenshots were captured on **2026-11-13** with Desktop Hover **1.5.2**. The other nine screenshots are from **2026-11-01**. All use the application's Windows Forms controls in English with a 720 × 540 preview limit, a 0.45-second delay and 65% playback volume. Interface animations are disabled for stable captures. The Settings window has a 1000 × 780 content area at 100% scaling.
 
 | File | Content |
 | --- | --- |
-| `settings-dark.png`, `settings-light.png` | Current settings in both themes, including the compact header, video looping, slide timing and file-type switches. |
+| `settings-dark.png`, `settings-light.png` | Dark and light Settings with the version in the header, editable shortcuts, the Windows file tooltips switch, Advanced settings and Open error log. |
 | `code-dark.png`, `code-light.png` | An original `hello.cpp` sample in the real code preview. |
 | `image-preview.png` | An original landscape illustration drawn in the new palette and opened by the image preview. |
 | `photoshop-preview.png` | An original typography and palette board saved as a valid RGB PSD with a raw merged image. |
@@ -27,7 +27,7 @@ On Windows, with .NET Framework 4.8, Microsoft PowerPoint for native slide rende
 
 The generator lives in [scripts/assets](../../scripts/assets), and temporary sample files and its executable go into the ignored `.verification/readme-assets` folder. It does not save or change the user's application preferences.
 
-To refresh only the tray-menu screenshot, run `.\scripts\refresh-assets.ps1 -TrayOnly`; this does not require Python or Office.
+Run `.\scripts\refresh-assets.ps1 -SettingsOnly` for the two Settings screenshots or `.\scripts\refresh-assets.ps1 -TrayOnly` for the tray menu. Both commands use only the Windows build tools.
 
 To refresh only Word and Excel screenshots using existing demonstration fixtures, run `.\scripts\refresh-assets.ps1 -OfficeOnly`.
 
